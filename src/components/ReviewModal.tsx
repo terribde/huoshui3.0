@@ -139,7 +139,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
   ];
 
   return (
-    <div id="review-modal" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div id="review-modal" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
       {/* Backdrop */}
       <motion.div 
         initial={{ opacity: 0 }}

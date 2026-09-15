@@ -177,6 +177,27 @@ export default function App() {
     );
   };
 
+  // Lock background scroll when any modal is open to prevent scrollbar flicker & layout jump
+  const isAnyModalOpen = Boolean(
+    selectedTeacher ||
+    isAiModalOpen ||
+    isReviewModalOpen ||
+    isPointsModalOpen ||
+    isCollegesModalOpen ||
+    isExperienceModalOpen
+  );
+
+  useEffect(() => {
+    if (isAnyModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isAnyModalOpen]);
+
   return (
     <div className="min-h-screen bg-slate-100/90 text-gray-900 flex flex-col items-center">
       
@@ -223,15 +244,15 @@ export default function App() {
         <div className="w-full flex justify-center py-0 sm:py-4">
           <div className="w-full max-w-[430px] min-h-screen sm:min-h-[92vh] bg-white sm:rounded-3xl sm:shadow-[0_20px_60px_rgba(0,0,0,0.12)] sm:border sm:border-gray-200/80 relative overflow-x-hidden flex flex-col justify-between">
             
-            {/* Mobile Tab Views with Smooth Fade and Slide Transition */}
-            <div className="flex-1 w-full relative">
+            {/* Mobile Tab Views with Smooth Fade Transition (Zero height jump) */}
+            <div className="flex-1 w-full relative overflow-x-hidden">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={currentTab}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15, ease: 'easeOut' }}
                   className="w-full"
                 >
                   {currentTab === 'home' && (
@@ -448,14 +469,14 @@ export default function App() {
           </header>
 
           {/* Desktop Views with AnimatePresence */}
-          <main className="w-full max-w-6xl mx-auto px-6 py-4">
+          <main className="w-full max-w-6xl mx-auto px-6 py-4 overflow-x-hidden">
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentTab}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.18, ease: 'easeOut' }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15, ease: 'easeOut' }}
               >
                 {currentTab === 'home' && (
                   <DesktopQuarkHome

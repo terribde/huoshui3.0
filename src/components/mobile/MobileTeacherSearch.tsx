@@ -73,12 +73,8 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
   const quickColleges = ['全部学院', '数学学院', '计算机与人工智能学院', '土木工程学院', '机械工程学院', '电气工程学院', '物理科学与技术学院'];
 
   return (
-    <motion.div 
+    <div 
       id="mobile-teacher-search-view" 
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      transition={{ duration: 0.2, ease: 'easeOut' }}
       className="w-full px-3.5 pt-2 pb-24 space-y-3"
     >
       {/* 1. Search Input Bar */}
@@ -344,6 +340,6 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
           ))
         )}
       </div>
-    </motion.div>
+    </div>
   );
 };

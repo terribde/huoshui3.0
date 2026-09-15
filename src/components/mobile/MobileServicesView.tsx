@@ -45,12 +45,8 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
   const featuredTeachers = teachers.slice(0, 4);
 
   return (
-    <motion.div 
+    <div 
       id="mobile-services-view" 
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      transition={{ duration: 0.22, ease: 'easeOut' }}
       className="w-full px-4 pt-3 pb-24 space-y-4"
     >
       {/* 1. Services Header */}
@@ -292,6 +288,6 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
           写评价获赠 +20 积分奖励，结构化查老师永久免费。共建交大真实口碑选课社区！
         </p>
       </div>
-    </motion.div>
+    </div>
   );
 };

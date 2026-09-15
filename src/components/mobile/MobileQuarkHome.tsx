@@ -49,12 +49,8 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
   };
 
   return (
-    <motion.div 
+    <div 
       id="mobile-quark-home" 
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      transition={{ duration: 0.22, ease: 'easeOut' }}
       className="w-full min-h-[75vh] px-4 pt-4 pb-20 flex flex-col justify-between items-center"
     >
       {/* 1. Top status / campus indicator + Points badge */}
@@ -218,6 +214,6 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
       <div className="text-[11px] text-gray-400 text-center pb-2 select-none">
         底部点击【服务】进入全校功能中心与专区
       </div>
-    </motion.div>
+    </div>
   );
 };

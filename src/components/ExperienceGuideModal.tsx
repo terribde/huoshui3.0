@@ -15,7 +15,7 @@ export const ExperienceGuideModal: React.FC<ExperienceGuideModalProps> = ({
   const [activeTab, setActiveTab] = useState<'guides' | 'notices' | 'history'>(defaultTab);
 
   return (
-    <div id="experience-guide-modal" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div id="experience-guide-modal" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
       {/* Backdrop */}
       <motion.div 
         initial={{ opacity: 0 }}
