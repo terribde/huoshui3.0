@@ -284,10 +284,8 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
                 </div>
               ) : (
                 teacherReviews.map((rev) => (
-                  <motion.div 
+                  <div 
                     key={rev.id}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
                     className="p-4 bg-gray-50/80 rounded-2xl border border-gray-100 space-y-2"
                   >
                     <div className="flex items-center justify-between">
@@ -317,7 +315,7 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
                         <span>{rev.likes}</span>
                       </motion.button>
                     </div>
-                  </motion.div>
+                  </div>
                 ))
               )}
             </div>

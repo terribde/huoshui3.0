@@ -47,12 +47,9 @@ export const CollegeListModal: React.FC<CollegeListModalProps> = ({
         </div>
 
         <div className="p-4 overflow-y-auto space-y-2 flex-1">
-          {SWJTU_COLLEGES.map((college, idx) => (
+          {SWJTU_COLLEGES.map((college) => (
             <motion.div
               key={college}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.02, duration: 0.2 }}
               whileHover={{ x: 4 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => {

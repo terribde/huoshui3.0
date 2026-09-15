@@ -50,12 +50,7 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
       className="w-full px-4 pt-3 pb-24 space-y-4"
     >
       {/* 1. Services Header */}
-      <motion.div 
-        initial={{ scale: 0.98, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.25 }}
-        className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-4 rounded-3xl shadow-sm space-y-1"
-      >
+      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-4 rounded-3xl shadow-sm space-y-1">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-base font-bold">交大服务 · 功能中心</span>
@@ -76,15 +71,10 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
         <p className="text-[11px] text-indigo-100">
           全校教师库检索 · 智能推荐偏好 · 经验攻略与教务通知
         </p>
-      </motion.div>
+      </div>
 
       {/* 2. Core 5 Function Buttons (Clean 5-Column layout) */}
-      <motion.div 
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.22, delay: 0.05 }}
-        className="bg-white p-3.5 rounded-3xl border border-gray-100 shadow-2xs space-y-2"
-      >
+      <div className="bg-white p-3.5 rounded-3xl border border-gray-100 shadow-2xs space-y-2">
         <span className="text-[11px] font-bold text-gray-400 px-1 uppercase tracking-wider block">
           核心功能
         </span>
@@ -154,15 +144,10 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
             <span className="text-[11px] font-medium text-gray-700">院系库</span>
           </motion.button>
         </div>
-      </motion.div>
+      </div>
 
       {/* 3. Colorful App-Style Badges (Row of 4) */}
-      <motion.div 
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.22, delay: 0.1 }}
-        className="bg-white p-3.5 rounded-3xl border border-gray-100 shadow-2xs space-y-2.5"
-      >
+      <div className="bg-white p-3.5 rounded-3xl border border-gray-100 shadow-2xs space-y-2.5">
         <span className="text-[11px] font-bold text-gray-400 px-1 uppercase tracking-wider block">
           校园专区
         </span>
@@ -219,7 +204,7 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
             <span className="text-[11px] font-medium text-gray-700 group-hover:text-emerald-600 transition-colors">教务通知</span>
           </motion.button>
         </div>
-      </motion.div>
+      </div>
 
       {/* 4. Featured Teachers Section */}
       <div className="bg-white p-3.5 rounded-3xl border border-gray-100 shadow-2xs space-y-3">
@@ -237,12 +222,9 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
         </div>
 
         <div className="space-y-2">
-          {featuredTeachers.map((teacher, idx) => (
+          {featuredTeachers.map((teacher) => (
             <motion.div
               key={teacher.id}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.04, duration: 0.2 }}
               onClick={() => onSelectTeacher(teacher)}
               whileTap={{ scale: 0.98 }}
               className="p-3 bg-gray-50/70 hover:bg-gray-100/70 rounded-2xl border border-gray-100 shadow-2xs transition-all cursor-pointer flex items-center justify-between group"

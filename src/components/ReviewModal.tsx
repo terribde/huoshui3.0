@@ -268,12 +268,9 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                 </div>
 
                 <div className="space-y-3">
-                  {dimensionDefinitions.map((item, idx) => (
-                    <motion.div 
+                  {dimensionDefinitions.map((item) => (
+                    <div 
                       key={item.key} 
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.04, duration: 0.2 }}
                       className="p-3 bg-gray-50/70 rounded-2xl border border-gray-100 space-y-1"
                     >
                       <div className="flex items-center justify-between text-xs">
@@ -304,7 +301,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                         </div>
                         <span className="text-[11px] text-gray-400 w-20 text-right">{item.highDesc}</span>
                       </div>
-                    </motion.div>
+                    </div>
                   ))}
                 </div>
               </div>

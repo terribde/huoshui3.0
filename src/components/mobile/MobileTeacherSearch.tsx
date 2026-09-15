@@ -246,12 +246,9 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
             <p className="text-[11px]">尝试缩短关键词或在“全部”中搜索</p>
           </div>
         ) : (
-          filteredTeachers.map((teacher, idx) => (
+          filteredTeachers.map((teacher) => (
             <motion.div
               key={teacher.id}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: Math.min(idx * 0.03, 0.25), duration: 0.2 }}
               onClick={() => onSelectTeacher(teacher)}
               whileTap={{ scale: 0.98 }}
               className="bg-white p-3.5 rounded-2xl border border-gray-100 shadow-2xs hover:shadow-xs transition-all cursor-pointer space-y-2.5"

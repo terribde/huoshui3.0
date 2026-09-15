@@ -71,12 +71,7 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
       {/* 2. Center Brand Title + Clean Quark AI Input Box */}
       <div className="w-full flex-1 flex flex-col items-center justify-center -mt-6">
         {/* Brand Title: Stylized Logo like Quark */}
-        <motion.div 
-          initial={{ scale: 0.96, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.25, delay: 0.05 }}
-          className="flex flex-col items-center justify-center mb-6 select-none"
-        >
+        <div className="flex flex-col items-center justify-center mb-6 select-none">
           <div className="flex items-center gap-2">
             <h1 className="text-4xl font-extrabold tracking-tight text-gray-950 font-sans">
               交大活水
@@ -88,15 +83,10 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
           <p className="text-xs text-gray-400 mt-1.5 tracking-wide">
             西南交通大学专属教师评价 · 校园智能助手
           </p>
-        </motion.div>
+        </div>
 
         {/* Center Search Card (The Quark AI Input Box) */}
-        <motion.div 
-          initial={{ scale: 0.98, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.25, delay: 0.1 }}
-          className="w-full bg-white rounded-3xl border border-gray-200/80 shadow-[0_6px_25px_rgb(0,0,0,0.06)] p-3.5 transition-all"
-        >
+        <div className="w-full bg-white rounded-3xl border border-gray-200/80 shadow-[0_6px_25px_rgb(0,0,0,0.06)] p-3.5 transition-all">
           <form onSubmit={handleInputSubmit} className="space-y-3">
             {/* Main Input */}
             <div className="relative">
@@ -207,7 +197,7 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
               从不点名神仙老师
             </motion.button>
           </div>
-        </motion.div>
+        </div>
       </div>
 
       {/* 3. Subtle bottom hint */}
