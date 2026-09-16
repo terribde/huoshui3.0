@@ -29,8 +29,6 @@ import { CollegeListModal } from './components/CollegeListModal';
 import { ExperienceGuideModal } from './components/ExperienceGuideModal';
 
 import { 
-  Smartphone, 
-  Monitor, 
   BookOpen, 
   Search, 
   Sliders, 
@@ -78,16 +76,34 @@ export default function App() {
   const [isExperienceModalOpen, setIsExperienceModalOpen] = useState<boolean>(false);
   const [experienceTab, setExperienceTab] = useState<'guides' | 'notices' | 'history'>('guides');
 
-  // Device Mode: 'mobile' (Quark pure app) vs 'desktop' (wide screen dashboard)
-  // Default to 'mobile' on mobile devices or 'mobile' view by default to match Quark image requested by user
-  const [viewMode, setViewMode] = useState<'mobile' | 'desktop'>('mobile');
+  // Automatic Device Detection: Accurately identifies mobile phone vs computer/desktop
+  const [deviceInfo, setDeviceInfo] = useState<{ isMobile: boolean; screenWidth: number }>(() => {
+    if (typeof window === 'undefined') return { isMobile: false, screenWidth: 1200 };
+    const userAgent = navigator.userAgent || '';
+    const isMobileUA = /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+    const isSmallScreen = window.innerWidth < 768;
+    return {
+      isMobile: isMobileUA || isSmallScreen,
+      screenWidth: window.innerWidth,
+    };
+  });
 
-  // Auto detect screen on initial mount
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
-      // User is on desktop browser, but allow toggling
-    }
+    const handleResize = () => {
+      const userAgent = navigator.userAgent || '';
+      const isMobileUA = /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+      const isSmallScreen = window.innerWidth < 768;
+      setDeviceInfo({
+        isMobile: isMobileUA || isSmallScreen,
+        screenWidth: window.innerWidth,
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  const viewMode: 'mobile' | 'desktop' = deviceInfo.isMobile ? 'mobile' : 'desktop';
 
   // Points Deduction Handler (PRD 5.0)
   const handleDeductPoints = (amount: number, reason: string): boolean => {
@@ -199,44 +215,7 @@ export default function App() {
   }, [isAnyModalOpen]);
 
   return (
-    <div className="min-h-screen bg-slate-100/90 text-gray-900 flex flex-col items-center">
-      
-      {/* 0. Top Mode Switcher Bar (Quick view toggle for desktop developers/users) */}
-      <div className="w-full bg-slate-200/90 border-b border-slate-300/80 px-4 py-1.5 flex items-center justify-between text-xs text-slate-600 z-40">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-slate-800">西南交大评教系统</span>
-          <span className="text-slate-400 hidden sm:inline">|</span>
-          <span className="text-slate-500 hidden sm:inline">已独立分离【手机夸克模式】与【电脑宽屏模式】</span>
-        </div>
-
-        <div className="flex items-center gap-1 bg-white/80 p-0.5 rounded-lg border border-slate-300">
-          <motion.button
-            whileTap={{ scale: 0.92 }}
-            onClick={() => setViewMode('mobile')}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
-              viewMode === 'mobile'
-                ? 'bg-indigo-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Smartphone className="w-3.5 h-3.5" />
-            <span>手机夸克模式</span>
-          </motion.button>
-          <motion.button
-            whileTap={{ scale: 0.92 }}
-            onClick={() => setViewMode('desktop')}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
-              viewMode === 'desktop'
-                ? 'bg-indigo-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Monitor className="w-3.5 h-3.5" />
-            <span>电脑宽屏模式</span>
-          </motion.button>
-        </div>
-      </div>
-
+    <div className="min-h-screen bg-white sm:bg-slate-100/90 text-gray-900 flex flex-col items-center">
       {/* ========================================================= */}
       {/* 1. MOBILE MODE: Pure, 100% faithful Quark mobile layout   */}
       {/* ========================================================= */}
