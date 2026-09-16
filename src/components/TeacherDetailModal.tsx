@@ -94,10 +94,10 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 30, scale: 0.96 }}
         transition={{ type: 'spring', damping: 28, stiffness: 350 }}
-        className="relative z-10 bg-white w-full max-w-lg max-h-[90vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
+        className="relative z-10 bg-white w-full max-w-lg h-[88vh] h-[88dvh] sm:h-auto max-h-[88vh] max-h-[88dvh] sm:max-h-[85vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
       >
         {/* Modal Header */}
-        <div className="p-5 border-b border-gray-100 flex items-start justify-between bg-gradient-to-r from-gray-50 to-white">
+        <div className="shrink-0 p-5 border-b border-gray-100 flex items-start justify-between bg-gradient-to-r from-gray-50 to-white">
           <div className="flex items-start gap-3.5">
             <div className="w-13 h-13 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-xl font-bold shadow-md shadow-indigo-100">
               {teacher.name.charAt(0)}
@@ -134,7 +134,7 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
         </div>
 
         {/* Quick Stats Bar */}
-        <div className="px-5 py-3 bg-gray-50/70 border-b border-gray-100 flex items-center justify-between text-xs">
+        <div className="shrink-0 px-5 py-3 bg-gray-50/70 border-b border-gray-100 flex items-center justify-between text-xs">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1 font-bold text-amber-600">
               <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
@@ -165,7 +165,7 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-gray-100 px-5 pt-2">
+        <div className="shrink-0 flex border-b border-gray-100 px-5 pt-2">
           <button
             id="tab-dimensions-btn"
             onClick={() => setActiveTab('dimensions')}
@@ -202,7 +202,7 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
         </div>
 
         {/* Modal Scroll Content */}
-        <div className="p-5 overflow-y-auto space-y-4 flex-1">
+        <div className="p-5 pb-6 overflow-y-auto min-h-0 space-y-4 flex-1 overscroll-contain">
           {activeTab === 'dimensions' ? (
             <div className="space-y-4">
               {/* Courses taught */}
@@ -323,7 +323,7 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
         </div>
 
         {/* Modal Action Footer */}
-        <div className="p-4 border-t border-gray-100 bg-white flex items-center justify-between gap-3">
+        <div className="shrink-0 p-4 pb-7 sm:pb-4 border-t border-gray-100 bg-white flex items-center justify-between gap-3">
           <div className="text-xs text-gray-500">
             真实上课体验可获审核积分
           </div>

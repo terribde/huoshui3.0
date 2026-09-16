@@ -270,6 +270,10 @@ export default function App() {
                         setIsAiModalOpen(true);
                       }}
                       onOpenPoints={() => setIsPointsModalOpen(true)}
+                      onOpenReview={() => {
+                        setReviewTargetTeacher(null);
+                        setIsReviewModalOpen(true);
+                      }}
                     />
                   )}
 

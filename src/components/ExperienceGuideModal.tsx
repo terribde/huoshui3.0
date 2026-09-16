@@ -31,10 +31,10 @@ export const ExperienceGuideModal: React.FC<ExperienceGuideModalProps> = ({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 30, scale: 0.96 }}
         transition={{ type: 'spring', damping: 28, stiffness: 350 }}
-        className="relative z-10 bg-white w-full max-w-lg max-h-[90vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
+        className="relative z-10 bg-white w-full max-w-lg h-[88vh] h-[88dvh] sm:h-auto max-h-[88vh] max-h-[88dvh] sm:max-h-[85vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
       >
         {/* Header */}
-        <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-indigo-50 to-white">
+        <div className="shrink-0 p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-indigo-50 to-white">
           <div>
             <h3 className="text-lg font-bold text-gray-900">交大知识库 & 校园动态</h3>
             <p className="text-xs text-gray-500">PRD 3.4 增量内容层 · 经验攻略与教务资讯</p>
@@ -50,7 +50,7 @@ export const ExperienceGuideModal: React.FC<ExperienceGuideModalProps> = ({
         </div>
 
         {/* Tab Buttons */}
-        <div className="flex border-b border-gray-100 px-5 pt-2">
+        <div className="shrink-0 flex border-b border-gray-100 px-5 pt-2">
           <button
             onClick={() => setActiveTab('guides')}
             className={`pb-2.5 text-xs sm:text-sm font-semibold transition-colors relative mr-6 cursor-pointer ${
@@ -97,7 +97,7 @@ export const ExperienceGuideModal: React.FC<ExperienceGuideModalProps> = ({
           </button>
         </div>
 
-        <div className="p-5 overflow-y-auto space-y-4 flex-1">
+        <div className="p-5 pb-8 sm:pb-5 overflow-y-auto min-h-0 space-y-4 flex-1 overscroll-contain">
           {activeTab === 'guides' && (
             <div className="space-y-3">
               <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-amber-800 flex items-center justify-between">

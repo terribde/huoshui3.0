@@ -184,10 +184,10 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 30, scale: 0.96 }}
         transition={{ type: 'spring', damping: 28, stiffness: 350 }}
-        className="relative z-10 bg-white w-full max-w-xl h-[85vh] sm:h-[80vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
+        className="relative z-10 bg-white w-full max-w-xl h-[88vh] h-[88dvh] sm:h-[80vh] max-h-[88vh] max-h-[88dvh] sm:max-h-[80vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
       >
         {/* Header */}
-        <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-indigo-50/70 to-white">
+        <div className="shrink-0 p-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-indigo-50/70 to-white">
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-100">
               <Bot className="w-5 h-5" />
@@ -326,7 +326,7 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
         </div>
 
         {/* Input Bar */}
-        <div className="p-3 border-t border-gray-100 bg-white flex items-center gap-2">
+        <div className="shrink-0 p-3 pb-7 sm:pb-3 border-t border-gray-100 bg-white flex items-center gap-2">
           <input
             id="ai-assistant-input"
             type="text"

@@ -155,10 +155,10 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 30, scale: 0.96 }}
         transition={{ type: 'spring', damping: 28, stiffness: 350 }}
-        className="relative z-10 bg-white w-full max-w-xl max-h-[90vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
+        className="relative z-10 bg-white w-full max-w-xl h-[88vh] h-[88dvh] sm:h-auto max-h-[88vh] max-h-[88dvh] sm:max-h-[85vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
       >
         {/* Header */}
-        <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white">
+        <div className="shrink-0 p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white">
           <div>
             <h3 className="text-lg font-bold text-gray-900">撰写教师评价 & 打分</h3>
             <p className="text-xs text-gray-500">
@@ -179,7 +179,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
           <motion.div 
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="p-12 flex flex-col items-center justify-center text-center space-y-3"
+            className="p-12 flex flex-col items-center justify-center text-center space-y-3 flex-1"
           >
             <motion.div 
               initial={{ scale: 0 }}
@@ -195,8 +195,8 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
             </p>
           </motion.div>
         ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
-            <div className="p-5 overflow-y-auto space-y-5 flex-1">
+          <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+            <div className="p-5 pb-6 overflow-y-auto min-h-0 space-y-5 flex-1 overscroll-contain">
               {/* Teacher & Course Selector */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
@@ -334,7 +334,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
             </div>
 
             {/* Footer */}
-            <div className="p-4 border-t border-gray-100 bg-white flex items-center justify-between">
+            <div className="shrink-0 p-4 pb-7 sm:pb-4 border-t border-gray-100 bg-white flex items-center justify-between">
               <motion.button
                 type="button"
                 whileTap={{ scale: 0.94 }}

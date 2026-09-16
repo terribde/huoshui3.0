@@ -5,6 +5,7 @@ import {
   Volume2, 
   Sliders, 
   Coins, 
+  PenLine,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -14,6 +15,7 @@ interface MobileQuarkHomeProps {
   onOpenRecommend: (course?: string) => void;
   onOpenAiChat: (initialPrompt?: string) => void;
   onOpenPoints: () => void;
+  onOpenReview: () => void;
 }
 
 export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
@@ -22,6 +24,7 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
   onOpenRecommend,
   onOpenAiChat,
   onOpenPoints,
+  onOpenReview,
 }) => {
   const [query, setQuery] = useState('');
   const [searchMode, setSearchMode] = useState<'ai' | 'search'>('ai');
@@ -197,6 +200,24 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
               从不点名神仙老师
             </motion.button>
           </div>
+        </div>
+
+        {/* Quick Review Button below search area */}
+        <div className="mt-4 flex justify-center">
+          <motion.button
+            type="button"
+            id="home-quick-review-btn"
+            whileTap={{ scale: 0.94 }}
+            whileHover={{ scale: 1.03 }}
+            onClick={onOpenReview}
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-full shadow-md shadow-indigo-200/70 hover:shadow-lg hover:shadow-indigo-300/80 transition-all text-xs font-semibold"
+          >
+            <PenLine className="w-3.5 h-3.5" />
+            <span>快速评价</span>
+            <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full text-indigo-50 font-normal">
+              +20积分
+            </span>
+          </motion.button>
         </div>
       </div>
 

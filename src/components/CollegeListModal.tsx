@@ -30,9 +30,9 @@ export const CollegeListModal: React.FC<CollegeListModalProps> = ({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 30, scale: 0.96 }}
         transition={{ type: 'spring', damping: 28, stiffness: 350 }}
-        className="relative z-10 bg-white w-full max-w-md max-h-[85vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
+        className="relative z-10 bg-white w-full max-w-md h-[85vh] h-[85dvh] sm:h-auto max-h-[85vh] max-h-[85dvh] sm:max-h-[85vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
       >
-        <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+        <div className="shrink-0 p-5 border-b border-gray-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Building2 className="w-5 h-5 text-indigo-600" />
             <h3 className="font-bold text-gray-900 text-base">西南交大学院库</h3>
@@ -46,7 +46,7 @@ export const CollegeListModal: React.FC<CollegeListModalProps> = ({
           </motion.button>
         </div>
 
-        <div className="p-4 overflow-y-auto space-y-2 flex-1">
+        <div className="p-4 pb-8 sm:pb-4 overflow-y-auto min-h-0 space-y-2 flex-1 overscroll-contain">
           {SWJTU_COLLEGES.map((college) => (
             <motion.div
               key={college}

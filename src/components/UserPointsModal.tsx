@@ -38,10 +38,10 @@ export const UserPointsModal: React.FC<UserPointsModalProps> = ({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 30, scale: 0.96 }}
         transition={{ type: 'spring', damping: 28, stiffness: 350 }}
-        className="relative z-10 bg-white w-full max-w-lg max-h-[90vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
+        className="relative z-10 bg-white w-full max-w-lg h-[88vh] h-[88dvh] sm:h-auto max-h-[88vh] max-h-[88dvh] sm:max-h-[85vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
       >
         {/* Header */}
-        <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-amber-500/10 via-orange-50 to-white">
+        <div className="shrink-0 p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-amber-500/10 via-orange-50 to-white">
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-md shadow-amber-200">
               <Coins className="w-5 h-5" />
@@ -61,7 +61,7 @@ export const UserPointsModal: React.FC<UserPointsModalProps> = ({
           </motion.button>
         </div>
 
-        <div className="p-5 overflow-y-auto space-y-5 flex-1">
+        <div className="p-5 pb-8 sm:pb-5 overflow-y-auto min-h-0 space-y-5 flex-1 overscroll-contain">
           {/* Balance card */}
           <div className="p-5 rounded-3xl bg-gradient-to-br from-gray-900 to-gray-800 text-white shadow-xl relative overflow-hidden">
             <div className="absolute top-0 right-0 -mr-6 -mt-6 w-32 h-32 bg-amber-500/15 rounded-full blur-xl pointer-events-none" />
