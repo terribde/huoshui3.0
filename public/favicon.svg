@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5" />
+      <stop offset="100%" stop-color="#312e81" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Rounded Base Badge -->
+  <rect width="128" height="128" rx="30" fill="url(#grad)" />
+  
+  <!-- Outer Ring Accent -->
+  <rect x="6" y="6" width="116" height="116" rx="24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-opacity="0.2" />
+
+  <!-- Academic / Evaluation Star Accent -->
+  <polygon points="64,22 67.5,31 77,32 69.5,38 72,47 64,42 56,47 58.5,38 51,32 60.5,31" fill="url(#accent)" />
+
+  <!-- Stylized Academic "交" Character / Architectural Book Silhouette -->
+  <g fill="#ffffff">
+    <!-- Top dot / Roof -->
+    <path d="M64 48 C60 48, 59 52, 59 54 L69 54 C69 52, 68 48, 64 48 Z" />
+    <!-- Horizontal beam -->
+    <rect x="32" y="56" width="64" height="7.5" rx="3.5" />
+    <!-- Skew pillars representing SWJTU railway & engineering roots -->
+    <path d="M46 68 L36 94 C35 96.5 37 99 40 99 L47 99 C49.5 99 51.5 97.5 52.5 95 L59 78 L53 68 Z" />
+    <path d="M82 68 L92 94 C93 96.5 91 99 88 99 L81 99 C78.5 99 76.5 97.5 75.5 95 L69 78 L75 68 Z" />
+    <!-- Center check / pen feather -->
+    <path d="M64 66 L61 88 C61 90.5 62.5 92 64 92 C65.5 92 67 90.5 67 88 L64 66 Z" fill="url(#accent)" />
+  </g>
+</svg>
