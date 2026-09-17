@@ -6,6 +6,8 @@
 import React, { useState, useEffect } from 'react';
 import { Teacher, Review, UserPointTransaction } from './types';
 import { INITIAL_TEACHERS, INITIAL_REVIEWS } from './data/mockTeachers';
+import { supabaseService } from './services/supabaseService';
+import { isSupabaseConfigured } from './lib/supabase';
 
 // Mobile Dedicated Views (Clean, pure Quark layout matching reference image)
 import { MobileQuarkHome } from './components/mobile/MobileQuarkHome';
@@ -103,6 +105,35 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Fetch initial data from Supabase if configured
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    // Load real teachers from Supabase
+    supabaseService.getTeachers().then((remoteTeachers) => {
+      if (remoteTeachers && remoteTeachers.length > 0) {
+        setTeachers(remoteTeachers);
+      }
+    });
+
+    // Load reviews from Supabase
+    supabaseService.getReviews().then((remoteReviews) => {
+      if (remoteReviews && remoteReviews.length > 0) {
+        setReviews(remoteReviews);
+      }
+    });
+
+    // Load user points from Supabase
+    supabaseService.getUserPoints().then((pointData) => {
+      if (pointData) {
+        setUserPoints(pointData.points);
+        if (pointData.transactions.length > 0) {
+          setTransactions(pointData.transactions);
+        }
+      }
+    });
+  }, []);
+
   const viewMode: 'mobile' | 'desktop' = deviceInfo.isMobile ? 'mobile' : 'desktop';
 
   // Points Deduction Handler (PRD 5.0)
@@ -124,6 +155,10 @@ export default function App() {
       },
       ...prev,
     ]);
+
+    if (isSupabaseConfigured) {
+      supabaseService.savePointTransaction('swjtu_student_default', reason, -amount, newBalance);
+    }
     return true;
   };
 
@@ -144,6 +179,10 @@ export default function App() {
       },
       ...prev,
     ]);
+
+    if (isSupabaseConfigured) {
+      supabaseService.savePointTransaction('swjtu_student_default', '每日签到奖励 (PRD 5.0)', added, newBalance);
+    }
   };
 
   // Submit Review Handler
@@ -184,6 +223,12 @@ export default function App() {
       },
       ...prev,
     ]);
+
+    // Persist to Supabase if configured
+    if (isSupabaseConfigured) {
+      supabaseService.submitReview(newReview);
+      supabaseService.savePointTransaction('swjtu_student_default', `撰写教师评价通过审核 (+${bonus}分)`, bonus, newBalance);
+    }
   };
 
   // Like review

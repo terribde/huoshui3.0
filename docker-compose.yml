@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  swjtu-eval:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: swjtu_teacher_eval
+    restart: always
+    ports:
+      - "80:80"
+    environment:
+      - NODE_ENV=production

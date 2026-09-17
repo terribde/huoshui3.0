@@ -1,6 +1,7 @@
 import React from 'react';
 import { UserPointTransaction, Review, Teacher } from '../../types';
-import { Coins, MessageSquare, Info, History, CheckCircle2, ArrowUpRight } from 'lucide-react';
+import { Coins, MessageSquare, Info, History, CheckCircle2, ArrowUpRight, Database } from 'lucide-react';
+import { isSupabaseConfigured } from '../../lib/supabase';
 
 interface MobileUserProfileProps {
   userPoints: number;
@@ -40,7 +41,15 @@ export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
                 评教积极分子
               </span>
             </div>
-            <p className="text-[11px] text-gray-500 mt-0.5">犀浦校区 · 认证学生</p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-[11px] text-gray-500">犀浦校区 · 认证学生</p>
+              {isSupabaseConfigured && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                  <Database className="w-2.5 h-2.5 text-emerald-600" />
+                  Supabase 已直连
+                </span>
+              )}
+            </div>
           </div>
         </div>
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { UserPointTransaction, Review, Teacher } from '../../types';
-import { Coins, MessageSquare, Info, History, ArrowUpRight, CheckCircle2, ShieldAlert, Sparkles, User } from 'lucide-react';
+import { Coins, MessageSquare, Info, History, ArrowUpRight, CheckCircle2, ShieldAlert, Sparkles, User, Database } from 'lucide-react';
+import { isSupabaseConfigured } from '../../lib/supabase';
 
 interface DesktopUserProfileProps {
   userPoints: number;
@@ -45,7 +46,15 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                     评教积极分子
                   </span>
                 </div>
-                <p className="text-xs text-gray-500 mt-0.5">犀浦校区 · 认证学生身份</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="text-xs text-gray-500">犀浦校区 · 认证学生身份</p>
+                  {isSupabaseConfigured && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                      <Database className="w-3 h-3 text-emerald-600" />
+                      Supabase 云端已直连
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
