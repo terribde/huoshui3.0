@@ -291,6 +291,46 @@ export const INITIAL_REVIEWS: Review[] = [
     status: 'approved',
     createdAt: '2025-01-08',
     likes: 31
+  },
+  {
+    id: 'r_pending_001',
+    teacherId: 't_002',
+    courseName: '高等数学 (I)',
+    yearTerm: '2024-2025第1学期',
+    dimensions: {
+      attendanceStrictness: 4,
+      gradingLeniency: 3,
+      effortMatters: 5,
+      workloadDifficulty: 4,
+      approachability: 4,
+      teachingQuality: 5
+    },
+    comment: '李老师讲微积分定理证明非常严密，每节课板书都工工整整。期末给分比较严格，全凭卷面成绩，但只要平时作业都自己认真写、考前刷完老师给的样卷，拿85+没问题！',
+    authorNickname: '交大24级小萌新',
+    isHistoricalMigrated: false,
+    status: 'pending',
+    createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+    likes: 0
+  },
+  {
+    id: 'r_pending_002',
+    teacherId: 't_006',
+    courseName: '大学英语 (III)',
+    yearTerm: '2024-2025第1学期',
+    dimensions: {
+      attendanceStrictness: 2,
+      gradingLeniency: 5,
+      effortMatters: 4,
+      workloadDifficulty: 2,
+      approachability: 5,
+      teachingQuality: 5
+    },
+    comment: '赵老师上课超级风趣！每节课都有10分钟小组口语自由展示，完全没有压力。考勤会每两周抽查一次，给分很客观，平时活跃的同学平时分都是满分！强烈推荐大家选！',
+    authorNickname: '九里校区大白鹅',
+    isHistoricalMigrated: false,
+    status: 'pending',
+    createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
+    likes: 0
   }
 ];
 

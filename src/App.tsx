@@ -270,13 +270,14 @@ export default function App() {
     }
 
     const nickname = currentUser.user_metadata?.nickname || '西南交大学子';
+    const nowIso = new Date().toISOString();
     const newReview: Review = {
       ...newReviewData,
       id: `rev_${Date.now()}`,
       userId: currentUser.id,
       userEmail: currentUser.email,
       authorNickname: nickname,
-      createdAt: '刚刚',
+      createdAt: nowIso,
       likes: 0,
       status: 'pending', // 初始状态为待审核
     };
@@ -286,6 +287,18 @@ export default function App() {
 
     // Persist to local cache and Supabase (points awarded upon approval)
     supabaseService.submitReview(newReview);
+  };
+
+  // Refresh reviews from Supabase & local cache
+  const handleRefreshReviews = async () => {
+    const allReviews = await supabaseService.getReviews();
+    if (allReviews && allReviews.length > 0) {
+      const existingIds = new Set(allReviews.map((r) => r.id));
+      const combined = [...allReviews, ...INITIAL_REVIEWS.filter((r) => !existingIds.has(r.id))];
+      setReviews(combined);
+    } else {
+      setReviews(INITIAL_REVIEWS);
+    }
   };
 
   // Approve review handler: status becomes 'approved', +20 points awarded to author
@@ -917,6 +930,7 @@ export default function App() {
             onApproveReview={handleApproveReview}
             onRejectReview={handleRejectReview}
             onDeleteReview={handleDeleteReview}
+            onRefreshReviews={handleRefreshReviews}
             currentUserEmail={currentUser?.email}
           />
         )}

@@ -17,8 +17,21 @@ interface AdminAuditModalProps {
   onApproveReview: (reviewId: string, authorUserId?: string) => Promise<void>;
   onRejectReview: (reviewId: string, reason: string) => Promise<void>;
   onDeleteReview: (reviewId: string) => Promise<void>;
+  onRefreshReviews?: () => Promise<void> | void;
   currentUserEmail?: string;
 }
+
+const formatReviewDate = (dateStr?: string) => {
+  if (!dateStr || dateStr === '刚刚') return '刚刚';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
 
 const PRESET_REJECTION_REASONS = [
   '包含不当言论、粗俗用语或人身攻击',
@@ -36,6 +49,7 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
   onApproveReview,
   onRejectReview,
   onDeleteReview,
+  onRefreshReviews,
   currentUserEmail,
 }) => {
   // Navigation between Reviews Audit and Admin Users Config
@@ -65,6 +79,8 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
   const [newAdminRole, setNewAdminRole] = useState<'super_admin' | 'admin' | 'moderator'>('admin');
   const [adminActionMsg, setAdminActionMsg] = useState<{ text: string; isError?: boolean } | null>(null);
   const [copiedSql, setCopiedSql] = useState(false);
+  const [copiedRlsSql, setCopiedRlsSql] = useState(false);
+  const [isRefreshingReviews, setIsRefreshingReviews] = useState(false);
 
   // Moderation filtering state
   const [currentTab, setCurrentTab] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
@@ -182,6 +198,34 @@ CREATE POLICY "Public can manage admin users" ON public.admin_users FOR ALL USIN
     navigator.clipboard.writeText(sql);
     setCopiedSql(true);
     setTimeout(() => setCopiedSql(false), 2000);
+  };
+
+  const copyRlsSqlCode = () => {
+    const sql = `-- 修复评价审核与读取权限 (允许管理员查询待审核评价并在后台公示或驳回)
+DROP POLICY IF EXISTS "Public can view approved reviews" ON public.reviews;
+DROP POLICY IF EXISTS "Public can view reviews" ON public.reviews;
+CREATE POLICY "Public can view reviews" ON public.reviews FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Public can update reviews" ON public.reviews;
+CREATE POLICY "Public can update reviews" ON public.reviews FOR UPDATE USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public can delete reviews" ON public.reviews;
+CREATE POLICY "Public can delete reviews" ON public.reviews FOR DELETE USING (true);`;
+
+    navigator.clipboard.writeText(sql);
+    setCopiedRlsSql(true);
+    setTimeout(() => setCopiedRlsSql(false), 2000);
+  };
+
+  const handleManualRefresh = async () => {
+    setIsRefreshingReviews(true);
+    try {
+      if (onRefreshReviews) {
+        await onRefreshReviews();
+      }
+    } finally {
+      setIsRefreshingReviews(false);
+    }
   };
 
   // Status counts
@@ -608,34 +652,69 @@ ON CONFLICT (email) DO UPDATE SET is_active = true;`}
                 </button>
               </div>
 
-              {/* Search Bar */}
-              <div className="relative w-full sm:w-64">
-                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="搜索教师、课程或内容..."
-                  value={searchKeyword}
-                  onChange={(e) => setSearchKeyword(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-gray-200 focus:outline-none focus:border-indigo-600 bg-gray-50 focus:bg-white transition-all"
-                />
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  onClick={handleManualRefresh}
+                  disabled={isRefreshingReviews}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-semibold transition-all shrink-0 disabled:opacity-50"
+                  title="重新从 Supabase 云端拉取最新评教与待审数据"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingReviews ? 'animate-spin text-indigo-600' : ''}`} />
+                  <span>刷新数据</span>
+                </button>
+
+                {/* Search Bar */}
+                <div className="relative w-full sm:w-64">
+                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="搜索教师、课程或内容..."
+                    value={searchKeyword}
+                    onChange={(e) => setSearchKeyword(e.target.value)}
+                    className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-gray-200 focus:outline-none focus:border-indigo-600 bg-gray-50 focus:bg-white transition-all"
+                  />
+                </div>
               </div>
             </div>
 
             {/* Reviews List */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
               {filteredReviews.length === 0 ? (
-                <div className="py-16 text-center space-y-3">
+                <div className="py-12 px-4 text-center space-y-4 max-w-lg mx-auto">
                   <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center">
                     <CheckCircle2 className="w-6 h-6" />
                   </div>
-                  <h5 className="text-sm font-bold text-gray-800">
-                    {currentTab === 'pending' ? '太棒了！所有待审评价已全部复核完毕' : '暂无匹配的评价记录'}
-                  </h5>
-                  <p className="text-xs text-gray-400 max-w-sm mx-auto">
-                    {currentTab === 'pending'
-                      ? '当有学子提交新的课程评教时，系统将自动汇总至此供您审批公示。'
-                      : '您可以通过上方筛选查看其他状态分类。'}
-                  </p>
+                  <div>
+                    <h5 className="text-sm font-bold text-gray-800">
+                      {currentTab === 'pending' ? '当前暂无待审核评教' : '暂无匹配的评价记录'}
+                    </h5>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {currentTab === 'pending'
+                        ? '当有学子提交新的课程评教时，系统将汇总至此供您审批公示。'
+                        : '您可以通过上方筛选查看其他状态分类。'}
+                    </p>
+                  </div>
+
+                  {currentTab === 'pending' && (
+                    <div className="p-4 bg-amber-50/80 border border-amber-200 rounded-2xl text-left space-y-2.5">
+                      <div className="flex items-start gap-2 text-amber-900">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div className="text-xs font-semibold">
+                          若其他账号已提交评价却在此处看不到？
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-amber-800 leading-relaxed">
+                        这是由于 Supabase 数据库默认的 RLS 行级安全策略设置了「仅过审评价可读（status = 'approved'）」，导致数据库拦截了待审评价的读取。
+                      </p>
+                      <button
+                        onClick={copyRlsSqlCode}
+                        className="w-full py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-2xs"
+                      >
+                        {copiedRlsSql ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedRlsSql ? '已复制修复 SQL，前往 Supabase 粘贴执行' : '复制修复 reviews 权限 SQL (1步搞定)'}</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 filteredReviews.map((rev) => {
@@ -683,12 +762,7 @@ ON CONFLICT (email) DO UPDATE SET is_active = true;`}
                             </span>
                           )}
                           <span className="text-[10px] text-gray-400">
-                            {new Date(rev.createdAt).toLocaleString('zh-CN', {
-                              month: '2-digit',
-                              day: '2-digit',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
+                            {formatReviewDate(rev.createdAt)}
                           </span>
                         </div>
                       </div>

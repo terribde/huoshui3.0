@@ -95,10 +95,12 @@ ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.point_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.admin_users ENABLE ROW LEVEL SECURITY;
 
--- 设定公开读取规则 (公共查询教师与过审评价永久免费)
+-- 设定公开读取与审核规则 (公共查询教师与评价，支持管理员工作台审核、公示与驳回)
 CREATE POLICY "Public can view teachers" ON public.teachers FOR SELECT USING (true);
-CREATE POLICY "Public can view approved reviews" ON public.reviews FOR SELECT USING (status = 'approved');
+CREATE POLICY "Public can view reviews" ON public.reviews FOR SELECT USING (true);
 CREATE POLICY "Public can insert reviews" ON public.reviews FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public can update reviews" ON public.reviews FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Public can delete reviews" ON public.reviews FOR DELETE USING (true);
 CREATE POLICY "Public can view own profile" ON public.user_profiles FOR SELECT USING (true);
 CREATE POLICY "Public can update own profile" ON public.user_profiles FOR ALL USING (true);
 CREATE POLICY "Public can view transactions" ON public.point_transactions FOR SELECT USING (true);

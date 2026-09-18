@@ -278,6 +278,11 @@ export const supabaseService = {
         }, { onConflict: 'id', ignoreDuplicates: true });
       }
 
+      let validCreatedAt: string = new Date().toISOString();
+      if (review.createdAt && !isNaN(Date.parse(review.createdAt))) {
+        validCreatedAt = new Date(review.createdAt).toISOString();
+      }
+
       const insertPayload: any = {
         id: review.id,
         teacher_id: review.teacherId,
@@ -295,7 +300,7 @@ export const supabaseService = {
         user_email: review.userEmail || null,
         is_historical_migrated: false,
         status: review.status,
-        created_at: review.createdAt,
+        created_at: validCreatedAt,
         likes: review.likes || 0,
       };
 
