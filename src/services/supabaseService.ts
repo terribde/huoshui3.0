@@ -3,10 +3,135 @@ import { Teacher, Review, UserPointTransaction } from '../types';
 
 /**
  * Supabase Data Service
- * Provides real database persistence with graceful local fallback
+ * Provides real database persistence with graceful local fallback & instant caching
  */
 
+const getStorageKey = (key: string) => `swjtu_${key}`;
+
+function getLocalItem<T>(key: string, defaultValue: T): T {
+  try {
+    if (typeof window === 'undefined') return defaultValue;
+    const val = localStorage.getItem(getStorageKey(key));
+    return val ? JSON.parse(val) : defaultValue;
+  } catch {
+    return defaultValue;
+  }
+}
+
+function setLocalItem<T>(key: string, value: T): void {
+  try {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(getStorageKey(key), JSON.stringify(value));
+  } catch (e) {
+    console.warn('[LocalStorage] Write failed:', e);
+  }
+}
+
 export const supabaseService = {
+  /**
+   * Local storage helpers for reviews & user points
+   */
+  getLocalReviews(): Review[] {
+    return getLocalItem<Review[]>('submitted_reviews', []);
+  },
+
+  saveLocalReview(review: Review): void {
+    const existing = this.getLocalReviews();
+    const updated = [review, ...existing.filter((r) => r.id !== review.id)];
+    setLocalItem('submitted_reviews', updated);
+  },
+
+  getLocalUserPoints(userId: string): { points: number; transactions: UserPointTransaction[] } | null {
+    const cache = getLocalItem<{ points: number; transactions: UserPointTransaction[] } | null>(
+      `points_${userId}`,
+      null
+    );
+    return cache;
+  },
+
+  saveLocalUserPoints(userId: string, points: number, transactions: UserPointTransaction[]): void {
+    setLocalItem(`points_${userId}`, { points, transactions });
+  },
+
+  /**
+   * Check-in date tracking (local and remote)
+   */
+  getLocalDateString(): string {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  },
+
+  getLocalCheckInDate(userId: string): string | null {
+    return getLocalItem<string | null>(`last_checkin_${userId}`, null);
+  },
+
+  saveLocalCheckInDate(userId: string, dateStr: string): void {
+    setLocalItem(`last_checkin_${userId}`, dateStr);
+  },
+
+  async hasUserCheckedInToday(userId: string): Promise<boolean> {
+    const todayStr = this.getLocalDateString();
+
+    // 1. Check local device cache
+    const localDate = this.getLocalCheckInDate(userId);
+    if (localDate === todayStr) {
+      return true;
+    }
+
+    // 2. Check Supabase user_profiles if configured
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .select('last_checkin_date')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (!error && data?.last_checkin_date) {
+          const remoteDate = String(data.last_checkin_date).slice(0, 10);
+          if (remoteDate === todayStr) {
+            this.saveLocalCheckInDate(userId, todayStr);
+            return true;
+          }
+        }
+      } catch (err) {
+        console.warn('[Supabase] Check-in verification failed:', err);
+      }
+    }
+
+    return false;
+  },
+
+  async recordCheckIn(userId: string, added: number, newBalance: number): Promise<boolean> {
+    const todayStr = this.getLocalDateString();
+
+    // 1. Save locally immediately
+    this.saveLocalCheckInDate(userId, todayStr);
+
+    // 2. Persist point transaction
+    await this.savePointTransaction(userId, '每日签到奖励 (PRD 5.0)', added, newBalance);
+
+    // 3. Update last_checkin_date on Supabase user_profiles
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('user_profiles')
+          .upsert({
+            id: userId,
+            points: newBalance,
+            last_checkin_date: todayStr,
+          });
+      } catch (err) {
+        console.warn('[Supabase] Failed to sync last_checkin_date to cloud:', err);
+      }
+    }
+
+    return true;
+  },
+
   /**
    * Fetch all teachers from Supabase
    */
@@ -55,55 +180,77 @@ export const supabaseService = {
   },
 
   /**
-   * Fetch reviews from Supabase
+   * Fetch reviews: Merges remote Supabase records with local user-submitted reviews
    */
   async getReviews(teacherId?: string): Promise<Review[] | null> {
-    if (!isSupabaseConfigured || !supabase) return null;
-    try {
-      let query = supabase.from('reviews').select('*').order('created_at', { ascending: false });
-      if (teacherId) {
-        query = query.eq('teacher_id', teacherId);
+    let remoteReviews: Review[] = [];
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        let query = supabase.from('reviews').select('*').order('created_at', { ascending: false });
+        if (teacherId) {
+          query = query.eq('teacher_id', teacherId);
+        }
+
+        const { data, error } = await query;
+        if (!error && data) {
+          remoteReviews = data.map((row: any) => ({
+            id: row.id,
+            teacherId: row.teacher_id,
+            courseName: row.course_name,
+            yearTerm: row.year_term || '2024-2025第1学期',
+            dimensions: {
+              attendanceStrictness: row.attendance_strictness,
+              gradingLeniency: row.grading_leniency,
+              effortMatters: row.effort_matters,
+              workloadDifficulty: row.workload_difficulty,
+              approachability: row.approachability,
+              teachingQuality: row.teaching_quality,
+            },
+            comment: row.comment || '',
+            authorNickname: row.author_nickname || '匿名交大学子',
+            userId: row.user_id,
+            userEmail: row.user_email,
+            isHistoricalMigrated: Boolean(row.is_historical_migrated),
+            status: row.status || 'approved',
+            createdAt: row.created_at || new Date().toISOString(),
+            likes: Number(row.likes) || 0,
+          }));
+        }
+      } catch (err) {
+        console.warn('[Supabase] Failed to fetch remote reviews:', err);
       }
-
-      const { data, error } = await query;
-      if (error) {
-        console.warn('[Supabase] Error fetching reviews:', error.message);
-        return null;
-      }
-
-      if (!data) return null;
-
-      return data.map((row: any) => ({
-        id: row.id,
-        teacherId: row.teacher_id,
-        courseName: row.course_name,
-        yearTerm: row.year_term || '2024-2025第1学期',
-        dimensions: {
-          attendanceStrictness: row.attendance_strictness,
-          gradingLeniency: row.grading_leniency,
-          effortMatters: row.effort_matters,
-          workloadDifficulty: row.workload_difficulty,
-          approachability: row.approachability,
-          teachingQuality: row.teaching_quality,
-        },
-        comment: row.comment || '',
-        authorNickname: row.author_nickname || '匿名交大学子',
-        isHistoricalMigrated: Boolean(row.is_historical_migrated),
-        status: row.status || 'approved',
-        createdAt: row.created_at || new Date().toISOString(),
-        likes: Number(row.likes) || 0,
-      }));
-    } catch (err) {
-      console.warn('[Supabase] Failed to fetch reviews:', err);
-      return null;
     }
+
+    // Always include locally saved user reviews so they are never lost on reload
+    let localReviews = this.getLocalReviews();
+    if (teacherId) {
+      localReviews = localReviews.filter((r) => r.teacherId === teacherId);
+    }
+
+    // Merge deduplicated by id (local reviews override/supplement remote)
+    const reviewMap = new Map<string, Review>();
+    for (const r of remoteReviews) {
+      reviewMap.set(r.id, r);
+    }
+    for (const r of localReviews) {
+      reviewMap.set(r.id, r);
+    }
+
+    const merged = Array.from(reviewMap.values());
+    return merged.length > 0 ? merged : null;
   },
 
   /**
-   * Submit a new teacher review to Supabase
+   * Submit a new teacher review to Supabase & Local Cache
    */
   async submitReview(review: Review): Promise<boolean> {
-    if (!isSupabaseConfigured || !supabase) return false;
+    // 1. Always save locally first for instant user feedback and offline safety
+    this.saveLocalReview(review);
+
+    // 2. Persist to Supabase if configured
+    if (!isSupabaseConfigured || !supabase) return true;
+
     try {
       const { error } = await supabase.from('reviews').insert({
         id: review.id,
@@ -118,57 +265,107 @@ export const supabaseService = {
         teaching_quality: review.dimensions.teachingQuality,
         comment: review.comment,
         author_nickname: review.authorNickname,
+        user_id: review.userId || null,
+        user_email: review.userEmail || null,
         is_historical_migrated: false,
         status: review.status,
         created_at: review.createdAt,
-        likes: 0,
+        likes: review.likes || 0,
       });
 
       if (error) {
-        console.error('[Supabase] Error submitting review:', error.message);
-        return false;
+        console.warn('[Supabase] Error submitting review to remote:', error.message);
+        // Returns true because it's safely saved in local storage
       }
       return true;
     } catch (err) {
-      console.error('[Supabase] Review submission failed:', err);
-      return false;
+      console.warn('[Supabase] Review remote submission failed (cached locally):', err);
+      return true;
     }
   },
 
   /**
-   * Fetch User Points & Transactions
+   * Fetch User Points & Transactions (with automatic 100 Welcome Points fallback)
    */
-  async getUserPoints(userId: string = 'swjtu_student_default'): Promise<{ points: number; transactions: UserPointTransaction[] } | null> {
-    if (!isSupabaseConfigured || !supabase) return null;
-    try {
-      const { data: userData } = await supabase
-        .from('user_profiles')
-        .select('points')
-        .eq('id', userId)
-        .maybeSingle();
+  async getUserPoints(userId: string = 'swjtu_student_default'): Promise<{ points: number; transactions: UserPointTransaction[] }> {
+    // 1. Try fetching from Supabase if configured
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data: userData } = await supabase
+          .from('user_profiles')
+          .select('points')
+          .eq('id', userId)
+          .maybeSingle();
 
-      const { data: txData } = await supabase
-        .from('point_transactions')
-        .select('*')
-        .eq('user_id', userId)
-        .order('timestamp', { ascending: false });
+        const { data: txData } = await supabase
+          .from('point_transactions')
+          .select('*')
+          .eq('user_id', userId)
+          .order('timestamp', { ascending: false });
 
-      if (!userData && (!txData || txData.length === 0)) return null;
-
-      return {
-        points: userData?.points ?? 100,
-        transactions: (txData || []).map((t: any) => ({
-          id: t.id,
-          action: t.action,
-          amount: Number(t.amount),
-          timestamp: t.timestamp,
-          balanceAfter: Number(t.balance_after),
-        })),
-      };
-    } catch (err) {
-      console.warn('[Supabase] Failed to fetch user points:', err);
-      return null;
+        if (userData || (txData && txData.length > 0)) {
+          const result = {
+            points: userData?.points ?? 100,
+            transactions: (txData || []).map((t: any) => ({
+              id: t.id,
+              action: t.action,
+              amount: Number(t.amount),
+              timestamp: t.timestamp ? new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '刚刚',
+              balanceAfter: Number(t.balance_after),
+            })),
+          };
+          // Sync to local cache
+          this.saveLocalUserPoints(userId, result.points, result.transactions);
+          return result;
+        }
+      } catch (err) {
+        console.warn('[Supabase] Failed to fetch user points from cloud:', err);
+      }
     }
+
+    // 2. Check local storage cache
+    const local = this.getLocalUserPoints(userId);
+    if (local && typeof local.points === 'number') {
+      return local;
+    }
+
+    // 3. New registered user without points record: Automatically grant 100 welcome points!
+    const welcomeTx: UserPointTransaction = {
+      id: 'tx_init_' + Date.now(),
+      action: '新用户注册欢迎礼 (PRD 5.0)',
+      amount: 100,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      balanceAfter: 100,
+    };
+
+    const initialData = {
+      points: 100,
+      transactions: [welcomeTx],
+    };
+
+    // Save locally
+    this.saveLocalUserPoints(userId, initialData.points, initialData.transactions);
+
+    // Try cloud sync in background
+    if (isSupabaseConfigured && supabase) {
+      (async () => {
+        try {
+          await supabase.from('user_profiles').upsert({ id: userId, points: 100 });
+          await supabase.from('point_transactions').insert({
+            id: welcomeTx.id,
+            user_id: userId,
+            action: welcomeTx.action,
+            amount: 100,
+            balance_after: 100,
+            timestamp: new Date().toISOString(),
+          });
+        } catch (e) {
+          console.warn('[Supabase] Auto sync welcome points note:', e);
+        }
+      })();
+    }
+
+    return initialData;
   },
 
   /**
@@ -180,16 +377,28 @@ export const supabaseService = {
     amount: number,
     balanceAfter: number
   ): Promise<boolean> {
-    if (!isSupabaseConfigured || !supabase) return false;
+    const txId = 'tx_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+    const newTx: UserPointTransaction = {
+      id: txId,
+      action,
+      amount,
+      balanceAfter,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+
+    // 1. Update local cache immediately
+    const local = this.getLocalUserPoints(userId) || { points: 100, transactions: [] };
+    const updatedTransactions = [newTx, ...local.transactions];
+    this.saveLocalUserPoints(userId, balanceAfter, updatedTransactions);
+
+    // 2. Persist to Supabase if configured
+    if (!isSupabaseConfigured || !supabase) return true;
+
     try {
-      const txId = 'tx_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
-      
-      // Update or insert user profile
       await supabase
         .from('user_profiles')
         .upsert({ id: userId, points: balanceAfter });
 
-      // Insert transaction log
       await supabase
         .from('point_transactions')
         .insert({
@@ -203,8 +412,8 @@ export const supabaseService = {
 
       return true;
     } catch (err) {
-      console.error('[Supabase] Failed to persist point transaction:', err);
-      return false;
+      console.warn('[Supabase] Failed to persist point transaction remotely:', err);
+      return true;
     }
   },
 
@@ -231,7 +440,7 @@ export const supabaseService = {
       throw error;
     }
 
-    // Ensure user_profile entry is created if user was created
+    // Ensure user_profile entry and 100 points are created immediately
     if (data.user) {
       await this.ensureUserProfile(data.user.id, data.user.email || email);
     }
@@ -288,40 +497,53 @@ export const supabaseService = {
   },
 
   /**
-   * Ensure user profile exists in public.user_profiles
+   * Ensure user profile exists with 100 points
    */
-  async ensureUserProfile(userId: string, email: string) {
-    if (!isSupabaseConfigured || !supabase) return;
-    try {
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('id, points')
-        .eq('id', userId)
-        .maybeSingle();
+  async ensureUserProfile(userId: string, _email: string) {
+    // 1. Initialize 100 points in local storage immediately
+    const existing = this.getLocalUserPoints(userId);
+    if (!existing) {
+      const welcomeTx: UserPointTransaction = {
+        id: 'tx_welcome_' + Date.now(),
+        action: '新用户注册欢迎礼 (PRD 5.0)',
+        amount: 100,
+        balanceAfter: 100,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      this.saveLocalUserPoints(userId, 100, [welcomeTx]);
+    }
 
-      if (!profile) {
-        // Create initial profile with 100 points
-        await supabase
+    // 2. Sync to Supabase if reachable
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data: profile } = await supabase
           .from('user_profiles')
-          .insert({
-            id: userId,
-            points: 100,
-          });
+          .select('id, points')
+          .eq('id', userId)
+          .maybeSingle();
 
-        // Add initial bonus transaction
-        await supabase
-          .from('point_transactions')
-          .insert({
-            id: 'tx_welcome_' + Date.now(),
-            user_id: userId,
-            action: '新用户注册赠送新人评教积分',
-            amount: 100,
-            balance_after: 100,
-            timestamp: new Date().toISOString(),
-          });
+        if (!profile) {
+          await supabase
+            .from('user_profiles')
+            .upsert({
+              id: userId,
+              points: 100,
+            });
+
+          await supabase
+            .from('point_transactions')
+            .insert({
+              id: 'tx_welcome_' + Date.now(),
+              user_id: userId,
+              action: '新用户注册欢迎礼 (PRD 5.0)',
+              amount: 100,
+              balance_after: 100,
+              timestamp: new Date().toISOString(),
+            });
+        }
+      } catch (err) {
+        console.warn('[Supabase] ensureUserProfile cloud warning:', err);
       }
-    } catch (err) {
-      console.warn('[Supabase] ensureUserProfile warning:', err);
     }
   },
 

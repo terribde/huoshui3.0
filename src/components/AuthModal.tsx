@@ -20,7 +20,7 @@ import { SWJTU_COLLEGES } from '../data/mockTeachers';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAuthSuccess?: (user: any) => void;
+  onAuthSuccess?: (user: any, isNewRegistration?: boolean) => void;
   initialMode?: 'login' | 'register';
 }
 
@@ -93,29 +93,41 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         const res = await supabaseService.signIn(cleanEmail, password);
         setSuccessMsg('登录成功！正在加载个人评教档案...');
         setTimeout(() => {
-          onAuthSuccess?.(res.user);
+          if (res.user) {
+            onAuthSuccess?.(res.user, false);
+          }
           onClose();
           resetForm();
-        }, 600);
+        }, 500);
       } else {
+        const finalNickname = nickname.trim() || '交大学子';
         const res = await supabaseService.signUp(cleanEmail, password, {
-          nickname: nickname.trim() || '交大学子',
+          nickname: finalNickname,
           college,
           campus,
         });
 
-        if (res.user && !res.session) {
-          // Email confirmation might be enabled
-          setSuccessMsg('注册申请已提交！若您的 Supabase 开启了邮件确认，请查收邮件；若未开启则可直接登录。');
-        } else {
-          setSuccessMsg('注册成功！已为您自动赠送 100 初始评教积分 🎁');
-        }
+        const authUser = res.user
+          ? {
+              ...res.user,
+              user_metadata: {
+                ...(res.user.user_metadata || {}),
+                nickname: finalNickname,
+                college,
+                campus,
+              },
+            }
+          : null;
+
+        setSuccessMsg('注册成功！已为您自动赠送 100 初始评教积分 🎁');
 
         setTimeout(() => {
-          onAuthSuccess?.(res.user);
+          if (authUser) {
+            onAuthSuccess?.(authUser, true);
+          }
           onClose();
           resetForm();
-        }, 1200);
+        }, 800);
       }
     } catch (err: any) {
       console.error('[Auth Error]', err);

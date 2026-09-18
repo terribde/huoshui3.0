@@ -101,21 +101,25 @@ export default function App() {
 
   // Sync Supabase Auth & User Data
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
-
     // Load initial teachers from Supabase
-    supabaseService.getTeachers().then((remoteTeachers) => {
-      if (remoteTeachers && remoteTeachers.length > 0) {
-        setTeachers(remoteTeachers);
+    if (isSupabaseConfigured) {
+      supabaseService.getTeachers().then((remoteTeachers) => {
+        if (remoteTeachers && remoteTeachers.length > 0) {
+          setTeachers(remoteTeachers);
+        }
+      });
+    }
+
+    // Load reviews from Supabase and local cache
+    supabaseService.getReviews().then((allReviews) => {
+      if (allReviews && allReviews.length > 0) {
+        const existingIds = new Set(allReviews.map((r) => r.id));
+        const combined = [...allReviews, ...INITIAL_REVIEWS.filter((r) => !existingIds.has(r.id))];
+        setReviews(combined);
       }
     });
 
-    // Load reviews from Supabase
-    supabaseService.getReviews().then((remoteReviews) => {
-      if (remoteReviews && remoteReviews.length > 0) {
-        setReviews(remoteReviews);
-      }
-    });
+    if (!isSupabaseConfigured) return;
 
     // Check active auth session
     supabaseService.getCurrentUser().then((user) => {
@@ -145,22 +149,26 @@ export default function App() {
     };
   }, []);
 
-  const loadUserPointsData = async (userId: string) => {
+  const loadUserPointsData = async (userId: string, isNewRegistration: boolean = false) => {
+    // Check if user already checked in today
+    const checkedIn = await supabaseService.hasUserCheckedInToday(userId);
+    setHasCheckedInToday(checkedIn);
+
     const pointData = await supabaseService.getUserPoints(userId);
-    if (pointData) {
+    if (pointData && (!isNewRegistration || pointData.points >= 100)) {
       setUserPoints(pointData.points);
       setTransactions(pointData.transactions);
     } else {
+      const welcomeTx: UserPointTransaction = {
+        id: 'tx_init_' + Date.now(),
+        action: '新用户注册欢迎礼 (PRD 5.0)',
+        amount: 100,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        balanceAfter: 100,
+      };
       setUserPoints(100);
-      setTransactions([
-        {
-          id: 'tx_init_' + Date.now(),
-          action: '新用户注册欢迎礼 (PRD 5.0)',
-          amount: 100,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          balanceAfter: 100,
-        },
-      ]);
+      setTransactions([welcomeTx]);
+      supabaseService.saveLocalUserPoints(userId, 100, [welcomeTx]);
     }
   };
 
@@ -217,7 +225,13 @@ export default function App() {
       return;
     }
 
-    if (hasCheckedInToday) return;
+    const alreadyChecked = await supabaseService.hasUserCheckedInToday(currentUser.id);
+    if (hasCheckedInToday || alreadyChecked) {
+      setHasCheckedInToday(true);
+      alert('您今日已经完成签到啦，明日 00:00 后即可再次签到领取积分！');
+      return;
+    }
+
     const added = 5;
     const newBalance = userPoints + added;
     setUserPoints(newBalance);
@@ -233,9 +247,7 @@ export default function App() {
       ...prev,
     ]);
 
-    if (isSupabaseConfigured) {
-      await supabaseService.savePointTransaction(currentUser.id, '每日签到奖励 (PRD 5.0)', added, newBalance);
-    }
+    await supabaseService.recordCheckIn(currentUser.id, added, newBalance);
   };
 
   // Guarded Review Open: Requires User Login!
@@ -258,10 +270,13 @@ export default function App() {
     const nickname = currentUser.user_metadata?.nickname || '西南交大学子';
     const newReview: Review = {
       ...newReviewData,
-      authorNickname: nickname,
       id: `rev_${Date.now()}`,
+      userId: currentUser.id,
+      userEmail: currentUser.email,
+      authorNickname: nickname,
       createdAt: '刚刚',
       likes: 1,
+      status: 'approved',
     };
 
     setReviews((prev) => [newReview, ...prev]);
@@ -294,11 +309,9 @@ export default function App() {
       ...prev,
     ]);
 
-    // Persist to Supabase if configured
-    if (isSupabaseConfigured) {
-      supabaseService.submitReview(newReview);
-      supabaseService.savePointTransaction(currentUser.id, `撰写教师评价通过审核 (+${bonus}分)`, bonus, newBalance);
-    }
+    // Persist review and points (local cache + Supabase cloud)
+    supabaseService.submitReview(newReview);
+    supabaseService.savePointTransaction(currentUser.id, `撰写教师评价通过审核 (+${bonus}分)`, bonus, newBalance);
   };
 
   // Like review
@@ -333,7 +346,12 @@ export default function App() {
   // Filter reviews written by current user
   const myUserNickname = currentUser?.user_metadata?.nickname;
   const myReviews = currentUser
-    ? reviews.filter((r) => myUserNickname && r.authorNickname === myUserNickname)
+    ? reviews.filter(
+        (r) =>
+          (r.userId && r.userId === currentUser.id) ||
+          (currentUser.email && r.userEmail === currentUser.email) ||
+          (myUserNickname && r.authorNickname === myUserNickname)
+      )
     : [];
 
   return (
@@ -815,8 +833,9 @@ export default function App() {
             isOpen={isAuthModalOpen}
             onClose={() => setIsAuthModalOpen(false)}
             initialMode={authModalMode}
-            onAuthSuccess={(user) => {
+            onAuthSuccess={(user, isNewRegistration) => {
               setCurrentUser(user);
+              loadUserPointsData(user.id, isNewRegistration);
               setIsAuthModalOpen(false);
             }}
           />

@@ -15,6 +15,8 @@ export interface Review {
   dimensions: Partial<TeacherDimensions>;
   comment?: string;
   authorNickname: string;
+  userId?: string;
+  userEmail?: string;
   isHistoricalMigrated?: boolean; // 2024年前老站迁移数据
   status: 'approved' | 'pending' | 'rejected';
   createdAt: string;
