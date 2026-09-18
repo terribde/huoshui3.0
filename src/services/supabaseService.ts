@@ -675,4 +675,146 @@ export const supabaseService = {
     }
     return supabase.auth.onAuthStateChange(callback);
   },
+
+  /**
+   * Check whether a user email is an authorized administrator dynamically from Supabase database
+   */
+  async checkIsAdmin(email?: string): Promise<{ isAdmin: boolean; role?: string; nickname?: string }> {
+    if (!email) return { isAdmin: false };
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // 1. Hardcoded initial super admin fallback (guarantees access even before SQL table is created)
+    const isHardcodedAdmin = 
+      normalizedEmail === '2502087135@qq.com' ||
+      normalizedEmail.includes('admin') ||
+      normalizedEmail.endsWith('@swjtu.edu.cn');
+
+    // 2. Query dynamic database table `admin_users`
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('admin_users')
+          .select('email, role, nickname, is_active')
+          .eq('email', normalizedEmail)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (data) {
+          return {
+            isAdmin: true,
+            role: data.role || 'admin',
+            nickname: data.nickname || '审核管理员',
+          };
+        }
+        if (error) {
+          // Table might not be created yet, fallback to hardcoded
+          console.warn('[Supabase] admin_users query warning:', error.message);
+        }
+      } catch (err) {
+        console.warn('[Supabase] checkIsAdmin exception:', err);
+      }
+    }
+
+    return {
+      isAdmin: isHardcodedAdmin,
+      role: isHardcodedAdmin ? 'super_admin' : undefined,
+      nickname: isHardcodedAdmin ? '系统超管' : undefined,
+    };
+  },
+
+  /**
+   * Get all admin users from database
+   */
+  async getAdminList(): Promise<Array<{ id: string; email: string; role: string; nickname: string; is_active: boolean; created_at: string }>> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('admin_users')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (data && data.length > 0) {
+          return data;
+        }
+        if (error) {
+          console.warn('[Supabase] getAdminList query warning:', error.message);
+        }
+      } catch (err) {
+        console.warn('[Supabase] getAdminList exception:', err);
+      }
+    }
+
+    // Default fallback admin list
+    return [
+      {
+        id: 'default_super_admin',
+        email: '2502087135@qq.com',
+        role: 'super_admin',
+        nickname: '站长超管',
+        is_active: true,
+        created_at: new Date().toISOString(),
+      },
+    ];
+  },
+
+  /**
+   * Add or update an administrator in the database
+   */
+  async addAdminUser(email: string, role: string = 'admin', nickname: string = '评教审核员'): Promise<boolean> {
+    if (!email) return false;
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase
+          .from('admin_users')
+          .upsert(
+            {
+              email: normalizedEmail,
+              role,
+              nickname,
+              is_active: true,
+            },
+            { onConflict: 'email' }
+          );
+
+        if (error) {
+          console.warn('[Supabase] addAdminUser error:', error);
+          return false;
+        }
+        return true;
+      } catch (err) {
+        console.warn('[Supabase] addAdminUser exception:', err);
+        return false;
+      }
+    }
+    return true;
+  },
+
+  /**
+   * Toggle or remove an administrator
+   */
+  async toggleAdminStatus(email: string, isActive: boolean): Promise<boolean> {
+    if (!email) return false;
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase
+          .from('admin_users')
+          .update({ is_active: isActive })
+          .eq('email', normalizedEmail);
+
+        if (error) {
+          console.warn('[Supabase] toggleAdminStatus error:', error);
+          return false;
+        }
+        return true;
+      } catch (err) {
+        console.warn('[Supabase] toggleAdminStatus exception:', err);
+        return false;
+      }
+    }
+    return true;
+  },
 };

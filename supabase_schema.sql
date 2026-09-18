@@ -72,11 +72,28 @@ CREATE TABLE IF NOT EXISTS public.point_transactions (
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- 5. 管理员动态配置表 (admin_users) - 存储审核管理员名单与权限
+CREATE TABLE IF NOT EXISTS public.admin_users (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    role TEXT NOT NULL DEFAULT 'admin', -- 'super_admin' (超管) | 'admin' (审核员) | 'moderator' (学工助理)
+    nickname TEXT DEFAULT '评教审核员',
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 默认插入站长初始超管账号 (可自由新增或修改)
+INSERT INTO public.admin_users (email, role, nickname, is_active)
+VALUES 
+    ('2502087135@qq.com', 'super_admin', '站长超管', true)
+ON CONFLICT (email) DO UPDATE SET is_active = true, role = 'super_admin';
+
 -- 启用 Row Level Security (RLS)
 ALTER TABLE public.teachers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.point_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admin_users ENABLE ROW LEVEL SECURITY;
 
 -- 设定公开读取规则 (公共查询教师与过审评价永久免费)
 CREATE POLICY "Public can view teachers" ON public.teachers FOR SELECT USING (true);
@@ -86,3 +103,9 @@ CREATE POLICY "Public can view own profile" ON public.user_profiles FOR SELECT U
 CREATE POLICY "Public can update own profile" ON public.user_profiles FOR ALL USING (true);
 CREATE POLICY "Public can view transactions" ON public.point_transactions FOR SELECT USING (true);
 CREATE POLICY "Public can insert transactions" ON public.point_transactions FOR INSERT WITH CHECK (true);
+
+-- 管理员表 RLS: 允许客户端校验管理员身份状态
+CREATE POLICY "Public can check active admin status" ON public.admin_users 
+FOR SELECT USING (is_active = true);
+CREATE POLICY "Public can manage admin users" ON public.admin_users 
+FOR ALL USING (true);
