@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { Teacher, Review, UserPointTransaction } from '../types';
+import { INITIAL_TEACHERS } from '../data/mockTeachers';
 
 /**
  * Supabase Data Service
@@ -213,6 +214,7 @@ export const supabaseService = {
             userEmail: row.user_email,
             isHistoricalMigrated: Boolean(row.is_historical_migrated),
             status: row.status || 'approved',
+            rejectionReason: row.rejection_reason || undefined,
             createdAt: row.created_at || new Date().toISOString(),
             likes: Number(row.likes) || 0,
           }));
@@ -252,7 +254,31 @@ export const supabaseService = {
     if (!isSupabaseConfigured || !supabase) return true;
 
     try {
-      const { error } = await supabase.from('reviews').insert({
+      // Ensure the referenced teacher exists in Supabase to avoid foreign key errors
+      const mockTeacher = INITIAL_TEACHERS.find((t) => t.id === review.teacherId);
+      if (mockTeacher) {
+        await supabase.from('teachers').upsert({
+          id: mockTeacher.id,
+          name: mockTeacher.name,
+          title: mockTeacher.title,
+          college: mockTeacher.college,
+          campus: mockTeacher.campus,
+          courses: mockTeacher.courses,
+          is_teaching_this_term: mockTeacher.isTeachingThisTerm,
+          overall_score: mockTeacher.overallScore,
+          review_count: mockTeacher.reviewCount,
+          attendance_strictness: mockTeacher.dimensions.attendanceStrictness,
+          grading_leniency: mockTeacher.dimensions.gradingLeniency,
+          effort_matters: mockTeacher.dimensions.effortMatters,
+          workload_difficulty: mockTeacher.dimensions.workloadDifficulty,
+          approachability: mockTeacher.dimensions.approachability,
+          teaching_quality: mockTeacher.dimensions.teachingQuality,
+          has_historical_data: mockTeacher.hasHistoricalData,
+          tags: mockTeacher.tags,
+        }, { onConflict: 'id', ignoreDuplicates: true });
+      }
+
+      const insertPayload: any = {
         id: review.id,
         teacher_id: review.teacherId,
         course_name: review.courseName,
@@ -271,17 +297,110 @@ export const supabaseService = {
         status: review.status,
         created_at: review.createdAt,
         likes: review.likes || 0,
-      });
+      };
+
+      if (review.rejectionReason) {
+        insertPayload.rejection_reason = review.rejectionReason;
+      }
+
+      let { error } = await supabase.from('reviews').insert(insertPayload);
+      if (error && error.message?.includes('rejection_reason')) {
+        delete insertPayload.rejection_reason;
+        const retryRes = await supabase.from('reviews').insert(insertPayload);
+        error = retryRes.error;
+      }
 
       if (error) {
         console.warn('[Supabase] Error submitting review to remote:', error.message);
-        // Returns true because it's safely saved in local storage
       }
       return true;
     } catch (err) {
       console.warn('[Supabase] Review remote submission failed (cached locally):', err);
       return true;
     }
+  },
+
+  /**
+   * Update Review status (approved / rejected) with optional rejection reason and reward points
+   */
+  async updateReviewStatus(
+    reviewId: string,
+    status: 'approved' | 'rejected',
+    rejectionReason?: string,
+    authorUserId?: string
+  ): Promise<boolean> {
+    // 1. Update local cache
+    const local = this.getLocalReviews();
+    const updated = local.map((r) =>
+      r.id === reviewId ? { ...r, status, rejectionReason: status === 'rejected' ? rejectionReason : undefined } : r
+    );
+    try {
+      localStorage.setItem('swjtu_local_reviews', JSON.stringify(updated));
+    } catch (e) {
+      console.warn('Failed to update review in local storage:', e);
+    }
+
+    // 2. Update Supabase if configured
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const updatePayload: any = { status };
+        if (rejectionReason) {
+          updatePayload.rejection_reason = rejectionReason;
+        } else if (status === 'approved') {
+          updatePayload.rejection_reason = null;
+        }
+
+        let { error } = await supabase.from('reviews').update(updatePayload).eq('id', reviewId);
+        if (error && error.message?.includes('rejection_reason')) {
+          const retryRes = await supabase.from('reviews').update({ status }).eq('id', reviewId);
+          error = retryRes.error;
+        }
+
+        if (error) {
+          console.warn('[Supabase] Failed to update review status in remote:', error);
+        }
+      } catch (err) {
+        console.warn('[Supabase] updateReviewStatus exception:', err);
+      }
+    }
+
+    // 3. If approved, automatically award +20 points to the author!
+    if (status === 'approved' && authorUserId) {
+      try {
+        const pointsData = await this.getUserPoints(authorUserId);
+        const newBalance = pointsData.points + 20;
+        await this.savePointTransaction(authorUserId, '撰写教师评价审核通过 (+20分)', 20, newBalance);
+      } catch (err) {
+        console.warn('Failed to award review reward points:', err);
+      }
+    }
+
+    return true;
+  },
+
+  /**
+   * Delete a review (e.g., author deletes rejected review or admin removes)
+   */
+  async deleteReview(reviewId: string): Promise<boolean> {
+    // 1. Remove from local cache
+    const local = this.getLocalReviews();
+    const filtered = local.filter((r) => r.id !== reviewId);
+    try {
+      localStorage.setItem('swjtu_local_reviews', JSON.stringify(filtered));
+    } catch (e) {
+      console.warn('Failed to delete review from local storage:', e);
+    }
+
+    // 2. Remove from Supabase
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('reviews').delete().eq('id', reviewId);
+      } catch (err) {
+        console.warn('[Supabase] Failed to delete review from remote:', err);
+      }
+    }
+
+    return true;
   },
 
   /**

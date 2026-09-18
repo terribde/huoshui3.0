@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { UserPointTransaction, Review, Teacher } from '../../types';
-import { Coins, MessageSquare, Info, History, ArrowUpRight, CheckCircle2, ShieldAlert, Sparkles, User, Database, LogIn, LogOut, Lock } from 'lucide-react';
+import { Coins, MessageSquare, Info, History, ArrowUpRight, CheckCircle2, ShieldAlert, Sparkles, User, Database, LogIn, LogOut, Lock, Clock, XCircle, ShieldCheck, Trash2, Edit3, AlertCircle } from 'lucide-react';
 import { isSupabaseConfigured } from '../../lib/supabase';
 
 interface DesktopUserProfileProps {
@@ -16,6 +16,8 @@ interface DesktopUserProfileProps {
   onSelectTeacher?: (teacher: Teacher) => void;
   myReviews: Review[];
   teachers: Teacher[];
+  onOpenAdminAudit?: () => void;
+  onDeleteReview?: (reviewId: string) => void;
 }
 
 export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
@@ -31,10 +33,24 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
   onSelectTeacher,
   myReviews,
   teachers,
+  onOpenAdminAudit,
+  onDeleteReview,
 }) => {
   const isLoggedIn = Boolean(currentUser);
   const userNickname = currentUser?.user_metadata?.nickname || '西南交大学子';
   const userCampus = currentUser?.user_metadata?.campus || '犀浦校区';
+
+  // Review status filter tab
+  const [reviewFilterTab, setReviewFilterTab] = useState<'all' | 'approved' | 'pending' | 'rejected'>('all');
+
+  const pendingCount = myReviews.filter((r) => r.status === 'pending').length;
+  const approvedCount = myReviews.filter((r) => r.status === 'approved').length;
+  const rejectedCount = myReviews.filter((r) => r.status === 'rejected').length;
+
+  const filteredMyReviews = myReviews.filter((r) => {
+    if (reviewFilterTab === 'all') return true;
+    return r.status === reviewFilterTab;
+  });
 
   return (
     <div id="desktop-user-profile" className="w-full max-w-5xl mx-auto pt-2 pb-16 space-y-6">
@@ -99,6 +115,27 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                 </button>
               )}
             </div>
+
+            {/* Admin Audit Quick Entrance */}
+            {onOpenAdminAudit && (
+              <button
+                onClick={onOpenAdminAudit}
+                className="w-full py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-slate-100 rounded-2xl text-xs font-bold transition-all shadow-xs flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                  <span>评教审核管理后台</span>
+                  {pendingCount > 0 && (
+                    <span className="px-1.5 py-0.2 bg-amber-500 text-slate-900 rounded-full text-[10px] font-bold">
+                      {pendingCount}待审
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] text-slate-400 group-hover:text-slate-200">
+                  进入后台 ➔
+                </span>
+              </button>
+            )}
 
             {/* Big Points Wallet Banner */}
             {isLoggedIn ? (
@@ -227,7 +264,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
         <div className="col-span-7 space-y-5">
           {/* Submitted Reviews Card */}
           <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-2xs space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <MessageSquare className="w-4 h-4 text-indigo-600" />
                 <h4 className="text-sm font-bold text-gray-900">我提交过的课程评价</h4>
@@ -238,6 +275,55 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                 </span>
               )}
             </div>
+
+            {/* Status Filter Tabs */}
+            {isLoggedIn && myReviews.length > 0 && (
+              <div className="flex items-center gap-1.5 p-1 bg-gray-100/80 rounded-2xl w-fit">
+                <button
+                  onClick={() => setReviewFilterTab('all')}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                    reviewFilterTab === 'all'
+                      ? 'bg-white text-gray-900 shadow-xs'
+                      : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  全部 ({myReviews.length})
+                </button>
+                <button
+                  onClick={() => setReviewFilterTab('approved')}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+                    reviewFilterTab === 'approved'
+                      ? 'bg-white text-emerald-600 shadow-xs'
+                      : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                  已通过 ({approvedCount})
+                </button>
+                <button
+                  onClick={() => setReviewFilterTab('pending')}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+                    reviewFilterTab === 'pending'
+                      ? 'bg-white text-amber-600 shadow-xs'
+                      : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  <Clock className="w-3 h-3 text-amber-500" />
+                  审核中 ({pendingCount})
+                </button>
+                <button
+                  onClick={() => setReviewFilterTab('rejected')}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+                    reviewFilterTab === 'rejected'
+                      ? 'bg-white text-rose-600 shadow-xs'
+                      : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  <XCircle className="w-3 h-3 text-rose-500" />
+                  已驳回 ({rejectedCount})
+                </button>
+              </div>
+            )}
 
             {!isLoggedIn ? (
               <div className="py-10 text-center bg-gray-50/60 rounded-2xl border border-gray-100 space-y-2.5">
@@ -250,9 +336,19 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                   立即登录
                 </button>
               </div>
-            ) : myReviews.length === 0 ? (
+            ) : filteredMyReviews.length === 0 ? (
               <div className="py-10 text-center text-gray-400 text-xs bg-gray-50/50 rounded-2xl border border-dashed border-gray-200 space-y-2">
-                <p>您尚未提交过教师评价记录。</p>
+                <p>
+                  {reviewFilterTab === 'all'
+                    ? '您尚未提交过教师评价记录。'
+                    : `暂无状态为「${
+                        reviewFilterTab === 'pending'
+                          ? '审核中'
+                          : reviewFilterTab === 'approved'
+                          ? '已通过'
+                          : '已驳回'
+                      }」的评价。`}
+                </p>
                 <p className="text-[11px] text-gray-500">
                   提交真实教师上课评价通过审核即可获赠 20 积分奖励！
                 </p>
@@ -265,8 +361,12 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
               </div>
             ) : (
               <div className="space-y-3">
-                {myReviews.map((rev) => {
+                {filteredMyReviews.map((rev) => {
                   const teacher = teachers.find((t) => t.id === rev.teacherId);
+                  const isPending = rev.status === 'pending';
+                  const isApproved = rev.status === 'approved';
+                  const isRejected = rev.status === 'rejected';
+
                   return (
                     <div
                       key={rev.id}
@@ -281,10 +381,77 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                           <span className="text-gray-600 font-medium">{rev.courseName}</span>
                           <span className="text-[10px] text-gray-400">({rev.yearTerm || '近期'})</span>
                         </div>
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-                          <CheckCircle2 className="w-2.5 h-2.5" /> 已过审 (+20分)
-                        </span>
+
+                        {/* Badges according to PRD */}
+                        {isPending && (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-amber-600 animate-pulse" /> ⏳ 审核中
+                          </span>
+                        )}
+
+                        {isApproved && (
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                            <CheckCircle2 className="w-2.5 h-2.5" /> ✓ 已公示 (+20分)
+                          </span>
+                        )}
+
+                        {isRejected && (
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200 flex items-center gap-1">
+                            <XCircle className="w-2.5 h-2.5" /> ✕ 未通过
+                          </span>
+                        )}
                       </div>
+
+                      {/* Friendly tip for pending reviews */}
+                      {isPending && (
+                        <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/80 text-[11px] text-amber-800 flex items-start gap-2">
+                          <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                          <div>
+                            <strong>正在复核：</strong>正在由交大学工/学生审核组复核，预计24小时内公示。
+                            <span className="block text-amber-700 mt-0.5 font-medium">
+                              提示：+20 积分待审核通过后自动到账并记入教师主页。
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Rejection reason box if rejected */}
+                      {isRejected && (
+                        <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[11px] text-rose-800 space-y-1.5">
+                          <div className="flex items-start gap-2">
+                            <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
+                            <div>
+                              <strong>驳回原因：</strong>
+                              {rev.rejectionReason || '内容包含不当言论、人身攻击或过于简略'}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 pt-1 border-t border-rose-100">
+                            <button
+                              onClick={() => {
+                                if (teacher) {
+                                  onSelectTeacher?.(teacher);
+                                }
+                                onOpenReview();
+                              }}
+                              className="px-2.5 py-1 bg-white hover:bg-rose-100 text-rose-700 font-bold rounded-lg border border-rose-200 text-[10px] transition-colors flex items-center gap-1"
+                            >
+                              <Edit3 className="w-3 h-3" /> 重新编辑提交
+                            </button>
+                            {onDeleteReview && (
+                              <button
+                                onClick={() => {
+                                  if (confirm('确定要删除此条被驳回的记录吗？')) {
+                                    onDeleteReview(rev.id);
+                                  }
+                                }}
+                                className="px-2 py-1 text-gray-500 hover:text-rose-700 text-[10px] transition-colors flex items-center gap-1"
+                              >
+                                <Trash2 className="w-3 h-3" /> 删除记录
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       {rev.comment && (
                         <p className="text-gray-700 text-xs leading-relaxed bg-white p-3 rounded-xl border border-gray-100">
@@ -299,7 +466,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                           <span>质量：<strong className="text-indigo-600">{rev.dimensions?.teachingQuality ?? 4}分</strong></span>
                         </div>
 
-                        {teacher && onSelectTeacher && (
+                        {teacher && onSelectTeacher && isApproved && (
                           <button
                             onClick={() => onSelectTeacher(teacher)}
                             className="text-indigo-600 hover:text-indigo-700 text-xs font-medium flex items-center gap-1"

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Teacher, Review } from '../types';
-import { X, CheckCircle, ShieldCheck } from 'lucide-react';
-import { motion } from 'motion/react';
+import { X, CheckCircle, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { AnimatedDropdown } from './AnimatedDropdown';
+import { checkSensitiveContent } from '../utils/sensitiveFilter';
 
 interface ReviewModalProps {
   isOpen: boolean;
@@ -29,6 +30,10 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
   const [nickname, setNickname] = useState<string>('犀浦小火车');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [successNotice, setSuccessNotice] = useState<boolean>(false);
+  const [sensitiveBlockNotice, setSensitiveBlockNotice] = useState<{
+    violations: string[];
+    reason: string;
+  } | null>(null);
 
   // 6 dimensions state
   const [dimensions, setDimensions] = useState({
@@ -62,9 +67,14 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
         alert('评价文字略显单薄，请至少写出5个字以上的具体上课或考核体验，避免空泛注水哦！');
         return;
       }
-      const bannedKeywords = ['傻逼', '垃圾老师', '去死', '骗子'];
-      if (bannedKeywords.some((w) => comment.includes(w))) {
-        alert('评价内容包含不当言论或人身攻击，已被拦截。请基于学术客观性与真实上课体验描述。');
+
+      // Automated Sensitive Content Pre-screening
+      const scanResult = checkSensitiveContent(comment);
+      if (!scanResult.isClean) {
+        setSensitiveBlockNotice({
+          violations: scanResult.violations,
+          reason: scanResult.reason,
+        });
         return;
       }
     }
@@ -74,14 +84,13 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
     setTimeout(() => {
       onSubmitReview({
         teacherId: selectedTeacherId,
-        teacherName: currentTeacher ? currentTeacher.name : '未知老师',
         courseName: selectedCourse || currentTeacher?.courses[0] || '通识课',
         yearTerm,
         dimensions,
         comment: comment.trim() || undefined,
         authorNickname: nickname || '交大学子',
         isHistoricalMigrated: false,
-        status: 'approved',
+        status: 'pending', // <--- Initial status: pending
       });
 
       setIsSubmitting(false);
@@ -89,7 +98,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
       setTimeout(() => {
         setSuccessNotice(false);
         onClose();
-      }, 1400);
+      }, 2000);
     }, 500);
   };
 
@@ -179,20 +188,25 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
           <motion.div 
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="p-12 flex flex-col items-center justify-center text-center space-y-3 flex-1"
+            className="p-10 flex flex-col items-center justify-center text-center space-y-3 flex-1"
           >
             <motion.div 
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: 'spring', damping: 15, stiffness: 300, delay: 0.1 }}
-              className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center"
+              className="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center"
             >
-              <CheckCircle className="w-8 h-8" />
+              <ShieldCheck className="w-8 h-8" />
             </motion.div>
-            <h4 className="text-xl font-bold text-gray-900">评价提交成功！</h4>
-            <p className="text-sm text-gray-500 max-w-xs">
-              系统已快速过审入库，<strong className="text-amber-600">+20 积分</strong>已发放至您的账户！
+            <h4 className="text-xl font-bold text-gray-900">评价已提交审核！</h4>
+            <p className="text-xs text-gray-500 max-w-sm leading-relaxed">
+              根据评教规范，评价正进入学工/学生审核组复核流程（预计24小时内公示）。
+              <br />
+              <strong>审核通过后将自动计入教师主页，并即时发放 <span className="text-amber-600 font-bold">+20 积分</span> 奖励！</strong>
             </p>
+            <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-semibold border border-amber-200">
+              可在【个人中心 - 我的评价】查看审核进度与状态
+            </span>
           </motion.div>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
@@ -351,12 +365,65 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                 disabled={isSubmitting}
                 className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-50 text-white rounded-xl text-sm font-semibold shadow-md shadow-indigo-100 transition-all flex items-center gap-1.5 cursor-pointer"
               >
-                {isSubmitting ? '正在提交...' : '提交打分 (+20积分)'}
+                {isSubmitting ? '正在提交...' : '提交审核 (+20分待审)'}
               </motion.button>
             </div>
           </form>
         )}
       </motion.div>
+
+      {/* Sensitive Words Interception Modal */}
+      <AnimatePresence>
+        {sensitiveBlockNotice && (
+          <div className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.92 }}
+              className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-rose-100 space-y-4 text-center"
+            >
+              <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 mx-auto flex items-center justify-center border border-rose-100">
+                <AlertTriangle className="w-7 h-7" />
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="text-base font-bold text-gray-900">
+                  评价内容未通过自动化安全合规初筛
+                </h4>
+                <p className="text-xs text-gray-600 leading-relaxed text-left bg-rose-50/60 p-3 rounded-2xl border border-rose-100">
+                  {sensitiveBlockNotice.reason}
+                </p>
+              </div>
+
+              <div className="space-y-1.5 text-left">
+                <span className="text-xs font-semibold text-gray-500">检测到的违规词/违规项：</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {sensitiveBlockNotice.violations.map((v, i) => (
+                    <span
+                      key={i}
+                      className="px-2 py-0.5 rounded-lg bg-rose-100 text-rose-700 text-xs font-mono font-bold border border-rose-200"
+                    >
+                      {v}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <p className="text-[11px] text-gray-400 text-left">
+                提示：请修改或移除上述涉嫌不当、隐私泄露或广告的内容后重新提交。
+              </p>
+
+              <button
+                type="button"
+                onClick={() => setSensitiveBlockNotice(null)}
+                className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs"
+              >
+                返回修改评价文字
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

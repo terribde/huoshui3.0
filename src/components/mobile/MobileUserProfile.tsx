@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { UserPointTransaction, Review, Teacher } from '../../types';
-import { Coins, MessageSquare, Info, History, CheckCircle2, ArrowUpRight, Database, LogIn, LogOut, Lock, User, Sparkles } from 'lucide-react';
+import { Coins, MessageSquare, Info, History, CheckCircle2, ArrowUpRight, Database, LogIn, LogOut, Lock, User, Sparkles, Clock, XCircle, ShieldCheck, AlertCircle, Edit3, Trash2 } from 'lucide-react';
 import { isSupabaseConfigured } from '../../lib/supabase';
 
 interface MobileUserProfileProps {
@@ -16,6 +16,8 @@ interface MobileUserProfileProps {
   onSelectTeacher?: (teacher: Teacher) => void;
   myReviews: Review[];
   teachers: Teacher[];
+  onOpenAdminAudit?: () => void;
+  onDeleteReview?: (reviewId: string) => void;
 }
 
 export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
@@ -31,10 +33,23 @@ export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
   onSelectTeacher,
   myReviews,
   teachers,
+  onOpenAdminAudit,
+  onDeleteReview,
 }) => {
   const isLoggedIn = Boolean(currentUser);
   const userNickname = currentUser?.user_metadata?.nickname || '西南交大学子';
   const userCampus = currentUser?.user_metadata?.campus || '犀浦校区';
+
+  const [reviewFilterTab, setReviewFilterTab] = useState<'all' | 'approved' | 'pending' | 'rejected'>('all');
+
+  const pendingCount = myReviews.filter((r) => r.status === 'pending').length;
+  const approvedCount = myReviews.filter((r) => r.status === 'approved').length;
+  const rejectedCount = myReviews.filter((r) => r.status === 'rejected').length;
+
+  const filteredMyReviews = myReviews.filter((r) => {
+    if (reviewFilterTab === 'all') return true;
+    return r.status === reviewFilterTab;
+  });
 
   return (
     <div id="mobile-user-profile" className="w-full px-4 pt-3 pb-24 space-y-4">
@@ -94,6 +109,25 @@ export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
             </button>
           )}
         </div>
+
+        {/* Admin Portal Quick Switch */}
+        {onOpenAdminAudit && (
+          <button
+            onClick={onOpenAdminAudit}
+            className="w-full py-2 px-3 bg-slate-900 hover:bg-slate-800 text-slate-100 rounded-2xl text-xs font-bold transition-all shadow-xs flex items-center justify-between"
+          >
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-indigo-400" />
+              <span>评教审核管理工作台</span>
+              {pendingCount > 0 && (
+                <span className="px-1.5 py-0.2 bg-amber-500 text-slate-900 rounded-full text-[10px] font-bold">
+                  {pendingCount}待审
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] text-slate-400">进入 ➔</span>
+          </button>
+        )}
 
         {/* Points Banner */}
         {isLoggedIn ? (
@@ -198,6 +232,52 @@ export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
           {isLoggedIn && <span className="text-[11px] text-gray-400">{myReviews.length} 条</span>}
         </div>
 
+        {/* Filter Pills */}
+        {isLoggedIn && myReviews.length > 0 && (
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar">
+            <button
+              onClick={() => setReviewFilterTab('all')}
+              className={`px-2.5 py-1 rounded-xl text-[11px] font-bold shrink-0 transition-all ${
+                reviewFilterTab === 'all'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              全部 ({myReviews.length})
+            </button>
+            <button
+              onClick={() => setReviewFilterTab('approved')}
+              className={`px-2.5 py-1 rounded-xl text-[11px] font-bold shrink-0 transition-all ${
+                reviewFilterTab === 'approved'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-gray-100 text-emerald-700'
+              }`}
+            >
+              已通过 ({approvedCount})
+            </button>
+            <button
+              onClick={() => setReviewFilterTab('pending')}
+              className={`px-2.5 py-1 rounded-xl text-[11px] font-bold shrink-0 transition-all ${
+                reviewFilterTab === 'pending'
+                  ? 'bg-amber-500 text-white shadow-xs'
+                  : 'bg-gray-100 text-amber-700'
+              }`}
+            >
+              审核中 ({pendingCount})
+            </button>
+            <button
+              onClick={() => setReviewFilterTab('rejected')}
+              className={`px-2.5 py-1 rounded-xl text-[11px] font-bold shrink-0 transition-all ${
+                reviewFilterTab === 'rejected'
+                  ? 'bg-rose-600 text-white shadow-xs'
+                  : 'bg-gray-100 text-rose-700'
+              }`}
+            >
+              已驳回 ({rejectedCount})
+            </button>
+          </div>
+        )}
+
         {!isLoggedIn ? (
           <div className="py-6 px-4 text-center bg-gray-50/50 rounded-2xl border border-gray-100 space-y-2">
             <p className="text-xs text-gray-600 font-medium">登录后可查看您提交过的教师评价与审核进度</p>
@@ -208,26 +288,89 @@ export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
               立即登录账号
             </button>
           </div>
-        ) : myReviews.length === 0 ? (
+        ) : filteredMyReviews.length === 0 ? (
           <div className="py-6 text-center text-gray-400 text-xs">
-            您尚未提交过教师评价。写一条评价并通过审核，即可获赠 20 积分！
+            {reviewFilterTab === 'all'
+              ? '您尚未提交过教师评价。写一条评价并通过审核，即可获赠 20 积分！'
+              : `暂无状态为「${
+                  reviewFilterTab === 'pending'
+                    ? '审核中'
+                    : reviewFilterTab === 'approved'
+                    ? '已通过'
+                    : '已驳回'
+                }」的评价记录。`}
           </div>
         ) : (
           <div className="space-y-2.5">
-            {myReviews.map((rev) => {
+            {filteredMyReviews.map((rev) => {
               const teacher = teachers.find((t) => t.id === rev.teacherId);
+              const isPending = rev.status === 'pending';
+              const isApproved = rev.status === 'approved';
+              const isRejected = rev.status === 'rejected';
+
               return (
-                <div key={rev.id} className="p-3 bg-gray-50/70 rounded-xl border border-gray-100 text-xs space-y-1.5">
+                <div key={rev.id} className="p-3 bg-gray-50/70 rounded-2xl border border-gray-100 text-xs space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-gray-900">
                       {teacher?.name || '任课老师'} - {rev.courseName}
                     </span>
-                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-700">
-                      已过审 (+20分)
-                    </span>
+                    {isPending && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-0.5">
+                        <Clock className="w-2.5 h-2.5" /> ⏳ 审核中
+                      </span>
+                    )}
+                    {isApproved && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center gap-0.5">
+                        <CheckCircle2 className="w-2.5 h-2.5" /> ✓ 已公示 (+20分)
+                      </span>
+                    )}
+                    {isRejected && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200 flex items-center gap-0.5">
+                        <XCircle className="w-2.5 h-2.5" /> ✕ 未通过
+                      </span>
+                    )}
                   </div>
+
+                  {isPending && (
+                    <div className="p-2 rounded-xl bg-amber-50 border border-amber-200/80 text-[10px] text-amber-800 leading-tight">
+                      <strong>正在复核：</strong>学工/学生审核组复核中，预计24h内公示。+20积分待通过后到账。
+                    </div>
+                  )}
+
+                  {isRejected && (
+                    <div className="p-2 rounded-xl bg-rose-50 border border-rose-200 text-[10px] text-rose-800 space-y-1.5 leading-tight">
+                      <div>
+                        <strong>驳回原因：</strong>
+                        {rev.rejectionReason || '内容包含不当言论、人身攻击或过于简略'}
+                      </div>
+                      <div className="flex items-center gap-2 pt-1 border-t border-rose-100">
+                        <button
+                          onClick={() => {
+                            if (teacher) onSelectTeacher?.(teacher);
+                            onOpenReview();
+                          }}
+                          className="px-2 py-0.5 bg-white text-rose-700 font-bold rounded border border-rose-200 text-[10px] flex items-center gap-0.5"
+                        >
+                          <Edit3 className="w-2.5 h-2.5" /> 重新编辑
+                        </button>
+                        {onDeleteReview && (
+                          <button
+                            onClick={() => {
+                              if (confirm('确定要删除此条被驳回的评价吗？')) {
+                                onDeleteReview(rev.id);
+                              }
+                            }}
+                            className="text-gray-500 hover:text-rose-700 text-[10px] flex items-center gap-0.5"
+                          >
+                            <Trash2 className="w-2.5 h-2.5" /> 删除
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {rev.comment && <p className="text-gray-600 text-[11px] line-clamp-2">“{rev.comment}”</p>}
-                  {teacher && onSelectTeacher && (
+                  {teacher && onSelectTeacher && isApproved && (
                     <button
                       onClick={() => onSelectTeacher(teacher)}
                       className="text-indigo-600 text-[10px] hover:underline flex items-center gap-0.5"

@@ -19,6 +19,7 @@ export interface Review {
   userEmail?: string;
   isHistoricalMigrated?: boolean; // 2024年前老站迁移数据
   status: 'approved' | 'pending' | 'rejected';
+  rejectionReason?: string;
   createdAt: string;
   likes: number;
 }

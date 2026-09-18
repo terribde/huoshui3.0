@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS public.reviews (
     user_email TEXT,
     is_historical_migrated BOOLEAN DEFAULT false,
     status TEXT DEFAULT 'approved',
+    rejection_reason TEXT,
     likes INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -50,6 +51,7 @@ CREATE TABLE IF NOT EXISTS public.reviews (
 -- 增量兼容更新 (如果已存在旧表，安全添加关联字段)
 ALTER TABLE public.reviews ADD COLUMN IF NOT EXISTS user_id TEXT;
 ALTER TABLE public.reviews ADD COLUMN IF NOT EXISTS user_email TEXT;
+ALTER TABLE public.reviews ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS last_checkin_date DATE;
 
 -- 3. 用户与积分表 (user_profiles)

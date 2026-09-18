@@ -30,6 +30,7 @@ import { UserPointsModal } from './components/UserPointsModal';
 import { CollegeListModal } from './components/CollegeListModal';
 import { ExperienceGuideModal } from './components/ExperienceGuideModal';
 import { AuthModal } from './components/AuthModal';
+import { AdminAuditModal } from './components/AdminAuditModal';
 
 import { 
   BookOpen, 
@@ -71,6 +72,7 @@ export default function App() {
   const [isCollegesModalOpen, setIsCollegesModalOpen] = useState<boolean>(false);
   const [isExperienceModalOpen, setIsExperienceModalOpen] = useState<boolean>(false);
   const [experienceTab, setExperienceTab] = useState<'guides' | 'notices' | 'history'>('guides');
+  const [isAdminAuditModalOpen, setIsAdminAuditModalOpen] = useState<boolean>(false);
 
   // Automatic Device Detection: Accurately identifies mobile phone vs computer/desktop
   const [deviceInfo, setDeviceInfo] = useState<{ isMobile: boolean; screenWidth: number }>(() => {
@@ -260,7 +262,7 @@ export default function App() {
     setIsReviewModalOpen(true);
   };
 
-  // Submit Review Handler
+  // Submit Review Handler (PRD & Audit State Machine: initial status is 'pending')
   const handleSubmitReview = (newReviewData: Omit<Review, 'id' | 'createdAt' | 'likes'>) => {
     if (!currentUser) {
       handleOpenAuth('login');
@@ -275,16 +277,33 @@ export default function App() {
       userEmail: currentUser.email,
       authorNickname: nickname,
       createdAt: '刚刚',
-      likes: 1,
-      status: 'approved',
+      likes: 0,
+      status: 'pending', // 初始状态为待审核
     };
 
+    // Add into current reviews list
     setReviews((prev) => [newReview, ...prev]);
 
-    // Update teacher review count
+    // Persist to local cache and Supabase (points awarded upon approval)
+    supabaseService.submitReview(newReview);
+  };
+
+  // Approve review handler: status becomes 'approved', +20 points awarded to author
+  const handleApproveReview = async (reviewId: string, authorUserId?: string) => {
+    const rev = reviews.find((r) => r.id === reviewId);
+    if (!rev) return;
+
+    // 1. Update review status to approved
+    setReviews((prev) =>
+      prev.map((r) =>
+        r.id === reviewId ? { ...r, status: 'approved', rejectionReason: undefined } : r
+      )
+    );
+
+    // 2. Increment teacher's published review count
     setTeachers((prev) =>
       prev.map((t) => {
-        if (t.id === newReview.teacherId) {
+        if (t.id === rev.teacherId) {
           return {
             ...t,
             reviewCount: t.reviewCount + 1,
@@ -294,24 +313,48 @@ export default function App() {
       })
     );
 
-    // Award +20 points for review submission (PRD 5.0)
-    const bonus = 20;
-    const newBalance = userPoints + bonus;
-    setUserPoints(newBalance);
-    setTransactions((prev) => [
-      {
-        id: `tx_${Date.now()}`,
-        action: `撰写教师评价通过审核 (+${bonus}分)`,
-        amount: bonus,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        balanceAfter: newBalance,
-      },
-      ...prev,
-    ]);
+    // 3. Award +20 points if author is currently logged in user
+    const targetUserId = authorUserId || rev.userId;
+    const isCurrentUserAuthor = Boolean(
+      currentUser &&
+      ((targetUserId && targetUserId === currentUser.id) ||
+       (rev.userEmail && rev.userEmail === currentUser.email))
+    );
 
-    // Persist review and points (local cache + Supabase cloud)
-    supabaseService.submitReview(newReview);
-    supabaseService.savePointTransaction(currentUser.id, `撰写教师评价通过审核 (+${bonus}分)`, bonus, newBalance);
+    if (isCurrentUserAuthor) {
+      const bonus = 20;
+      const newBalance = userPoints + bonus;
+      setUserPoints(newBalance);
+      setTransactions((prev) => [
+        {
+          id: `tx_${Date.now()}`,
+          action: `教师评价审核通过公示奖励 (+${bonus}分)`,
+          amount: bonus,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          balanceAfter: newBalance,
+        },
+        ...prev,
+      ]);
+    }
+
+    // 4. Update remote Supabase & author user points
+    await supabaseService.updateReviewStatus(reviewId, 'approved', undefined, targetUserId);
+  };
+
+  // Reject review handler: status becomes 'rejected' with reason
+  const handleRejectReview = async (reviewId: string, reason: string) => {
+    setReviews((prev) =>
+      prev.map((r) =>
+        r.id === reviewId ? { ...r, status: 'rejected', rejectionReason: reason } : r
+      )
+    );
+    await supabaseService.updateReviewStatus(reviewId, 'rejected', reason);
+  };
+
+  // Delete review handler
+  const handleDeleteReview = async (reviewId: string) => {
+    setReviews((prev) => prev.filter((r) => r.id !== reviewId));
+    await supabaseService.deleteReview(reviewId);
   };
 
   // Like review
@@ -329,7 +372,8 @@ export default function App() {
     isPointsModalOpen ||
     isCollegesModalOpen ||
     isExperienceModalOpen ||
-    isAuthModalOpen
+    isAuthModalOpen ||
+    isAdminAuditModalOpen
   );
 
   useEffect(() => {
@@ -473,6 +517,8 @@ export default function App() {
                       onSelectTeacher={(teacher) => setSelectedTeacher(teacher)}
                       myReviews={myReviews}
                       teachers={teachers}
+                      onOpenAdminAudit={() => setIsAdminAuditModalOpen(true)}
+                      onDeleteReview={handleDeleteReview}
                     />
                   )}
                 </motion.div>
@@ -643,6 +689,22 @@ export default function App() {
                   <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
                   <span>AI 智能问答</span>
                 </motion.button>
+
+                {/* Admin Audit Quick Switch */}
+                <motion.button
+                  whileTap={{ scale: 0.93 }}
+                  onClick={() => setIsAdminAuditModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900 hover:bg-slate-800 text-slate-100 text-xs font-bold transition-all shadow-2xs cursor-pointer group"
+                  title="进入评教审核管理工作台"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-indigo-400 group-hover:scale-110 transition-transform" />
+                  <span>管理审核</span>
+                  {reviews.filter((r) => r.status === 'pending').length > 0 && (
+                    <span className="px-1.5 py-0.2 bg-amber-500 text-slate-950 rounded-full text-[9px] font-black animate-pulse">
+                      {reviews.filter((r) => r.status === 'pending').length}
+                    </span>
+                  )}
+                </motion.button>
               </div>
             </div>
           </header>
@@ -733,6 +795,8 @@ export default function App() {
                     onSelectTeacher={(teacher) => setSelectedTeacher(teacher)}
                     myReviews={myReviews}
                     teachers={teachers}
+                    onOpenAdminAudit={() => setIsAdminAuditModalOpen(true)}
+                    onDeleteReview={handleDeleteReview}
                   />
                 )}
               </motion.div>
@@ -838,6 +902,22 @@ export default function App() {
               loadUserPointsData(user.id, isNewRegistration);
               setIsAuthModalOpen(false);
             }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* 8. 管理员审核后台工作台 Modal (PRD 核心审核机制) */}
+      <AnimatePresence>
+        {isAdminAuditModalOpen && (
+          <AdminAuditModal
+            isOpen={isAdminAuditModalOpen}
+            onClose={() => setIsAdminAuditModalOpen(false)}
+            reviews={reviews}
+            teachers={teachers}
+            onApproveReview={handleApproveReview}
+            onRejectReview={handleRejectReview}
+            onDeleteReview={handleDeleteReview}
+            currentUserEmail={currentUser?.email}
           />
         )}
       </AnimatePresence>

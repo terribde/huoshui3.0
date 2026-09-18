@@ -22,7 +22,10 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
 
   if (!teacher) return null;
 
-  const teacherReviews = reviews.filter((r) => r.teacherId === teacher.id);
+  // Only approved reviews are visible on the public teacher page (PRD moderation spec)
+  const teacherReviews = reviews.filter(
+    (r) => r.teacherId === teacher.id && (r.status === 'approved' || (!r.status && !r.isHistoricalMigrated))
+  );
 
   // 6 dimensions specifications according to PRD
   const dimensionConfigs = [
