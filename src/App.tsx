@@ -29,6 +29,7 @@ import { ReviewModal } from './components/ReviewModal';
 import { UserPointsModal } from './components/UserPointsModal';
 import { CollegeListModal } from './components/CollegeListModal';
 import { ExperienceGuideModal } from './components/ExperienceGuideModal';
+import { AuthModal } from './components/AuthModal';
 
 import { 
   BookOpen, 
@@ -36,32 +37,25 @@ import {
   Sliders, 
   User, 
   Coins, 
-  Sparkles
+  Sparkles,
+  LogIn,
+  LogOut,
+  ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
+  // Current logged in user via Supabase Auth
+  const [currentUser, setCurrentUser] = useState<any | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
+
   // Core application states
   const [teachers, setTeachers] = useState<Teacher[]>(INITIAL_TEACHERS);
   const [reviews, setReviews] = useState<Review[]>(INITIAL_REVIEWS);
-  const [userPoints, setUserPoints] = useState<number>(38);
+  const [userPoints, setUserPoints] = useState<number>(0);
   const [hasCheckedInToday, setHasCheckedInToday] = useState<boolean>(false);
-  const [transactions, setTransactions] = useState<UserPointTransaction[]>([
-    {
-      id: 'tx_init',
-      action: '新用户注册欢迎礼',
-      amount: 30,
-      timestamp: '2025-02-01 10:00',
-      balanceAfter: 30,
-    },
-    {
-      id: 'tx_checkin_prev',
-      action: '历史每日签到奖励',
-      amount: 8,
-      timestamp: '2025-02-02 08:30',
-      balanceAfter: 38,
-    }
-  ]);
+  const [transactions, setTransactions] = useState<UserPointTransaction[]>([]);
 
   // Navigation tab
   const [currentTab, setCurrentTab] = useState<NavTab>('home');
@@ -105,11 +99,11 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Fetch initial data from Supabase if configured
+  // Sync Supabase Auth & User Data
   useEffect(() => {
     if (!isSupabaseConfigured) return;
 
-    // Load real teachers from Supabase
+    // Load initial teachers from Supabase
     supabaseService.getTeachers().then((remoteTeachers) => {
       if (remoteTeachers && remoteTeachers.length > 0) {
         setTeachers(remoteTeachers);
@@ -123,23 +117,77 @@ export default function App() {
       }
     });
 
-    // Load user points from Supabase
-    supabaseService.getUserPoints().then((pointData) => {
-      if (pointData) {
-        setUserPoints(pointData.points);
-        if (pointData.transactions.length > 0) {
-          setTransactions(pointData.transactions);
-        }
+    // Check active auth session
+    supabaseService.getCurrentUser().then((user) => {
+      setCurrentUser(user);
+      if (user) {
+        loadUserPointsData(user.id);
+      } else {
+        setUserPoints(0);
+        setTransactions([]);
       }
     });
+
+    // Subscribe to auth state changes
+    const { data: authListener } = supabaseService.onAuthStateChange((_event, session) => {
+      const user = session?.user || null;
+      setCurrentUser(user);
+      if (user) {
+        loadUserPointsData(user.id);
+      } else {
+        setUserPoints(0);
+        setTransactions([]);
+      }
+    });
+
+    return () => {
+      authListener?.subscription?.unsubscribe();
+    };
   }, []);
+
+  const loadUserPointsData = async (userId: string) => {
+    const pointData = await supabaseService.getUserPoints(userId);
+    if (pointData) {
+      setUserPoints(pointData.points);
+      setTransactions(pointData.transactions);
+    } else {
+      setUserPoints(100);
+      setTransactions([
+        {
+          id: 'tx_init_' + Date.now(),
+          action: '新用户注册欢迎礼 (PRD 5.0)',
+          amount: 100,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          balanceAfter: 100,
+        },
+      ]);
+    }
+  };
+
+  const handleOpenAuth = (mode: 'login' | 'register' = 'login') => {
+    setAuthModalMode(mode);
+    setIsAuthModalOpen(true);
+  };
+
+  const handleLogout = async () => {
+    await supabaseService.signOut();
+    setCurrentUser(null);
+    setUserPoints(0);
+    setTransactions([]);
+    setHasCheckedInToday(false);
+  };
 
   const viewMode: 'mobile' | 'desktop' = deviceInfo.isMobile ? 'mobile' : 'desktop';
 
   // Points Deduction Handler (PRD 5.0)
   const handleDeductPoints = (amount: number, reason: string): boolean => {
+    if (!currentUser) {
+      handleOpenAuth('login');
+      return false;
+    }
+
     if (userPoints < amount) {
-      alert(`积分不足！本次操作需消耗 ${amount} 积分，当前剩余 ${userPoints} 积分。请先签到或提交评价赚取积分。`);
+      alert(`积分不足！本次操作需消耗 ${amount} 积分，当前剩余 ${userPoints} 积分。请先每日签到或写评价赚取积分。`);
       return false;
     }
 
@@ -157,13 +205,18 @@ export default function App() {
     ]);
 
     if (isSupabaseConfigured) {
-      supabaseService.savePointTransaction('swjtu_student_default', reason, -amount, newBalance);
+      supabaseService.savePointTransaction(currentUser.id, reason, -amount, newBalance);
     }
     return true;
   };
 
   // Daily Check-in Handler
-  const handleCheckIn = () => {
+  const handleCheckIn = async () => {
+    if (!currentUser) {
+      handleOpenAuth('login');
+      return;
+    }
+
     if (hasCheckedInToday) return;
     const added = 5;
     const newBalance = userPoints + added;
@@ -181,14 +234,31 @@ export default function App() {
     ]);
 
     if (isSupabaseConfigured) {
-      supabaseService.savePointTransaction('swjtu_student_default', '每日签到奖励 (PRD 5.0)', added, newBalance);
+      await supabaseService.savePointTransaction(currentUser.id, '每日签到奖励 (PRD 5.0)', added, newBalance);
     }
+  };
+
+  // Guarded Review Open: Requires User Login!
+  const handleOpenReview = (teacher?: Teacher | null) => {
+    if (!currentUser) {
+      handleOpenAuth('login');
+      return;
+    }
+    setReviewTargetTeacher(teacher || null);
+    setIsReviewModalOpen(true);
   };
 
   // Submit Review Handler
   const handleSubmitReview = (newReviewData: Omit<Review, 'id' | 'createdAt' | 'likes'>) => {
+    if (!currentUser) {
+      handleOpenAuth('login');
+      return;
+    }
+
+    const nickname = currentUser.user_metadata?.nickname || '西南交大学子';
     const newReview: Review = {
       ...newReviewData,
+      authorNickname: nickname,
       id: `rev_${Date.now()}`,
       createdAt: '刚刚',
       likes: 1,
@@ -227,7 +297,7 @@ export default function App() {
     // Persist to Supabase if configured
     if (isSupabaseConfigured) {
       supabaseService.submitReview(newReview);
-      supabaseService.savePointTransaction('swjtu_student_default', `撰写教师评价通过审核 (+${bonus}分)`, bonus, newBalance);
+      supabaseService.savePointTransaction(currentUser.id, `撰写教师评价通过审核 (+${bonus}分)`, bonus, newBalance);
     }
   };
 
@@ -245,7 +315,8 @@ export default function App() {
     isReviewModalOpen ||
     isPointsModalOpen ||
     isCollegesModalOpen ||
-    isExperienceModalOpen
+    isExperienceModalOpen ||
+    isAuthModalOpen
   );
 
   useEffect(() => {
@@ -259,6 +330,12 @@ export default function App() {
     };
   }, [isAnyModalOpen]);
 
+  // Filter reviews written by current user
+  const myUserNickname = currentUser?.user_metadata?.nickname;
+  const myReviews = currentUser
+    ? reviews.filter((r) => myUserNickname && r.authorNickname === myUserNickname)
+    : [];
+
   return (
     <div className="min-h-screen bg-white sm:bg-slate-100/90 text-gray-900 flex flex-col items-center">
       {/* ========================================================= */}
@@ -268,7 +345,7 @@ export default function App() {
         <div className="w-full flex justify-center py-0 sm:py-4">
           <div className="w-full max-w-[430px] min-h-screen sm:min-h-[92vh] bg-white sm:rounded-3xl sm:shadow-[0_20px_60px_rgba(0,0,0,0.12)] sm:border sm:border-gray-200/80 relative overflow-x-hidden flex flex-col justify-between">
             
-            {/* Mobile Tab Views with Smooth Fade Transition (Zero height jump) */}
+            {/* Mobile Tab Views with Smooth Fade Transition */}
             <div className="flex-1 w-full relative overflow-x-hidden">
               <AnimatePresence mode="wait">
                 <motion.div
@@ -281,23 +358,28 @@ export default function App() {
                 >
                   {currentTab === 'home' && (
                     <MobileQuarkHome
+                      currentUser={currentUser}
+                      onOpenAuth={handleOpenAuth}
                       userPoints={userPoints}
                       onOpenSearch={(query) => {
                         setInitialTeacherSearch(query || '');
                         setCurrentTab('search');
                       }}
-                      onOpenRecommend={(course) => {
+                      onOpenRecommend={() => {
                         setCurrentTab('recommend');
                       }}
                       onOpenAiChat={(prompt) => {
                         setAiInitialPrompt(prompt || '');
                         setIsAiModalOpen(true);
                       }}
-                      onOpenPoints={() => setIsPointsModalOpen(true)}
-                      onOpenReview={() => {
-                        setReviewTargetTeacher(null);
-                        setIsReviewModalOpen(true);
+                      onOpenPoints={() => {
+                        if (!currentUser) {
+                          handleOpenAuth('login');
+                        } else {
+                          setIsPointsModalOpen(true);
+                        }
                       }}
+                      onOpenReview={() => handleOpenReview()}
                     />
                   )}
 
@@ -306,10 +388,7 @@ export default function App() {
                       teachers={teachers}
                       initialSearch={initialTeacherSearch}
                       onSelectTeacher={(teacher) => setSelectedTeacher(teacher)}
-                      onOpenReview={(teacher) => {
-                        setReviewTargetTeacher(teacher || null);
-                        setIsReviewModalOpen(true);
-                      }}
+                      onOpenReview={(teacher) => handleOpenReview(teacher)}
                     />
                   )}
 
@@ -321,18 +400,21 @@ export default function App() {
                         setInitialTeacherSearch(query || '');
                         setCurrentTab('search');
                       }}
-                      onOpenRecommend={(course) => {
+                      onOpenRecommend={() => {
                         setCurrentTab('recommend');
                       }}
                       onOpenAiChat={(prompt) => {
                         setAiInitialPrompt(prompt || '');
                         setIsAiModalOpen(true);
                       }}
-                      onOpenReview={(teacher) => {
-                        setReviewTargetTeacher(teacher || null);
-                        setIsReviewModalOpen(true);
+                      onOpenReview={(teacher) => handleOpenReview(teacher)}
+                      onOpenPoints={() => {
+                        if (!currentUser) {
+                          handleOpenAuth('login');
+                        } else {
+                          setIsPointsModalOpen(true);
+                        }
                       }}
-                      onOpenPoints={() => setIsPointsModalOpen(true)}
                       onOpenCollegeList={() => setIsCollegesModalOpen(true)}
                       onOpenExperienceModal={(tab) => {
                         setExperienceTab(tab || 'guides');
@@ -355,17 +437,23 @@ export default function App() {
 
                   {currentTab === 'profile' && (
                     <MobileUserProfile
+                      currentUser={currentUser}
+                      onOpenAuth={handleOpenAuth}
+                      onLogout={handleLogout}
                       userPoints={userPoints}
                       transactions={transactions}
                       hasCheckedInToday={hasCheckedInToday}
                       onCheckIn={handleCheckIn}
-                      onOpenPointsModal={() => setIsPointsModalOpen(true)}
-                      onOpenReview={() => {
-                        setReviewTargetTeacher(null);
-                        setIsReviewModalOpen(true);
+                      onOpenPointsModal={() => {
+                        if (!currentUser) {
+                          handleOpenAuth('login');
+                        } else {
+                          setIsPointsModalOpen(true);
+                        }
                       }}
+                      onOpenReview={() => handleOpenReview()}
                       onSelectTeacher={(teacher) => setSelectedTeacher(teacher)}
-                      myReviews={reviews.filter((r) => r.authorNickname === '犀浦小火车')}
+                      myReviews={myReviews}
                       teachers={teachers}
                     />
                   )}
@@ -466,23 +554,68 @@ export default function App() {
                 >
                   <User className="w-4 h-4" />
                   <span>个人中心</span>
-                  <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-amber-500 text-white font-extrabold ml-0.5">
-                    {userPoints}
-                  </span>
+                  {currentUser && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-amber-500 text-white font-extrabold ml-0.5">
+                      {userPoints}
+                    </span>
+                  )}
                 </motion.button>
               </nav>
 
-              {/* Points & AI Quick Buttons */}
+              {/* Auth, Points & AI Quick Buttons */}
               <div className="flex items-center gap-2.5">
-                <motion.div 
-                  whileTap={{ scale: 0.93 }}
-                  onClick={() => setIsPointsModalOpen(true)}
-                  className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 px-3.5 py-1.5 rounded-full border border-amber-200/80 cursor-pointer transition-all shadow-2xs"
-                >
-                  <Coins className="w-3.5 h-3.5 text-amber-500" />
-                  <span className="font-bold text-xs">{userPoints}</span>
-                  <span className="text-[10px] text-amber-700">积分中心</span>
-                </motion.div>
+                {currentUser ? (
+                  <>
+                    <motion.div 
+                      whileTap={{ scale: 0.93 }}
+                      onClick={() => setIsPointsModalOpen(true)}
+                      className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full border border-amber-200/80 cursor-pointer transition-all shadow-2xs"
+                    >
+                      <Coins className="w-3.5 h-3.5 text-amber-500" />
+                      <span className="font-bold text-xs">{userPoints}</span>
+                      <span className="text-[10px] text-amber-700">分</span>
+                    </motion.div>
+
+                    <div className="flex items-center gap-2 pl-1 border-l border-gray-200">
+                      <div 
+                        onClick={() => setCurrentTab('profile')}
+                        className="flex items-center gap-1.5 cursor-pointer p-1 rounded-xl hover:bg-gray-100 transition-colors"
+                        title="查看个人中心"
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                          {(currentUser.user_metadata?.nickname || '交').slice(0, 1)}
+                        </div>
+                        <span className="text-xs font-bold text-gray-800 max-w-[80px] truncate">
+                          {currentUser.user_metadata?.nickname || '学子'}
+                        </span>
+                      </div>
+                      <button
+                        onClick={handleLogout}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                        title="退出登录"
+                      >
+                        <LogOut className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleOpenAuth('login')}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white hover:bg-gray-50 border border-gray-200 text-xs font-bold text-gray-700 transition-all shadow-2xs"
+                    >
+                      <LogIn className="w-3.5 h-3.5 text-gray-500" />
+                      <span>登录</span>
+                    </button>
+                    <button
+                      onClick={() => handleOpenAuth('register')}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-2xs"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>注册 (+100积分)</span>
+                    </button>
+                  </div>
+                )}
 
                 <motion.button
                   whileTap={{ scale: 0.93 }}
@@ -508,24 +641,29 @@ export default function App() {
               >
                 {currentTab === 'home' && (
                   <DesktopQuarkHome
+                    currentUser={currentUser}
+                    onOpenAuth={handleOpenAuth}
                     teachers={teachers}
                     userPoints={userPoints}
                     onOpenSearch={(query) => {
                       setInitialTeacherSearch(query || '');
                       setCurrentTab('search');
                     }}
-                    onOpenRecommend={(course) => {
+                    onOpenRecommend={() => {
                       setCurrentTab('recommend');
                     }}
                     onOpenAiChat={(prompt) => {
                       setAiInitialPrompt(prompt || '');
                       setIsAiModalOpen(true);
                     }}
-                    onOpenReview={(teacher) => {
-                      setReviewTargetTeacher(teacher || null);
-                      setIsReviewModalOpen(true);
+                    onOpenReview={(teacher) => handleOpenReview(teacher)}
+                    onOpenPoints={() => {
+                      if (!currentUser) {
+                        handleOpenAuth('login');
+                      } else {
+                        setIsPointsModalOpen(true);
+                      }
                     }}
-                    onOpenPoints={() => setIsPointsModalOpen(true)}
                     onOpenCollegeList={() => setIsCollegesModalOpen(true)}
                     onOpenExperienceModal={(tab) => {
                       setExperienceTab(tab || 'guides');
@@ -541,10 +679,7 @@ export default function App() {
                       teachers={teachers}
                       initialSearch={initialTeacherSearch}
                       onSelectTeacher={(teacher) => setSelectedTeacher(teacher)}
-                      onOpenReview={(teacher) => {
-                        setReviewTargetTeacher(teacher || null);
-                        setIsReviewModalOpen(true);
-                      }}
+                      onOpenReview={(teacher) => handleOpenReview(teacher)}
                     />
                   </div>
                 )}
@@ -562,17 +697,23 @@ export default function App() {
 
                 {currentTab === 'profile' && (
                   <DesktopUserProfile
+                    currentUser={currentUser}
+                    onOpenAuth={handleOpenAuth}
+                    onLogout={handleLogout}
                     userPoints={userPoints}
                     transactions={transactions}
                     hasCheckedInToday={hasCheckedInToday}
                     onCheckIn={handleCheckIn}
-                    onOpenPointsModal={() => setIsPointsModalOpen(true)}
-                    onOpenReview={() => {
-                      setReviewTargetTeacher(null);
-                      setIsReviewModalOpen(true);
+                    onOpenPointsModal={() => {
+                      if (!currentUser) {
+                        handleOpenAuth('login');
+                      } else {
+                        setIsPointsModalOpen(true);
+                      }
                     }}
+                    onOpenReview={() => handleOpenReview()}
                     onSelectTeacher={(teacher) => setSelectedTeacher(teacher)}
-                    myReviews={reviews.filter((r) => r.authorNickname === '犀浦小火车')}
+                    myReviews={myReviews}
                     teachers={teachers}
                   />
                 )}
@@ -593,10 +734,7 @@ export default function App() {
             teacher={selectedTeacher}
             reviews={reviews}
             onClose={() => setSelectedTeacher(null)}
-            onOpenReview={(t) => {
-              setReviewTargetTeacher(t);
-              setIsReviewModalOpen(true);
-            }}
+            onOpenReview={(t) => handleOpenReview(t)}
             onLikeReview={handleLikeReview}
           />
         )}
@@ -640,10 +778,7 @@ export default function App() {
             transactions={transactions}
             hasCheckedInToday={hasCheckedInToday}
             onCheckIn={handleCheckIn}
-            onOpenReview={() => {
-              setReviewTargetTeacher(null);
-              setIsReviewModalOpen(true);
-            }}
+            onOpenReview={() => handleOpenReview()}
           />
         )}
       </AnimatePresence>
@@ -654,7 +789,7 @@ export default function App() {
           <CollegeListModal
             isOpen={isCollegesModalOpen}
             onClose={() => setIsCollegesModalOpen(false)}
-            onSelectCollege={(college) => {
+            onSelectCollege={(_college) => {
               setInitialTeacherSearch('');
               setCurrentTab('search');
             }}
@@ -669,6 +804,21 @@ export default function App() {
             isOpen={isExperienceModalOpen}
             onClose={() => setIsExperienceModalOpen(false)}
             defaultTab={experienceTab}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* 7. Supabase 用户认证 Modal (登录 / 注册) */}
+      <AnimatePresence>
+        {isAuthModalOpen && (
+          <AuthModal
+            isOpen={isAuthModalOpen}
+            onClose={() => setIsAuthModalOpen(false)}
+            initialMode={authModalMode}
+            onAuthSuccess={(user) => {
+              setCurrentUser(user);
+              setIsAuthModalOpen(false);
+            }}
           />
         )}
       </AnimatePresence>

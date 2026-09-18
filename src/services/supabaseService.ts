@@ -207,4 +207,131 @@ export const supabaseService = {
       return false;
     }
   },
+
+  /**
+   * Supabase Auth: User Sign Up with Email & Password
+   */
+  async signUp(email: string, password: string, metadata?: { nickname?: string; college?: string; campus?: string }) {
+    if (!isSupabaseConfigured || !supabase) {
+      throw new Error('Supabase 未配置或密钥未激活');
+    }
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          nickname: metadata?.nickname || '交大学子',
+          college: metadata?.college || '计算机与人工智能学院',
+          campus: metadata?.campus || '犀浦校区',
+        },
+      },
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    // Ensure user_profile entry is created if user was created
+    if (data.user) {
+      await this.ensureUserProfile(data.user.id, data.user.email || email);
+    }
+
+    return data;
+  },
+
+  /**
+   * Supabase Auth: User Sign In with Email & Password
+   */
+  async signIn(email: string, password: string) {
+    if (!isSupabaseConfigured || !supabase) {
+      throw new Error('Supabase 未配置或密钥未激活');
+    }
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    if (data.user) {
+      await this.ensureUserProfile(data.user.id, data.user.email || email);
+    }
+
+    return data;
+  },
+
+  /**
+   * Supabase Auth: Sign Out
+   */
+  async signOut() {
+    if (!isSupabaseConfigured || !supabase) return;
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.warn('[Supabase] Sign out error:', error.message);
+    }
+  },
+
+  /**
+   * Get current auth user & session
+   */
+  async getCurrentUser() {
+    if (!isSupabaseConfigured || !supabase) return null;
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || !user) return null;
+      return user;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * Ensure user profile exists in public.user_profiles
+   */
+  async ensureUserProfile(userId: string, email: string) {
+    if (!isSupabaseConfigured || !supabase) return;
+    try {
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('id, points')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (!profile) {
+        // Create initial profile with 100 points
+        await supabase
+          .from('user_profiles')
+          .insert({
+            id: userId,
+            points: 100,
+          });
+
+        // Add initial bonus transaction
+        await supabase
+          .from('point_transactions')
+          .insert({
+            id: 'tx_welcome_' + Date.now(),
+            user_id: userId,
+            action: '新用户注册赠送新人评教积分',
+            amount: 100,
+            balance_after: 100,
+            timestamp: new Date().toISOString(),
+          });
+      }
+    } catch (err) {
+      console.warn('[Supabase] ensureUserProfile warning:', err);
+    }
+  },
+
+  /**
+   * Subscribe to auth state changes
+   */
+  onAuthStateChange(callback: (event: string, session: any) => void) {
+    if (!isSupabaseConfigured || !supabase) {
+      return { data: { subscription: { unsubscribe: () => {} } } };
+    }
+    return supabase.auth.onAuthStateChange(callback);
+  },
 };

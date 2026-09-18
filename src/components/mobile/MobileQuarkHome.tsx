@@ -10,6 +10,8 @@ import {
 import { motion } from 'motion/react';
 
 interface MobileQuarkHomeProps {
+  currentUser?: any | null;
+  onOpenAuth?: (mode?: 'login' | 'register') => void;
   userPoints: number;
   onOpenSearch: (query?: string) => void;
   onOpenRecommend: (course?: string) => void;
@@ -19,6 +21,8 @@ interface MobileQuarkHomeProps {
 }
 
 export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
+  currentUser,
+  onOpenAuth,
   userPoints,
   onOpenSearch,
   onOpenRecommend,
@@ -28,6 +32,7 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
 }) => {
   const [query, setQuery] = useState('');
   const [searchMode, setSearchMode] = useState<'ai' | 'search'>('ai');
+  const isLoggedIn = Boolean(currentUser);
 
   const handleInputSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,16 +64,26 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
       {/* 1. Top status / campus indicator + Points badge */}
       <div className="w-full flex items-center justify-between text-xs text-gray-400 mb-6">
         <span className="font-medium tracking-tight text-gray-500">西南交通大学 · 犀浦 / 九里</span>
-        <motion.div 
-          onClick={onOpenPoints}
-          whileTap={{ scale: 0.92 }}
-          whileHover={{ scale: 1.03 }}
-          className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 px-2.5 py-1 rounded-full border border-amber-200/80 cursor-pointer transition-colors shadow-2xs"
-        >
-          <Coins className="w-3.5 h-3.5 text-amber-500" />
-          <span className="font-bold">{userPoints}</span>
-          <span className="text-[10px] text-amber-700">积分</span>
-        </motion.div>
+        
+        {isLoggedIn ? (
+          <motion.div 
+            onClick={onOpenPoints}
+            whileTap={{ scale: 0.92 }}
+            whileHover={{ scale: 1.03 }}
+            className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 px-2.5 py-1 rounded-full border border-amber-200/80 cursor-pointer transition-colors shadow-2xs"
+          >
+            <Coins className="w-3.5 h-3.5 text-amber-500" />
+            <span className="font-bold">{userPoints}</span>
+            <span className="text-[10px] text-amber-700">积分</span>
+          </motion.div>
+        ) : (
+          <button
+            onClick={() => onOpenAuth?.('login')}
+            className="flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full border border-indigo-200/80 text-xs font-bold transition-colors shadow-2xs"
+          >
+            <span>登录 / 注册</span>
+          </button>
+        )}
       </div>
 
       {/* 2. Center Brand Title + Clean Quark AI Input Box */}

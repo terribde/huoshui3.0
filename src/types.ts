@@ -66,3 +66,13 @@ export interface AiChatMessage {
     reason: string;
   }[];
 }
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  nickname?: string;
+  college?: string;
+  campus?: string;
+  points: number;
+}
+
