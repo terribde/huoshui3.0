@@ -3,7 +3,7 @@ import { Review, Teacher } from '../types';
 import { 
   X, ShieldCheck, CheckCircle2, XCircle, AlertTriangle, 
   Search, Filter, Clock, Eye, Trash2, Send, Lock, UserCheck, Sparkles, MessageSquare,
-  Users, UserPlus, Database, RefreshCw, Check, Copy, UserCog
+  Users, UserPlus, Database, RefreshCw, Check, Copy, UserCog, Plus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { checkSensitiveContent } from '../utils/sensitiveFilter';
@@ -220,6 +220,44 @@ CREATE POLICY "Public can delete reviews" ON public.reviews FOR DELETE USING (tr
   const handleManualRefresh = async () => {
     setIsRefreshingReviews(true);
     try {
+      if (onRefreshReviews) {
+        await onRefreshReviews();
+      }
+    } finally {
+      setIsRefreshingReviews(false);
+    }
+  };
+
+  // Automatically refresh reviews whenever admin opens the modal
+  useEffect(() => {
+    if (isOpen && onRefreshReviews) {
+      onRefreshReviews();
+    }
+  }, [isOpen]);
+
+  const handleCreateTestReview = async () => {
+    setIsRefreshingReviews(true);
+    try {
+      const testRev: Review = {
+        id: `rev_test_${Date.now()}`,
+        teacherId: teachers[0]?.id || 't_001',
+        courseName: '通用必修课 (测试待审样本)',
+        yearTerm: '2024-2025第1学期',
+        dimensions: {
+          attendanceStrictness: 3,
+          gradingLeniency: 5,
+          effortMatters: 4,
+          workloadDifficulty: 3,
+          approachability: 5,
+          teachingQuality: 5,
+        },
+        comment: '（这是一条测试待审核评价）老师授课条理极其清晰，期末还会重点答疑。给分很公道，平时作业认真完成就能拿优秀！',
+        authorNickname: '交大测评小助手',
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        likes: 0,
+      };
+      await supabaseService.submitReview(testRev);
       if (onRefreshReviews) {
         await onRefreshReviews();
       }
@@ -712,6 +750,15 @@ ON CONFLICT (email) DO UPDATE SET is_active = true;`}
                       >
                         {copiedRlsSql ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                         <span>{copiedRlsSql ? '已复制修复 SQL，前往 Supabase 粘贴执行' : '复制修复 reviews 权限 SQL (1步搞定)'}</span>
+                      </button>
+
+                      <button
+                        onClick={handleCreateTestReview}
+                        disabled={isRefreshingReviews}
+                        className="w-full py-1.5 bg-white hover:bg-amber-100/70 text-amber-900 border border-amber-300/80 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 shadow-2xs disabled:opacity-50"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-amber-700" />
+                        <span>一键生成模拟待审评价 (用于验证审批流)</span>
                       </button>
                     </div>
                   )}
