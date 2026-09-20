@@ -33,7 +33,23 @@ export const supabaseService = {
    * Local storage helpers for reviews & user points
    */
   getLocalReviews(): Review[] {
-    return getLocalItem<Review[]>('submitted_reviews', []);
+    const local = getLocalItem<Review[]>('submitted_reviews', []);
+    if (local.length === 0) {
+      try {
+        const legacy = localStorage.getItem('swjtu_local_reviews');
+        if (legacy) {
+          const parsed = JSON.parse(legacy);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setLocalItem('submitted_reviews', parsed);
+            localStorage.removeItem('swjtu_local_reviews');
+            return parsed;
+          }
+        }
+      } catch (e) {
+        // ignore legacy parsing error
+      }
+    }
+    return local;
   },
 
   saveLocalReview(review: Review): void {
@@ -230,13 +246,44 @@ export const supabaseService = {
       localReviews = localReviews.filter((r) => r.teacherId === teacherId);
     }
 
-    // Merge deduplicated by id (local reviews override/supplement remote)
+    // Merge deduplicated by id:
+    // Remote database (Supabase) is the single source of truth for moderation and audit status.
+    // Local reviews are only used to supplement newly submitted reviews that have not synced yet.
     const reviewMap = new Map<string, Review>();
-    for (const r of remoteReviews) {
-      reviewMap.set(r.id, r);
-    }
+    
+    // 1. Insert local reviews first
     for (const r of localReviews) {
       reviewMap.set(r.id, r);
+    }
+
+    // 2. Remote reviews take absolute precedence and overwrite local status
+    let hasLocalUpdates = false;
+    const allLocal = this.getLocalReviews();
+
+    for (const r of remoteReviews) {
+      reviewMap.set(r.id, r);
+
+      // If this review exists locally, sync the remote audit status & likes back to localStorage
+      const localIdx = allLocal.findIndex((lr) => lr.id === r.id);
+      if (localIdx >= 0) {
+        if (
+          allLocal[localIdx].status !== r.status ||
+          allLocal[localIdx].likes !== r.likes ||
+          allLocal[localIdx].rejectionReason !== r.rejectionReason
+        ) {
+          allLocal[localIdx] = {
+            ...allLocal[localIdx],
+            status: r.status,
+            rejectionReason: r.rejectionReason,
+            likes: r.likes,
+          };
+          hasLocalUpdates = true;
+        }
+      }
+    }
+
+    if (hasLocalUpdates) {
+      setLocalItem('submitted_reviews', allLocal);
     }
 
     const merged = Array.from(reviewMap.values());
@@ -340,7 +387,8 @@ export const supabaseService = {
       r.id === reviewId ? { ...r, status, rejectionReason: status === 'rejected' ? rejectionReason : undefined } : r
     );
     try {
-      localStorage.setItem('swjtu_local_reviews', JSON.stringify(updated));
+      setLocalItem('submitted_reviews', updated);
+      localStorage.removeItem('swjtu_local_reviews');
     } catch (e) {
       console.warn('Failed to update review in local storage:', e);
     }
@@ -391,7 +439,8 @@ export const supabaseService = {
     const local = this.getLocalReviews();
     const filtered = local.filter((r) => r.id !== reviewId);
     try {
-      localStorage.setItem('swjtu_local_reviews', JSON.stringify(filtered));
+      setLocalItem('submitted_reviews', filtered);
+      localStorage.removeItem('swjtu_local_reviews');
     } catch (e) {
       console.warn('Failed to delete review from local storage:', e);
     }
@@ -406,6 +455,41 @@ export const supabaseService = {
     }
 
     return true;
+  },
+
+  /**
+   * Subscribe to real-time changes on the reviews table
+   */
+  subscribeToReviews(onChange: () => void): { unsubscribe: () => void } {
+    if (!isSupabaseConfigured || !supabase) {
+      return { unsubscribe: () => {} };
+    }
+
+    try {
+      const channel = supabase
+        .channel('reviews_realtime_' + Date.now())
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'reviews' },
+          () => {
+            onChange();
+          }
+        )
+        .subscribe();
+
+      return {
+        unsubscribe: () => {
+          try {
+            supabase?.removeChannel(channel);
+          } catch (e) {
+            console.warn('[Supabase Realtime] Error removing channel:', e);
+          }
+        },
+      };
+    } catch (e) {
+      console.warn('[Supabase Realtime] Failed to subscribe to reviews:', e);
+      return { unsubscribe: () => {} };
+    }
   },
 
   /**

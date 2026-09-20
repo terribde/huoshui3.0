@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserPointTransaction, Review, Teacher } from '../../types';
-import { Coins, MessageSquare, Info, History, CheckCircle2, ArrowUpRight, Database, LogIn, LogOut, Lock, User, Sparkles, Clock, XCircle, ShieldCheck, AlertCircle, Edit3, Trash2 } from 'lucide-react';
+import { Coins, MessageSquare, Info, History, CheckCircle2, ArrowUpRight, Database, LogIn, LogOut, Lock, User, Sparkles, Clock, XCircle, ShieldCheck, AlertCircle, Edit3, Trash2, RotateCw } from 'lucide-react';
 import { isSupabaseConfigured } from '../../lib/supabase';
 
 interface MobileUserProfileProps {
@@ -18,6 +18,7 @@ interface MobileUserProfileProps {
   teachers: Teacher[];
   onOpenAdminAudit?: () => void;
   onDeleteReview?: (reviewId: string) => void;
+  onRefreshReviews?: () => Promise<void>;
 }
 
 export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
@@ -35,12 +36,21 @@ export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
   teachers,
   onOpenAdminAudit,
   onDeleteReview,
+  onRefreshReviews,
 }) => {
   const isLoggedIn = Boolean(currentUser);
   const userNickname = currentUser?.user_metadata?.nickname || '西南交大学子';
   const userCampus = currentUser?.user_metadata?.campus || '犀浦校区';
 
   const [reviewFilterTab, setReviewFilterTab] = useState<'all' | 'approved' | 'pending' | 'rejected'>('all');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Auto refresh reviews when profile opens
+  useEffect(() => {
+    if (onRefreshReviews) {
+      onRefreshReviews();
+    }
+  }, [onRefreshReviews]);
 
   const pendingCount = myReviews.filter((r) => r.status === 'pending').length;
   const approvedCount = myReviews.filter((r) => r.status === 'approved').length;
@@ -228,7 +238,26 @@ export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
       {/* 3. My Submitted Reviews */}
       <div className="bg-white p-4 rounded-3xl border border-gray-100 shadow-2xs space-y-3">
         <div className="flex items-center justify-between">
-          <h4 className="text-xs font-bold text-gray-900">我的评价记录</h4>
+          <div className="flex items-center gap-2">
+            <h4 className="text-xs font-bold text-gray-900">我的评价记录</h4>
+            {onRefreshReviews && (
+              <button
+                onClick={async () => {
+                  setIsRefreshing(true);
+                  try {
+                    await onRefreshReviews();
+                  } finally {
+                    setTimeout(() => setIsRefreshing(false), 400);
+                  }
+                }}
+                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-gray-100 hover:bg-indigo-50 text-gray-500 hover:text-indigo-600 text-[10px] font-medium transition-all"
+                title="重新同步最新审核结果"
+              >
+                <RotateCw className={`w-2.5 h-2.5 ${isRefreshing ? 'animate-spin text-indigo-600' : ''}`} />
+                <span>{isRefreshing ? '同步中' : '同步'}</span>
+              </button>
+            )}
+          </div>
           {isLoggedIn && <span className="text-[11px] text-gray-400">{myReviews.length} 条</span>}
         </div>
 

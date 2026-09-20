@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Teacher, Review, UserPointTransaction } from './types';
 import { INITIAL_TEACHERS, INITIAL_REVIEWS } from './data/mockTeachers';
 import { supabaseService } from './services/supabaseService';
@@ -101,7 +101,42 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Sync Supabase Auth & User Data
+  const loadUserPointsData = useCallback(async (userId: string, isNewRegistration: boolean = false) => {
+    // Check if user already checked in today
+    const checkedIn = await supabaseService.hasUserCheckedInToday(userId);
+    setHasCheckedInToday(checkedIn);
+
+    const pointData = await supabaseService.getUserPoints(userId);
+    if (pointData && (!isNewRegistration || pointData.points >= 100)) {
+      setUserPoints(pointData.points);
+      setTransactions(pointData.transactions);
+    } else {
+      const welcomeTx: UserPointTransaction = {
+        id: 'tx_init_' + Date.now(),
+        action: '新用户注册欢迎礼 (PRD 5.0)',
+        amount: 100,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        balanceAfter: 100,
+      };
+      setUserPoints(100);
+      setTransactions([welcomeTx]);
+      supabaseService.saveLocalUserPoints(userId, 100, [welcomeTx]);
+    }
+  }, []);
+
+  // Refresh reviews from Supabase & local cache (remote status always takes precedence)
+  const handleRefreshReviews = useCallback(async () => {
+    const allReviews = await supabaseService.getReviews();
+    if (allReviews && allReviews.length > 0) {
+      const existingIds = new Set(allReviews.map((r) => r.id));
+      const combined = [...allReviews, ...INITIAL_REVIEWS.filter((r) => !existingIds.has(r.id))];
+      setReviews(combined);
+    } else {
+      setReviews(INITIAL_REVIEWS);
+    }
+  }, []);
+
+  // Sync Supabase Auth, Initial Data, and Realtime Listeners
   useEffect(() => {
     // Load initial teachers from Supabase
     if (isSupabaseConfigured) {
@@ -112,14 +147,8 @@ export default function App() {
       });
     }
 
-    // Load reviews from Supabase and local cache
-    supabaseService.getReviews().then((allReviews) => {
-      if (allReviews && allReviews.length > 0) {
-        const existingIds = new Set(allReviews.map((r) => r.id));
-        const combined = [...allReviews, ...INITIAL_REVIEWS.filter((r) => !existingIds.has(r.id))];
-        setReviews(combined);
-      }
-    });
+    // Initial reviews load
+    handleRefreshReviews();
 
     if (!isSupabaseConfigured) return;
 
@@ -146,33 +175,47 @@ export default function App() {
       }
     });
 
+    // Subscribe to real-time reviews changes (e.g. admin approval from another device)
+    const reviewsSub = supabaseService.subscribeToReviews(() => {
+      handleRefreshReviews();
+      supabaseService.getCurrentUser().then((u) => {
+        if (u) loadUserPointsData(u.id);
+      });
+    });
+
+    // Window focus and visibility listeners for auto background sync
+    const handleSyncOnActive = () => {
+      handleRefreshReviews();
+      supabaseService.getCurrentUser().then((u) => {
+        if (u) loadUserPointsData(u.id);
+      });
+    };
+
+    window.addEventListener('focus', handleSyncOnActive);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        handleSyncOnActive();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       authListener?.subscription?.unsubscribe();
+      reviewsSub?.unsubscribe();
+      window.removeEventListener('focus', handleSyncOnActive);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [handleRefreshReviews, loadUserPointsData]);
 
-  const loadUserPointsData = async (userId: string, isNewRegistration: boolean = false) => {
-    // Check if user already checked in today
-    const checkedIn = await supabaseService.hasUserCheckedInToday(userId);
-    setHasCheckedInToday(checkedIn);
-
-    const pointData = await supabaseService.getUserPoints(userId);
-    if (pointData && (!isNewRegistration || pointData.points >= 100)) {
-      setUserPoints(pointData.points);
-      setTransactions(pointData.transactions);
-    } else {
-      const welcomeTx: UserPointTransaction = {
-        id: 'tx_init_' + Date.now(),
-        action: '新用户注册欢迎礼 (PRD 5.0)',
-        amount: 100,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        balanceAfter: 100,
-      };
-      setUserPoints(100);
-      setTransactions([welcomeTx]);
-      supabaseService.saveLocalUserPoints(userId, 100, [welcomeTx]);
+  // Re-sync reviews and user points whenever user navigates to the 'profile' tab
+  useEffect(() => {
+    if (currentTab === 'profile') {
+      handleRefreshReviews();
+      if (currentUser) {
+        loadUserPointsData(currentUser.id);
+      }
     }
-  };
+  }, [currentTab, currentUser, handleRefreshReviews, loadUserPointsData]);
 
   const handleOpenAuth = (mode: 'login' | 'register' = 'login') => {
     setAuthModalMode(mode);
@@ -289,18 +332,6 @@ export default function App() {
     supabaseService.submitReview(newReview);
   };
 
-  // Refresh reviews from Supabase & local cache
-  const handleRefreshReviews = async () => {
-    const allReviews = await supabaseService.getReviews();
-    if (allReviews && allReviews.length > 0) {
-      const existingIds = new Set(allReviews.map((r) => r.id));
-      const combined = [...allReviews, ...INITIAL_REVIEWS.filter((r) => !existingIds.has(r.id))];
-      setReviews(combined);
-    } else {
-      setReviews(INITIAL_REVIEWS);
-    }
-  };
-
   // Approve review handler: status becomes 'approved', +20 points awarded to author
   const handleApproveReview = async (reviewId: string, authorUserId?: string) => {
     const rev = reviews.find((r) => r.id === reviewId);
@@ -400,14 +431,16 @@ export default function App() {
     };
   }, [isAnyModalOpen]);
 
-  // Filter reviews written by current user
+  // Filter reviews written by current user (supports user id, email, nickname, and local client submissions)
   const myUserNickname = currentUser?.user_metadata?.nickname;
+  const localSubmittedIds = new Set(supabaseService.getLocalReviews().map((r) => r.id));
   const myReviews = currentUser
     ? reviews.filter(
         (r) =>
           (r.userId && r.userId === currentUser.id) ||
           (currentUser.email && r.userEmail === currentUser.email) ||
-          (myUserNickname && r.authorNickname === myUserNickname)
+          (myUserNickname && r.authorNickname === myUserNickname) ||
+          localSubmittedIds.has(r.id)
       )
     : [];
 
@@ -532,6 +565,7 @@ export default function App() {
                       teachers={teachers}
                       onOpenAdminAudit={() => setIsAdminAuditModalOpen(true)}
                       onDeleteReview={handleDeleteReview}
+                      onRefreshReviews={handleRefreshReviews}
                     />
                   )}
                 </motion.div>
@@ -810,6 +844,7 @@ export default function App() {
                     teachers={teachers}
                     onOpenAdminAudit={() => setIsAdminAuditModalOpen(true)}
                     onDeleteReview={handleDeleteReview}
+                    onRefreshReviews={handleRefreshReviews}
                   />
                 )}
               </motion.div>
