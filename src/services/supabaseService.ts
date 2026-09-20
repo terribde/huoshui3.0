@@ -768,15 +768,17 @@ export const supabaseService = {
   /**
    * Check whether a user email is an authorized administrator dynamically from Supabase database
    */
-  async checkIsAdmin(email?: string): Promise<{ isAdmin: boolean; role?: string; nickname?: string }> {
+  async checkIsAdmin(email?: string, userMetadata?: any): Promise<{ isAdmin: boolean; role?: string; nickname?: string }> {
     if (!email) return { isAdmin: false };
     const normalizedEmail = email.trim().toLowerCase();
 
-    // 1. Hardcoded initial super admin fallback (guarantees access even before SQL table is created)
+    // 1. Hardcoded initial super admin fallback & metadata role (guarantees access even before SQL table is created)
+    const isMetadataAdmin = userMetadata?.role === 'admin' || userMetadata?.role === 'super_admin';
     const isHardcodedAdmin = 
       normalizedEmail === '2502087135@qq.com' ||
       normalizedEmail.includes('admin') ||
-      normalizedEmail.endsWith('@swjtu.edu.cn');
+      normalizedEmail.endsWith('@swjtu.edu.cn') ||
+      isMetadataAdmin;
 
     // 2. Query dynamic database table `admin_users`
     if (isSupabaseConfigured && supabase) {
@@ -806,8 +808,8 @@ export const supabaseService = {
 
     return {
       isAdmin: isHardcodedAdmin,
-      role: isHardcodedAdmin ? 'super_admin' : undefined,
-      nickname: isHardcodedAdmin ? '系统超管' : undefined,
+      role: isHardcodedAdmin ? (userMetadata?.role || 'super_admin') : undefined,
+      nickname: isHardcodedAdmin ? (userMetadata?.nickname || '系统超管') : undefined,
     };
   },
 

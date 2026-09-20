@@ -73,6 +73,7 @@ export default function App() {
   const [isExperienceModalOpen, setIsExperienceModalOpen] = useState<boolean>(false);
   const [experienceTab, setExperienceTab] = useState<'guides' | 'notices' | 'history'>('guides');
   const [isAdminAuditModalOpen, setIsAdminAuditModalOpen] = useState<boolean>(false);
+  const [isUserAdmin, setIsUserAdmin] = useState<boolean>(false);
 
   // Automatic Device Detection: Accurately identifies mobile phone vs computer/desktop
   const [deviceInfo, setDeviceInfo] = useState<{ isMobile: boolean; screenWidth: number }>(() => {
@@ -217,6 +218,41 @@ export default function App() {
     }
   }, [currentTab, currentUser, handleRefreshReviews, loadUserPointsData]);
 
+  // Verify administrator privilege whenever currentUser changes
+  useEffect(() => {
+    let isMounted = true;
+    if (!currentUser || !currentUser.email) {
+      setIsUserAdmin(false);
+      setIsAdminAuditModalOpen(false);
+      return;
+    }
+
+    const email = currentUser.email.trim().toLowerCase();
+    const roleMeta = currentUser.user_metadata?.role;
+    // Immediate synchronous check for known admin accounts or role metadata
+    const isKnownAdmin =
+      email === '2502087135@qq.com' ||
+      email.includes('admin') ||
+      email.endsWith('@swjtu.edu.cn') ||
+      roleMeta === 'admin' ||
+      roleMeta === 'super_admin';
+
+    if (isKnownAdmin) {
+      setIsUserAdmin(true);
+    }
+
+    // Dynamic database check from admin_users table in Supabase
+    supabaseService.checkIsAdmin(currentUser.email, currentUser.user_metadata).then((res) => {
+      if (isMounted) {
+        setIsUserAdmin(res.isAdmin || isKnownAdmin);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser]);
+
   const handleOpenAuth = (mode: 'login' | 'register' = 'login') => {
     setAuthModalMode(mode);
     setIsAuthModalOpen(true);
@@ -225,6 +261,8 @@ export default function App() {
   const handleLogout = async () => {
     await supabaseService.signOut();
     setCurrentUser(null);
+    setIsUserAdmin(false);
+    setIsAdminAuditModalOpen(false);
     setUserPoints(0);
     setTransactions([]);
     setHasCheckedInToday(false);
@@ -563,9 +601,10 @@ export default function App() {
                       onSelectTeacher={(teacher) => setSelectedTeacher(teacher)}
                       myReviews={myReviews}
                       teachers={teachers}
-                      onOpenAdminAudit={() => setIsAdminAuditModalOpen(true)}
+                      onOpenAdminAudit={isUserAdmin ? () => setIsAdminAuditModalOpen(true) : undefined}
                       onDeleteReview={handleDeleteReview}
                       onRefreshReviews={handleRefreshReviews}
+                      isUserAdmin={isUserAdmin}
                     />
                   )}
                 </motion.div>
@@ -737,21 +776,23 @@ export default function App() {
                   <span>AI 智能问答</span>
                 </motion.button>
 
-                {/* Admin Audit Quick Switch */}
-                <motion.button
-                  whileTap={{ scale: 0.93 }}
-                  onClick={() => setIsAdminAuditModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900 hover:bg-slate-800 text-slate-100 text-xs font-bold transition-all shadow-2xs cursor-pointer group"
-                  title="进入评教审核管理工作台"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 text-indigo-400 group-hover:scale-110 transition-transform" />
-                  <span>管理审核</span>
-                  {reviews.filter((r) => r.status === 'pending').length > 0 && (
-                    <span className="px-1.5 py-0.2 bg-amber-500 text-slate-950 rounded-full text-[9px] font-black animate-pulse">
-                      {reviews.filter((r) => r.status === 'pending').length}
-                    </span>
-                  )}
-                </motion.button>
+                {/* Admin Audit Quick Switch - Only visible when an administrator is logged in */}
+                {isUserAdmin && (
+                  <motion.button
+                    whileTap={{ scale: 0.93 }}
+                    onClick={() => setIsAdminAuditModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900 hover:bg-slate-800 text-slate-100 text-xs font-bold transition-all shadow-2xs cursor-pointer group"
+                    title="进入评教审核管理工作台"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 text-indigo-400 group-hover:scale-110 transition-transform" />
+                    <span>管理审核</span>
+                    {reviews.filter((r) => r.status === 'pending').length > 0 && (
+                      <span className="px-1.5 py-0.2 bg-amber-500 text-slate-950 rounded-full text-[9px] font-black animate-pulse">
+                        {reviews.filter((r) => r.status === 'pending').length}
+                      </span>
+                    )}
+                  </motion.button>
+                )}
               </div>
             </div>
           </header>
@@ -842,9 +883,10 @@ export default function App() {
                     onSelectTeacher={(teacher) => setSelectedTeacher(teacher)}
                     myReviews={myReviews}
                     teachers={teachers}
-                    onOpenAdminAudit={() => setIsAdminAuditModalOpen(true)}
+                    onOpenAdminAudit={isUserAdmin ? () => setIsAdminAuditModalOpen(true) : undefined}
                     onDeleteReview={handleDeleteReview}
                     onRefreshReviews={handleRefreshReviews}
+                    isUserAdmin={isUserAdmin}
                   />
                 )}
               </motion.div>
@@ -956,7 +998,7 @@ export default function App() {
 
       {/* 8. 管理员审核后台工作台 Modal (PRD 核心审核机制) */}
       <AnimatePresence>
-        {isAdminAuditModalOpen && (
+        {isAdminAuditModalOpen && isUserAdmin && (
           <AdminAuditModal
             isOpen={isAdminAuditModalOpen}
             onClose={() => setIsAdminAuditModalOpen(false)}

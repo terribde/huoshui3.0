@@ -19,6 +19,7 @@ interface MobileUserProfileProps {
   onOpenAdminAudit?: () => void;
   onDeleteReview?: (reviewId: string) => void;
   onRefreshReviews?: () => Promise<void>;
+  isUserAdmin?: boolean;
 }
 
 export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
@@ -37,6 +38,7 @@ export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
   onOpenAdminAudit,
   onDeleteReview,
   onRefreshReviews,
+  isUserAdmin = false,
 }) => {
   const isLoggedIn = Boolean(currentUser);
   const userNickname = currentUser?.user_metadata?.nickname || '西南交大学子';
@@ -78,9 +80,16 @@ export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
                   {isLoggedIn ? userNickname : '未登录学子'}
                 </h3>
                 {isLoggedIn ? (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                    评教积极分子
-                  </span>
+                  isUserAdmin ? (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-900 text-white flex items-center gap-1 shadow-2xs">
+                      <ShieldCheck className="w-3 h-3 text-indigo-400" />
+                      审核管理员
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                      评教积极分子
+                    </span>
+                  )
                 ) : (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-600">
                     访客状态
