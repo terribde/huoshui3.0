@@ -111,3 +111,146 @@ CREATE POLICY "Public can check active admin status" ON public.admin_users
 FOR SELECT USING (is_active = true);
 CREATE POLICY "Public can manage admin users" ON public.admin_users 
 FOR ALL USING (true);
+
+-- ============================================================================
+-- 6. 数据库 RPC 核心函数 (SECURITY DEFINER 规避 RLS 42501 权限异常)
+-- ============================================================================
+
+-- 6.1 每日签到函数 (handle_daily_checkin)
+CREATE OR REPLACE FUNCTION public.handle_daily_checkin()
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_user_id TEXT;
+    v_current_points INT;
+    v_last_checkin DATE;
+    v_today DATE := CURRENT_DATE;
+BEGIN
+    -- 获取当前登录用户 ID (优先 auth.uid())
+    v_user_id := auth.uid()::text;
+    IF v_user_id IS NULL THEN
+        RAISE EXCEPTION 'User must be logged in to check in (未获取到登录身份)';
+    END IF;
+
+    -- 确保 user_profiles 行存在
+    INSERT INTO public.user_profiles (id, points, last_checkin_date)
+    VALUES (v_user_id, 100, NULL)
+    ON CONFLICT (id) DO NOTHING;
+
+    -- 读取当前积分与最后签到日期 (加行级排他锁)
+    SELECT points, last_checkin_date INTO v_current_points, v_last_checkin
+    FROM public.user_profiles
+    WHERE id = v_user_id
+    FOR UPDATE;
+
+    -- 若今日已签到
+    IF v_last_checkin = v_today THEN
+        RETURN json_build_object(
+            'points', v_current_points,
+            'already_checked_in', true
+        );
+    END IF;
+
+    -- 执行签到: +5 积分，更新签到日期
+    v_current_points := v_current_points + 5;
+    UPDATE public.user_profiles
+    SET points = v_current_points,
+        last_checkin_date = v_today
+    WHERE id = v_user_id;
+
+    -- 写入积分流水记录
+    INSERT INTO public.point_transactions (id, user_id, action, amount, balance_after, timestamp)
+    VALUES (
+        'tx_' || extract(epoch from now())::bigint || '_' || substr(md5(random()::text), 1, 4),
+        v_user_id,
+        '每日签到奖励 (PRD 5.0)',
+        5,
+        v_current_points,
+        now()
+    );
+
+    RETURN json_build_object(
+        'points', v_current_points,
+        'already_checked_in', false
+    );
+END;
+$$;
+
+-- 6.2 消费积分函数 (spend_points)
+CREATE OR REPLACE FUNCTION public.spend_points(
+    p_action_code TEXT,
+    p_note TEXT DEFAULT NULL
+)
+RETURNS INT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_user_id TEXT;
+    v_cost INT := 2;
+    v_current_points INT;
+    v_action_desc TEXT;
+BEGIN
+    v_user_id := auth.uid()::text;
+    IF v_user_id IS NULL THEN
+        RAISE EXCEPTION 'User must be logged in to spend points (未登录)';
+    END IF;
+
+    -- 确定消耗积分额度
+    IF p_action_code = 'ai_question' THEN
+        v_cost := 2;
+        v_action_desc := COALESCE(p_note, '向交大学霸智囊提问消耗 (PRD 5.0)');
+    ELSIF p_action_code = 'smart_filter' THEN
+        v_cost := 2;
+        v_action_desc := COALESCE(p_note, '智能选课偏好画像排序筛选消耗 (PRD 5.0)');
+    ELSIF p_action_code = 'guide_unlock' THEN
+        v_cost := 5;
+        v_action_desc := COALESCE(p_note, '解锁交大高分选课避坑指南 (PRD 5.0)');
+    ELSE
+        v_cost := 2;
+        v_action_desc := COALESCE(p_note, '消耗积分: ' || p_action_code);
+    END IF;
+
+    -- 读取并锁定当前积分
+    SELECT points INTO v_current_points
+    FROM public.user_profiles
+    WHERE id = v_user_id
+    FOR UPDATE;
+
+    IF v_current_points IS NULL THEN
+        v_current_points := 100;
+        INSERT INTO public.user_profiles (id, points) VALUES (v_user_id, 100);
+    END IF;
+
+    IF v_current_points < v_cost THEN
+        RAISE EXCEPTION 'insufficient points: 积分不足 (需要 % 分，当前 % 分)', v_cost, v_current_points;
+    END IF;
+
+    -- 扣减积分
+    v_current_points := v_current_points - v_cost;
+    UPDATE public.user_profiles
+    SET points = v_current_points
+    WHERE id = v_user_id;
+
+    -- 记录流水
+    INSERT INTO public.point_transactions (id, user_id, action, amount, balance_after, timestamp)
+    VALUES (
+        'tx_' || extract(epoch from now())::bigint || '_' || substr(md5(random()::text), 1, 4),
+        v_user_id,
+        v_action_desc,
+        -v_cost,
+        v_current_points,
+        now()
+    );
+
+    RETURN v_current_points;
+END;
+$$;
+
+-- 授权匿名角色与已认证角色执行 RPC 函数
+GRANT EXECUTE ON FUNCTION public.handle_daily_checkin() TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.spend_points(TEXT, TEXT) TO anon, authenticated;

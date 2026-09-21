@@ -15,17 +15,17 @@ export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey && su
 
 let supabaseInstance: SupabaseClient | null = null;
 
-export const getSupabase = (): SupabaseClient | null => {
-  if (!isSupabaseConfigured) {
-    return null;
-  }
-  if (!supabaseInstance) {
-    supabaseInstance = createClient(supabaseUrl, supabaseAnonKey);
-  }
-  return supabaseInstance;
-};
+if (isSupabaseConfigured) {
+  supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  });
+}
 
-// Export direct client helper (falls back gracefully if not configured)
-export const supabase = isSupabaseConfigured 
-  ? createClient(supabaseUrl, supabaseAnonKey) 
-  : null;
+// Export single shared client instance
+export const supabase: SupabaseClient | null = supabaseInstance;
+
+export const getSupabase = (): SupabaseClient | null => supabaseInstance;

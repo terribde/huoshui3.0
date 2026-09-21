@@ -154,24 +154,23 @@ export default function App() {
 
     // Check active auth session
     supabaseService.getCurrentUser().then((user) => {
-      setCurrentUser(user);
       if (user) {
+        setCurrentUser(user);
         loadUserPointsData(user.id);
-      } else {
-        setUserPoints(0);
-        setTransactions([]);
       }
     });
 
     // Subscribe to auth state changes
-    const { data: authListener } = supabaseService.onAuthStateChange((_event, session) => {
+    const { data: authListener } = supabaseService.onAuthStateChange((event, session) => {
       const user = session?.user || null;
-      setCurrentUser(user);
-      if (user) {
-        loadUserPointsData(user.id);
-      } else {
+      if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
         setUserPoints(0);
         setTransactions([]);
+        setHasCheckedInToday(false);
+      } else if (user) {
+        setCurrentUser(user);
+        loadUserPointsData(user.id);
       }
     });
 
