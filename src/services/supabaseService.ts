@@ -122,31 +122,94 @@ export const supabaseService = {
     return false;
   },
 
-  async recordCheckIn(userId: string, added: number, newBalance: number): Promise<boolean> {
-    const todayStr = this.getLocalDateString();
-
-    // 1. Save locally immediately
-    this.saveLocalCheckInDate(userId, todayStr);
-
-    // 2. Persist point transaction
-    await this.savePointTransaction(userId, '每日签到奖励 (PRD 5.0)', added, newBalance);
-
-    // 3. Update last_checkin_date on Supabase user_profiles
+  /**
+   * Execute Daily Check-in via Supabase Database Function `handle_daily_checkin`
+   * Requirement 1: Call `supabase.rpc('handle_daily_checkin')`
+   */
+  async handleDailyCheckin(userId: string): Promise<{
+    success: boolean;
+    points: number;
+    alreadyCheckedIn: boolean;
+    message?: string;
+  }> {
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase
-          .from('user_profiles')
-          .upsert({
-            id: userId,
-            points: newBalance,
-            last_checkin_date: todayStr,
-          });
-      } catch (err) {
-        console.warn('[Supabase] Failed to sync last_checkin_date to cloud:', err);
+        const { data, error } = await supabase.rpc('handle_daily_checkin');
+        if (error) {
+          console.error('[Supabase] handle_daily_checkin error:', error);
+          return {
+            success: false,
+            points: 0,
+            alreadyCheckedIn: false,
+            message: error.message || '签到失败，请稍后重试',
+          };
+        }
+
+        // data format: [{ points: 105, already_checked_in: false }] or { points: 105, already_checked_in: false }
+        const res = Array.isArray(data) ? data[0] : data;
+        const currentBalance = typeof res?.points === 'number' ? res.points : 0;
+        const alreadyChecked = Boolean(res?.already_checked_in);
+
+        const todayStr = this.getLocalDateString();
+        this.saveLocalCheckInDate(userId, todayStr);
+
+        // Synchronize local points cache
+        const local = this.getLocalUserPoints(userId) || { points: 0, transactions: [] };
+        const updatedTx = alreadyChecked
+          ? local.transactions
+          : [
+              {
+                id: 'tx_checkin_' + Date.now(),
+                action: '每日签到奖励 (PRD 5.0)',
+                amount: 5,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                balanceAfter: currentBalance,
+              },
+              ...local.transactions,
+            ];
+        this.saveLocalUserPoints(userId, currentBalance, updatedTx);
+
+        return {
+          success: true,
+          points: currentBalance,
+          alreadyCheckedIn: alreadyChecked,
+        };
+      } catch (err: any) {
+        console.error('[Supabase] handle_daily_checkin exception:', err);
+        return {
+          success: false,
+          points: 0,
+          alreadyCheckedIn: false,
+          message: err.message || '签到请求异常',
+        };
       }
     }
 
-    return true;
+    // Local fallback for offline/development without Supabase
+    const todayStr = this.getLocalDateString();
+    const isAlready = this.getLocalCheckInDate(userId) === todayStr;
+    const local = this.getLocalUserPoints(userId) || { points: 100, transactions: [] };
+    if (isAlready) {
+      return { success: true, points: local.points, alreadyCheckedIn: true };
+    }
+    const newBal = local.points + 5;
+    this.saveLocalCheckInDate(userId, todayStr);
+    this.saveLocalUserPoints(userId, newBal, [
+      {
+        id: 'tx_checkin_' + Date.now(),
+        action: '每日签到奖励 (PRD 5.0)',
+        amount: 5,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        balanceAfter: newBal,
+      },
+      ...local.transactions,
+    ]);
+    return { success: true, points: newBal, alreadyCheckedIn: false };
+  },
+
+  async recordCheckIn(userId: string, _added: number, _newBalance: number): Promise<boolean> {
+    const res = await this.handleDailyCheckin(userId);
+    return res.success;
   },
 
   /**
@@ -173,6 +236,7 @@ export const supabaseService = {
         name: row.name,
         title: row.title || '教师',
         college: row.college || '西南交通大学',
+        collegeId: row.college_id || undefined,
         campus: row.campus || '犀浦校区',
         courses: Array.isArray(row.courses) ? row.courses : (typeof row.courses === 'string' ? JSON.parse(row.courses) : []),
         isTeachingThisTerm: Boolean(row.is_teaching_this_term),
@@ -302,6 +366,7 @@ export const supabaseService = {
 
     try {
       // Ensure the referenced teacher exists in Supabase to avoid foreign key errors
+      // Note: Do NOT write overall_score or dimension averages (managed by database triggers)
       const mockTeacher = INITIAL_TEACHERS.find((t) => t.id === review.teacherId);
       if (mockTeacher) {
         await supabase.from('teachers').upsert({
@@ -312,14 +377,6 @@ export const supabaseService = {
           campus: mockTeacher.campus,
           courses: mockTeacher.courses,
           is_teaching_this_term: mockTeacher.isTeachingThisTerm,
-          overall_score: mockTeacher.overallScore,
-          review_count: mockTeacher.reviewCount,
-          attendance_strictness: mockTeacher.dimensions.attendanceStrictness,
-          grading_leniency: mockTeacher.dimensions.gradingLeniency,
-          effort_matters: mockTeacher.dimensions.effortMatters,
-          workload_difficulty: mockTeacher.dimensions.workloadDifficulty,
-          approachability: mockTeacher.dimensions.approachability,
-          teaching_quality: mockTeacher.dimensions.teachingQuality,
           has_historical_data: mockTeacher.hasHistoricalData,
           tags: mockTeacher.tags,
         }, { onConflict: 'id', ignoreDuplicates: true });
@@ -328,6 +385,15 @@ export const supabaseService = {
       let validCreatedAt: string = new Date().toISOString();
       if (review.createdAt && !isNaN(Date.parse(review.createdAt))) {
         validCreatedAt = new Date(review.createdAt).toISOString();
+      }
+
+      // Requirement 4: Ensure user_id = current authenticated session user and status = 'pending'
+      const sessionUser = (await supabase.auth.getUser())?.data?.user;
+      const currentUserId = sessionUser?.id || review.userId;
+
+      if (!currentUserId) {
+        console.error('[Supabase] Submission rejected: must be logged in with a valid user_id.');
+        return false;
       }
 
       const insertPayload: any = {
@@ -343,27 +409,19 @@ export const supabaseService = {
         teaching_quality: review.dimensions.teachingQuality,
         comment: review.comment,
         author_nickname: review.authorNickname,
-        user_id: review.userId || null,
-        user_email: review.userEmail || null,
+        user_id: currentUserId,
+        user_email: sessionUser?.email || review.userEmail || null,
         is_historical_migrated: false,
-        status: review.status,
+        status: 'pending', // Strictly 'pending' per database requirement
         created_at: validCreatedAt,
-        likes: review.likes || 0,
+        likes: 0,
       };
 
-      if (review.rejectionReason) {
-        insertPayload.rejection_reason = review.rejectionReason;
-      }
-
-      let { error } = await supabase.from('reviews').insert(insertPayload);
-      if (error && error.message?.includes('rejection_reason')) {
-        delete insertPayload.rejection_reason;
-        const retryRes = await supabase.from('reviews').insert(insertPayload);
-        error = retryRes.error;
-      }
+      const { error } = await supabase.from('reviews').insert(insertPayload);
 
       if (error) {
-        console.warn('[Supabase] Error submitting review to remote:', error.message);
+        console.error('[Supabase] Error submitting review to remote:', error.message);
+        return false;
       }
       return true;
     } catch (err) {
@@ -373,15 +431,9 @@ export const supabaseService = {
   },
 
   /**
-   * Update Review status (approved / rejected) with optional rejection reason and reward points
+   * Update local review status in browser storage
    */
-  async updateReviewStatus(
-    reviewId: string,
-    status: 'approved' | 'rejected',
-    rejectionReason?: string,
-    authorUserId?: string
-  ): Promise<boolean> {
-    // 1. Update local cache
+  updateLocalReviewStatus(reviewId: string, status: 'approved' | 'rejected', rejectionReason?: string) {
     const local = this.getLocalReviews();
     const updated = local.map((r) =>
       r.id === reviewId ? { ...r, status, rejectionReason: status === 'rejected' ? rejectionReason : undefined } : r
@@ -392,43 +444,135 @@ export const supabaseService = {
     } catch (e) {
       console.warn('Failed to update review in local storage:', e);
     }
+  },
 
-    // 2. Update Supabase if configured
+  /**
+   * Approve a review via Supabase Database Function `approve_review`
+   * Requirement 5: Call `supabase.rpc('approve_review', { p_review_id: reviewId })`
+   * Automatically grants author 20 points, writes transaction log, and updates audit timestamp.
+   */
+  async approveReview(reviewId: string): Promise<{ success: boolean; message?: string }> {
+    // 1. Update local cache immediately
+    this.updateLocalReviewStatus(reviewId, 'approved');
+
+    // 2. Call Supabase RPC function
     if (isSupabaseConfigured && supabase) {
       try {
-        const updatePayload: any = { status };
-        if (rejectionReason) {
-          updatePayload.rejection_reason = rejectionReason;
-        } else if (status === 'approved') {
-          updatePayload.rejection_reason = null;
-        }
-
-        let { error } = await supabase.from('reviews').update(updatePayload).eq('id', reviewId);
-        if (error && error.message?.includes('rejection_reason')) {
-          const retryRes = await supabase.from('reviews').update({ status }).eq('id', reviewId);
-          error = retryRes.error;
-        }
+        const { error } = await supabase.rpc('approve_review', {
+          p_review_id: reviewId,
+        });
 
         if (error) {
-          console.warn('[Supabase] Failed to update review status in remote:', error);
+          console.error('[Supabase] approve_review error:', error);
+          let msg = error.message;
+          if (msg.includes('not authorized') || msg.includes('Permission denied')) {
+            msg = '无权操作：当前登录账号不是审核管理员（需在 admin_users 表中启用），无法通过审核。';
+          }
+          return { success: false, message: msg };
         }
-      } catch (err) {
-        console.warn('[Supabase] updateReviewStatus exception:', err);
+        return { success: true };
+      } catch (err: any) {
+        console.error('[Supabase] approve_review exception:', err);
+        return { success: false, message: err.message };
       }
     }
 
-    // 3. If approved, automatically award +20 points to the author!
-    if (status === 'approved' && authorUserId) {
+    return { success: true };
+  },
+
+  /**
+   * Reject a review via Supabase Database Function `reject_review`
+   * Requirement 5: Call `supabase.rpc('reject_review', { p_review_id: reviewId, p_reason: reason })`
+   */
+  async rejectReview(reviewId: string, reason: string): Promise<{ success: boolean; message?: string }> {
+    // 1. Update local cache immediately
+    this.updateLocalReviewStatus(reviewId, 'rejected', reason);
+
+    // 2. Call Supabase RPC function
+    if (isSupabaseConfigured && supabase) {
       try {
-        const pointsData = await this.getUserPoints(authorUserId);
-        const newBalance = pointsData.points + 20;
-        await this.savePointTransaction(authorUserId, '撰写教师评价审核通过 (+20分)', 20, newBalance);
-      } catch (err) {
-        console.warn('Failed to award review reward points:', err);
+        const { error } = await supabase.rpc('reject_review', {
+          p_review_id: reviewId,
+          p_reason: reason || '内容过于简短，麻烦补充具体上课体验',
+        });
+
+        if (error) {
+          console.error('[Supabase] reject_review error:', error);
+          let msg = error.message;
+          if (msg.includes('not authorized') || msg.includes('Permission denied')) {
+            msg = '无权操作：当前登录账号不是审核管理员（需在 admin_users 表中启用），无法驳回。';
+          }
+          return { success: false, message: msg };
+        }
+        return { success: true };
+      } catch (err: any) {
+        console.error('[Supabase] reject_review exception:', err);
+        return { success: false, message: err.message };
       }
     }
 
-    return true;
+    return { success: true };
+  },
+
+  /**
+   * Re-edit user's own review (pending or rejected -> reset to pending for re-audit)
+   */
+  async updateMyReview(review: Review): Promise<{ success: boolean; message?: string }> {
+    this.saveLocalReview({ ...review, status: 'pending', rejectionReason: undefined });
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const sessionUser = (await supabase.auth.getUser())?.data?.user;
+        if (!sessionUser) {
+          return { success: false, message: '请先登录' };
+        }
+
+        const { error } = await supabase
+          .from('reviews')
+          .update({
+            course_name: review.courseName,
+            year_term: review.yearTerm,
+            attendance_strictness: review.dimensions.attendanceStrictness,
+            grading_leniency: review.dimensions.gradingLeniency,
+            effort_matters: review.dimensions.effortMatters,
+            workload_difficulty: review.dimensions.workloadDifficulty,
+            approachability: review.dimensions.approachability,
+            teaching_quality: review.dimensions.teachingQuality,
+            comment: review.comment,
+            status: 'pending',
+            rejection_reason: null,
+          })
+          .eq('id', review.id)
+          .eq('user_id', sessionUser.id);
+
+        if (error) {
+          console.error('[Supabase] updateMyReview error:', error);
+          return { success: false, message: error.message };
+        }
+        return { success: true };
+      } catch (err: any) {
+        return { success: false, message: err.message };
+      }
+    }
+    return { success: true };
+  },
+
+  /**
+   * Backward-compatible status updater: routes to RPC functions
+   */
+  async updateReviewStatus(
+    reviewId: string,
+    status: 'approved' | 'rejected',
+    rejectionReason?: string,
+    _authorUserId?: string
+  ): Promise<boolean> {
+    if (status === 'approved') {
+      const res = await this.approveReview(reviewId);
+      return res.success;
+    } else {
+      const res = await this.rejectReview(reviewId, rejectionReason || '未说明驳回理由');
+      return res.success;
+    }
   },
 
   /**
@@ -537,7 +681,7 @@ export const supabaseService = {
       return local;
     }
 
-    // 3. New registered user without points record: Automatically grant 100 welcome points!
+    // 3. New registered user without points record: fallback local display
     const welcomeTx: UserPointTransaction = {
       id: 'tx_init_' + Date.now(),
       action: '新用户注册欢迎礼 (PRD 5.0)',
@@ -553,27 +697,70 @@ export const supabaseService = {
 
     // Save locally
     this.saveLocalUserPoints(userId, initialData.points, initialData.transactions);
+    // Note: Database trigger on auth.users automatically initializes user_profiles with 100 points and logs transaction.
+    return initialData;
+  },
 
-    // Try cloud sync in background
+  /**
+   * Spend Points via Supabase Database Function `spend_points`
+   * Requirement 2: Unified RPC deduction function
+   */
+  async spendPoints(
+    actionCode: 'ai_question' | 'smart_filter' | 'guide_unlock' | string,
+    note?: string,
+    fallbackAmount: number = 2
+  ): Promise<{
+    success: boolean;
+    newBalance: number;
+    message?: string;
+    error?: string;
+  }> {
     if (isSupabaseConfigured && supabase) {
-      (async () => {
-        try {
-          await supabase.from('user_profiles').upsert({ id: userId, points: 100 });
-          await supabase.from('point_transactions').insert({
-            id: welcomeTx.id,
-            user_id: userId,
-            action: welcomeTx.action,
-            amount: 100,
-            balance_after: 100,
-            timestamp: new Date().toISOString(),
-          });
-        } catch (e) {
-          console.warn('[Supabase] Auto sync welcome points note:', e);
+      try {
+        const { data, error } = await supabase.rpc('spend_points', {
+          p_action_code: actionCode,
+          p_note: note || undefined,
+        });
+
+        if (error) {
+          console.warn('[Supabase] spend_points error:', error);
+          let userMsg = error.message || '扣除积分失败';
+          if (error.message?.includes('insufficient points') || error.message?.includes('积分不足')) {
+            userMsg = '积分不足！本次操作所需积分超过您的当前余额。请先每日签到(+5分)或提交评价(+20分)获取积分。';
+          } else if (error.message?.includes('must be logged in') || error.message?.includes('未登录')) {
+            userMsg = '请先登录交大学子账号后再使用该功能。';
+          }
+          return {
+            success: false,
+            newBalance: 0,
+            message: userMsg,
+            error: error.message,
+          };
         }
-      })();
+
+        const newBalance = typeof data === 'number' ? data : Number(data);
+        return {
+          success: true,
+          newBalance,
+        };
+      } catch (err: any) {
+        console.error('[Supabase] spend_points exception:', err);
+        return {
+          success: false,
+          newBalance: 0,
+          message: err.message || '网络异常，扣除积分失败',
+          error: err.message,
+        };
+      }
     }
 
-    return initialData;
+    // Local fallback
+    const local = this.getLocalUserPoints('swjtu_student_default');
+    const newBal = Math.max(0, local.points - fallbackAmount);
+    return {
+      success: true,
+      newBalance: newBal,
+    };
   },
 
   /**
@@ -599,30 +786,9 @@ export const supabaseService = {
     const updatedTransactions = [newTx, ...local.transactions];
     this.saveLocalUserPoints(userId, balanceAfter, updatedTransactions);
 
-    // 2. Persist to Supabase if configured
-    if (!isSupabaseConfigured || !supabase) return true;
-
-    try {
-      await supabase
-        .from('user_profiles')
-        .upsert({ id: userId, points: balanceAfter });
-
-      await supabase
-        .from('point_transactions')
-        .insert({
-          id: txId,
-          user_id: userId,
-          action,
-          amount,
-          balance_after: balanceAfter,
-          timestamp: new Date().toISOString(),
-        });
-
-      return true;
-    } catch (err) {
-      console.warn('[Supabase] Failed to persist point transaction remotely:', err);
-      return true;
-    }
+    // Note: Remote point_transactions and user_profiles writes are strictly handled via database RPCs
+    // (handle_daily_checkin, spend_points, approve_review, and auth.users triggers).
+    return true;
   },
 
   /**
@@ -705,10 +871,10 @@ export const supabaseService = {
   },
 
   /**
-   * Ensure user profile exists with 100 points
+   * Ensure user profile exists (managed by DB trigger on auth.users automatically)
    */
   async ensureUserProfile(userId: string, _email: string) {
-    // 1. Initialize 100 points in local storage immediately
+    // 1. Initialize local cache representation if needed
     const existing = this.getLocalUserPoints(userId);
     if (!existing) {
       const welcomeTx: UserPointTransaction = {
@@ -719,39 +885,6 @@ export const supabaseService = {
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       this.saveLocalUserPoints(userId, 100, [welcomeTx]);
-    }
-
-    // 2. Sync to Supabase if reachable
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select('id, points')
-          .eq('id', userId)
-          .maybeSingle();
-
-        if (!profile) {
-          await supabase
-            .from('user_profiles')
-            .upsert({
-              id: userId,
-              points: 100,
-            });
-
-          await supabase
-            .from('point_transactions')
-            .insert({
-              id: 'tx_welcome_' + Date.now(),
-              user_id: userId,
-              action: '新用户注册欢迎礼 (PRD 5.0)',
-              amount: 100,
-              balance_after: 100,
-              timestamp: new Date().toISOString(),
-            });
-        }
-      } catch (err) {
-        console.warn('[Supabase] ensureUserProfile cloud warning:', err);
-      }
     }
   },
 
@@ -907,5 +1040,27 @@ export const supabaseService = {
       }
     }
     return true;
+  },
+
+  /**
+   * Fetch standardized colleges list from Supabase `colleges` table
+   * Requirement 7: college_id reference table
+   */
+  async getColleges(): Promise<Array<{ id: string; name: string; code?: string }> | null> {
+    if (!isSupabaseConfigured || !supabase) return null;
+    try {
+      const { data, error } = await supabase
+        .from('colleges')
+        .select('*')
+        .order('name');
+      if (error) {
+        console.warn('[Supabase] getColleges note:', error.message);
+        return null;
+      }
+      return data;
+    } catch (err) {
+      console.warn('[Supabase] getColleges exception:', err);
+      return null;
+    }
   },
 };

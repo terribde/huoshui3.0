@@ -70,6 +70,7 @@ export default function App() {
   const [reviewTargetTeacher, setReviewTargetTeacher] = useState<Teacher | null>(null);
   const [isPointsModalOpen, setIsPointsModalOpen] = useState<boolean>(false);
   const [isCollegesModalOpen, setIsCollegesModalOpen] = useState<boolean>(false);
+  const [colleges, setColleges] = useState<Array<{ id: string; name: string; code?: string }>>([]);
   const [isExperienceModalOpen, setIsExperienceModalOpen] = useState<boolean>(false);
   const [experienceTab, setExperienceTab] = useState<'guides' | 'notices' | 'history'>('guides');
   const [isAdminAuditModalOpen, setIsAdminAuditModalOpen] = useState<boolean>(false);
@@ -102,26 +103,15 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const loadUserPointsData = useCallback(async (userId: string, isNewRegistration: boolean = false) => {
+  const loadUserPointsData = useCallback(async (userId: string) => {
     // Check if user already checked in today
     const checkedIn = await supabaseService.hasUserCheckedInToday(userId);
     setHasCheckedInToday(checkedIn);
 
     const pointData = await supabaseService.getUserPoints(userId);
-    if (pointData && (!isNewRegistration || pointData.points >= 100)) {
+    if (pointData) {
       setUserPoints(pointData.points);
       setTransactions(pointData.transactions);
-    } else {
-      const welcomeTx: UserPointTransaction = {
-        id: 'tx_init_' + Date.now(),
-        action: '新用户注册欢迎礼 (PRD 5.0)',
-        amount: 100,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        balanceAfter: 100,
-      };
-      setUserPoints(100);
-      setTransactions([welcomeTx]);
-      supabaseService.saveLocalUserPoints(userId, 100, [welcomeTx]);
     }
   }, []);
 
@@ -150,6 +140,15 @@ export default function App() {
 
     // Initial reviews load
     handleRefreshReviews();
+
+    // Load colleges list
+    if (isSupabaseConfigured) {
+      supabaseService.getColleges().then((data) => {
+        if (data && data.length > 0) {
+          setColleges(data);
+        }
+      });
+    }
 
     if (!isSupabaseConfigured) return;
 
@@ -270,19 +269,29 @@ export default function App() {
 
   const viewMode: 'mobile' | 'desktop' = deviceInfo.isMobile ? 'mobile' : 'desktop';
 
-  // Points Deduction Handler (PRD 5.0)
-  const handleDeductPoints = (amount: number, reason: string): boolean => {
+  // Points Deduction Handler (PRD 5.0) via unified spend_points RPC function
+  const handleDeductPoints = async (
+    amount: number,
+    reason: string,
+    actionCode: 'ai_question' | 'smart_filter' | 'guide_unlock' | string = 'ai_question'
+  ): Promise<boolean> => {
     if (!currentUser) {
       handleOpenAuth('login');
       return false;
     }
 
     if (userPoints < amount) {
-      alert(`积分不足！本次操作需消耗 ${amount} 积分，当前剩余 ${userPoints} 积分。请先每日签到或写评价赚取积分。`);
+      alert(`积分不足！本次操作需消耗 ${amount} 积分，当前剩余 ${userPoints} 积分。请先每日签到(+5分)或写评价(+20分)赚取积分。`);
       return false;
     }
 
-    const newBalance = userPoints - amount;
+    const res = await supabaseService.spendPoints(actionCode, reason, amount);
+    if (!res.success) {
+      alert(res.message || '扣除积分失败');
+      return false;
+    }
+
+    const newBalance = res.newBalance;
     setUserPoints(newBalance);
     setTransactions((prev) => [
       {
@@ -295,42 +304,41 @@ export default function App() {
       ...prev,
     ]);
 
-    if (isSupabaseConfigured) {
-      supabaseService.savePointTransaction(currentUser.id, reason, -amount, newBalance);
-    }
     return true;
   };
 
-  // Daily Check-in Handler
+  // Daily Check-in Handler via handle_daily_checkin RPC function
   const handleCheckIn = async () => {
     if (!currentUser) {
       handleOpenAuth('login');
       return;
     }
 
-    const alreadyChecked = await supabaseService.hasUserCheckedInToday(currentUser.id);
-    if (hasCheckedInToday || alreadyChecked) {
-      setHasCheckedInToday(true);
+    const res = await supabaseService.handleDailyCheckin(currentUser.id);
+    if (!res.success) {
+      alert(res.message || '签到失败，请稍后重试');
+      return;
+    }
+
+    setHasCheckedInToday(true);
+    setUserPoints(res.points);
+
+    if (res.alreadyCheckedIn) {
       alert('您今日已经完成签到啦，明日 00:00 后即可再次签到领取积分！');
       return;
     }
 
-    const added = 5;
-    const newBalance = userPoints + added;
-    setUserPoints(newBalance);
-    setHasCheckedInToday(true);
     setTransactions((prev) => [
       {
         id: `tx_${Date.now()}`,
         action: '每日签到奖励 (PRD 5.0)',
-        amount: added,
+        amount: 5,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        balanceAfter: newBalance,
+        balanceAfter: res.points,
       },
       ...prev,
     ]);
-
-    await supabaseService.recordCheckIn(currentUser.id, added, newBalance);
+    alert('签到成功！已获得 +5 积分奖励');
   };
 
   // Guarded Review Open: Requires User Login!
@@ -370,67 +378,51 @@ export default function App() {
     supabaseService.submitReview(newReview);
   };
 
-  // Approve review handler: status becomes 'approved', +20 points awarded to author
-  const handleApproveReview = async (reviewId: string, authorUserId?: string) => {
-    const rev = reviews.find((r) => r.id === reviewId);
-    if (!rev) return;
+  // Approve review handler: calls approve_review RPC function (Requirement 5 & 6)
+  const handleApproveReview = async (reviewId: string, _authorUserId?: string) => {
+    const res = await supabaseService.approveReview(reviewId);
+    if (!res.success) {
+      alert(res.message || '审核通过操作失败');
+      return;
+    }
 
-    // 1. Update review status to approved
+    // 1. Update review status to approved locally
     setReviews((prev) =>
       prev.map((r) =>
         r.id === reviewId ? { ...r, status: 'approved', rejectionReason: undefined } : r
       )
     );
 
-    // 2. Increment teacher's published review count
-    setTeachers((prev) =>
-      prev.map((t) => {
-        if (t.id === rev.teacherId) {
-          return {
-            ...t,
-            reviewCount: t.reviewCount + 1,
-          };
+    // 2. Refresh reviews and teachers from remote (DB trigger calculates scores and review counts)
+    handleRefreshReviews();
+    if (isSupabaseConfigured) {
+      supabaseService.getTeachers().then((remoteTeachers) => {
+        if (remoteTeachers && remoteTeachers.length > 0) {
+          setTeachers(remoteTeachers);
         }
-        return t;
-      })
-    );
-
-    // 3. Award +20 points if author is currently logged in user
-    const targetUserId = authorUserId || rev.userId;
-    const isCurrentUserAuthor = Boolean(
-      currentUser &&
-      ((targetUserId && targetUserId === currentUser.id) ||
-       (rev.userEmail && rev.userEmail === currentUser.email))
-    );
-
-    if (isCurrentUserAuthor) {
-      const bonus = 20;
-      const newBalance = userPoints + bonus;
-      setUserPoints(newBalance);
-      setTransactions((prev) => [
-        {
-          id: `tx_${Date.now()}`,
-          action: `教师评价审核通过公示奖励 (+${bonus}分)`,
-          amount: bonus,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          balanceAfter: newBalance,
-        },
-        ...prev,
-      ]);
+      });
     }
 
-    // 4. Update remote Supabase & author user points
-    await supabaseService.updateReviewStatus(reviewId, 'approved', undefined, targetUserId);
+    // 3. If current user is author, reload user points (+20 awarded by approve_review function)
+    if (currentUser) {
+      loadUserPointsData(currentUser.id);
+    }
   };
 
-  // Reject review handler: status becomes 'rejected' with reason
+  // Reject review handler: calls reject_review RPC function (Requirement 5)
   const handleRejectReview = async (reviewId: string, reason: string) => {
+    const res = await supabaseService.rejectReview(reviewId, reason);
+    if (!res.success) {
+      alert(res.message || '驳回操作失败');
+      return;
+    }
+
     setReviews((prev) =>
       prev.map((r) =>
         r.id === reviewId ? { ...r, status: 'rejected', rejectionReason: reason } : r
       )
     );
-    await supabaseService.updateReviewStatus(reviewId, 'rejected', reason);
+    handleRefreshReviews();
   };
 
   // Delete review handler
@@ -532,6 +524,7 @@ export default function App() {
                   {currentTab === 'search' && (
                     <MobileTeacherSearch
                       teachers={teachers}
+                      colleges={colleges}
                       initialSearch={initialTeacherSearch}
                       onSelectTeacher={(teacher) => setSelectedTeacher(teacher)}
                       onOpenReview={(teacher) => handleOpenReview(teacher)}
@@ -574,6 +567,7 @@ export default function App() {
                     <div className="pt-3 px-3 pb-24">
                       <CourseRecommend
                         teachers={teachers}
+                        colleges={colleges}
                         userPoints={userPoints}
                         onSelectTeacher={(teacher) => setSelectedTeacher(teacher)}
                         onDeductPoints={handleDeductPoints}
@@ -845,6 +839,7 @@ export default function App() {
                   <div className="pt-2">
                     <DesktopTeacherSearch
                       teachers={teachers}
+                      colleges={colleges}
                       initialSearch={initialTeacherSearch}
                       onSelectTeacher={(teacher) => setSelectedTeacher(teacher)}
                       onOpenReview={(teacher) => handleOpenReview(teacher)}
@@ -856,6 +851,7 @@ export default function App() {
                   <div className="pt-2">
                     <CourseRecommend
                       teachers={teachers}
+                      colleges={colleges}
                       userPoints={userPoints}
                       onSelectTeacher={(teacher) => setSelectedTeacher(teacher)}
                       onDeductPoints={handleDeductPoints}
@@ -961,8 +957,9 @@ export default function App() {
           <CollegeListModal
             isOpen={isCollegesModalOpen}
             onClose={() => setIsCollegesModalOpen(false)}
-            onSelectCollege={(_college) => {
-              setInitialTeacherSearch('');
+            colleges={colleges}
+            onSelectCollege={(_college, collegeId) => {
+              setInitialTeacherSearch(collegeId || _college || '');
               setCurrentTab('search');
             }}
           />

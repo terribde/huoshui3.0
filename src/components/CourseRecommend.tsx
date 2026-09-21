@@ -1,22 +1,25 @@
 import React, { useState, useMemo } from 'react';
-import { Teacher, RecommendationWeights } from '../types';
+import { Teacher, RecommendationWeights, College } from '../types';
 import { POPULAR_COURSES } from '../data/mockTeachers';
-import { Sliders, Sparkles, CheckCircle2, ChevronRight, HelpCircle, Star, Award, RotateCcw } from 'lucide-react';
+import { Sliders, Sparkles, CheckCircle2, ChevronRight, HelpCircle, Star, Award, RotateCcw, Building2 } from 'lucide-react';
 
 interface CourseRecommendProps {
   teachers: Teacher[];
+  colleges?: College[];
   userPoints: number;
   onSelectTeacher: (teacher: Teacher) => void;
-  onDeductPoints: (amount: number, reason: string) => boolean;
+  onDeductPoints: (amount: number, reason: string, actionCode?: string) => Promise<boolean> | boolean;
 }
 
 export const CourseRecommend: React.FC<CourseRecommendProps> = ({
   teachers,
+  colleges,
   userPoints,
   onSelectTeacher,
   onDeductPoints,
 }) => {
   const [selectedCourse, setSelectedCourse] = useState<string>('高等数学 (I)');
+  const [selectedCollegeId, setSelectedCollegeId] = useState<string>('all');
   const [searchKeyword, setSearchKeyword] = useState<string>('');
   const [hasCalculated, setHasCalculated] = useState<boolean>(true);
 
@@ -52,17 +55,25 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
 
   // Filter candidates:
   // PRD 7.0 Requirement: 候选池为本学期开课的授课老师（不含以往教过但本学期未开课的老师）
+  // Database Schema Requirement: 支持通过 college_id 筛选学院
   const rankedTeachers = useMemo(() => {
     const courseToMatch = searchKeyword.trim() || selectedCourse;
     if (!courseToMatch) return [];
 
-    // Filter teachers who teach this course AND are teaching this semester
+    const selectedCollegeName = colleges?.find((c) => c.id === selectedCollegeId)?.name;
+
+    // Filter teachers who teach this course AND are teaching this semester AND match college
     const candidates = teachers.filter((t) => {
       const matchCourse = t.courses.some((c) => 
         c.toLowerCase().includes(courseToMatch.toLowerCase())
       );
+      const matchCollege =
+        selectedCollegeId === 'all' ||
+        t.collegeId === selectedCollegeId ||
+        (selectedCollegeName && t.college === selectedCollegeName);
+
       // Hard requirement from PRD: isTeachingThisTerm must be true
-      return matchCourse && t.isTeachingThisTerm;
+      return matchCourse && t.isTeachingThisTerm && matchCollege;
     });
 
     // Calculate weighted match score (0 - 100)
@@ -182,6 +193,37 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
             </button>
           ))}
         </div>
+
+        {/* College Filter using college_id foreign key */}
+        {colleges && colleges.length > 0 && (
+          <div className="pt-3 border-t border-gray-100 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-gray-500 font-medium flex items-center gap-1">
+              <Building2 className="w-3.5 h-3.5 text-indigo-500" />
+              开课学院筛选:
+            </span>
+            <select
+              id="course-recommend-college-select"
+              value={selectedCollegeId}
+              onChange={(e) => setSelectedCollegeId(e.target.value)}
+              className="text-xs px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-500 text-gray-700 cursor-pointer"
+            >
+              <option value="all">全部学院 (不限)</option>
+              {colleges.map((col) => (
+                <option key={col.id} value={col.id}>
+                  {col.name}
+                </option>
+              ))}
+            </select>
+            {selectedCollegeId !== 'all' && (
+              <button
+                onClick={() => setSelectedCollegeId('all')}
+                className="text-[11px] text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+              >
+                清除学院筛选
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 6 Dimensions Weight Sliders */}

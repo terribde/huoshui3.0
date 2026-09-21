@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Teacher } from '../../types';
+import { Teacher, College } from '../../types';
 import { SWJTU_COLLEGES } from '../../data/mockTeachers';
 import { 
   Search, 
@@ -18,6 +18,7 @@ import { AnimatedDropdown } from '../AnimatedDropdown';
 
 interface MobileTeacherSearchProps {
   teachers: Teacher[];
+  colleges?: College[];
   onSelectTeacher: (teacher: Teacher) => void;
   onOpenReview?: (teacher?: Teacher) => void;
   initialSearch?: string;
@@ -25,12 +26,13 @@ interface MobileTeacherSearchProps {
 
 export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
   teachers,
+  colleges,
   onSelectTeacher,
   onOpenReview,
   initialSearch = '',
 }) => {
   const [searchTerm, setSearchTerm] = useState<string>(initialSearch);
-  const [selectedCollege, setSelectedCollege] = useState<string>('全部学院');
+  const [selectedCollege, setSelectedCollege] = useState<string>('all');
   const [onlyThisTerm, setOnlyThisTerm] = useState<boolean>(false);
   const [sortBy, setSortBy] = useState<'overall' | 'leniency' | 'quality' | 'attendance'>('overall');
   const [isSearchFocused, setIsSearchFocused] = useState<boolean>(false);
@@ -47,11 +49,56 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
     return () => document.removeEventListener('mousedown', handleOutside);
   }, []);
 
+  const collegeDropdownOptions = useMemo(() => {
+    if (colleges && colleges.length > 0) {
+      return [
+        { value: 'all', label: '更多学院...' },
+        ...colleges.map((c) => ({ value: c.id, label: c.name })),
+      ];
+    }
+    return [
+      { value: 'all', label: '更多学院...' },
+      ...SWJTU_COLLEGES.filter((c) => c !== '全部学院').map((col) => ({
+        value: col,
+        label: col,
+      })),
+    ];
+  }, [colleges]);
+
+  // Mobile quick college filter chips
+  const quickCollegeChips = useMemo(() => {
+    if (colleges && colleges.length > 0) {
+      return [
+        { id: 'all', name: '全部' },
+        ...colleges.slice(0, 6).map((c) => ({
+          id: c.id,
+          name: c.name.replace(/学院$/, '').slice(0, 4),
+        })),
+      ];
+    }
+    return [
+      { id: 'all', name: '全部' },
+      ...SWJTU_COLLEGES.filter((c) => c !== '全部学院')
+        .slice(0, 6)
+        .map((name) => ({
+          id: name,
+          name: name.replace(/学院$/, '').slice(0, 4),
+        })),
+    ];
+  }, [colleges]);
+
   // Filter and sort
   const filteredTeachers = useMemo(() => {
+    const selectedCollegeName = colleges?.find((c) => c.id === selectedCollege)?.name;
+
     return teachers
       .filter((t) => {
-        const matchesCollege = selectedCollege === '全部学院' || t.college === selectedCollege;
+        const matchesCollege =
+          selectedCollege === 'all' ||
+          selectedCollege === '全部学院' ||
+          t.collegeId === selectedCollege ||
+          t.college === selectedCollege ||
+          (selectedCollegeName && t.college === selectedCollegeName);
         const matchesTerm = !onlyThisTerm || t.isTeachingThisTerm;
         const matchesQuery =
           !searchTerm.trim() ||
@@ -67,10 +114,7 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
         if (sortBy === 'attendance') return a.dimensions.attendanceStrictness - b.dimensions.attendanceStrictness;
         return 0;
       });
-  }, [teachers, searchTerm, selectedCollege, onlyThisTerm, sortBy]);
-
-  // Mobile quick college filter chips
-  const quickColleges = ['全部学院', '数学学院', '计算机与人工智能学院', '土木工程学院', '机械工程学院', '电气工程学院', '物理科学与技术学院'];
+  }, [teachers, searchTerm, selectedCollege, onlyThisTerm, sortBy, colleges]);
 
   return (
     <div 
@@ -158,21 +202,20 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
 
         {/* College Horizontal Scroll Chips */}
         <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 -mx-1 px-1">
-          {quickColleges.map((col) => {
-            const isSelected = selectedCollege === col;
-            const shortName = col === '全部学院' ? '全部' : col.replace(/学院$/, '').slice(0, 4);
+          {quickCollegeChips.map((chip) => {
+            const isSelected = selectedCollege === chip.id || (chip.id === 'all' && (selectedCollege === 'all' || selectedCollege === '全部学院'));
             return (
               <motion.button
-                key={col}
+                key={chip.id}
                 whileTap={{ scale: 0.92 }}
-                onClick={() => setSelectedCollege(col)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium whitespace-nowrap transition-colors shrink-0 ${
+                onClick={() => setSelectedCollege(chip.id)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium whitespace-nowrap transition-colors shrink-0 cursor-pointer ${
                   isSelected
                     ? 'bg-indigo-600 text-white shadow-2xs font-semibold'
                     : 'bg-gray-100/90 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                {shortName}
+                {chip.name}
               </motion.button>
             );
           })}
@@ -184,7 +227,7 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
             <motion.button
               whileTap={{ scale: 0.92 }}
               onClick={() => setOnlyThisTerm(!onlyThisTerm)}
-              className={`px-2 py-1 rounded-lg text-[11px] font-medium transition-all ${
+              className={`px-2 py-1 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
                 onlyThisTerm
                   ? 'bg-emerald-600 text-white shadow-2xs font-semibold'
                   : 'bg-gray-100 text-gray-600'
@@ -198,13 +241,7 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
               id="mobile-college-dropdown"
               value={selectedCollege}
               onChange={setSelectedCollege}
-              options={[
-                { value: '全部学院', label: '更多学院...' },
-                ...SWJTU_COLLEGES.filter((c) => c !== '全部学院').map((col) => ({
-                  value: col,
-                  label: col,
-                })),
-              ]}
+              options={collegeDropdownOptions}
               searchable
               buttonClassName="px-2 py-1 bg-gray-100 text-gray-600 rounded-lg text-[11px] font-medium max-w-[110px]"
               menuClassName="w-56"

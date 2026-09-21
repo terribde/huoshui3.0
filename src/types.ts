@@ -24,11 +24,18 @@ export interface Review {
   likes: number;
 }
 
+export interface College {
+  id: string;
+  name: string;
+  code?: string;
+}
+
 export interface Teacher {
   id: string;
   name: string;
   title: string; // 教授、副教授、讲师
   college: string; // 学院：计算机与人工智能学院、土木工程学院等
+  collegeId?: string; // 外键关联 colleges 表
   campus: '犀浦校区' | '九里校区';
   courses: string[];
   isTeachingThisTerm: boolean; // 本学期是否开课（智能推荐候选池硬性条件）

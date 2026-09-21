@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Teacher } from '../../types';
+import { Teacher, College } from '../../types';
 import { SWJTU_COLLEGES } from '../../data/mockTeachers';
 import { 
   Search, 
@@ -18,6 +18,7 @@ import { AnimatedDropdown } from '../AnimatedDropdown';
 
 interface DesktopTeacherSearchProps {
   teachers: Teacher[];
+  colleges?: College[];
   onSelectTeacher: (teacher: Teacher) => void;
   onOpenReview?: (teacher?: Teacher) => void;
   initialSearch?: string;
@@ -25,12 +26,13 @@ interface DesktopTeacherSearchProps {
 
 export const DesktopTeacherSearch: React.FC<DesktopTeacherSearchProps> = ({
   teachers,
+  colleges,
   onSelectTeacher,
   onOpenReview,
   initialSearch = '',
 }) => {
   const [searchTerm, setSearchTerm] = useState<string>(initialSearch);
-  const [selectedCollege, setSelectedCollege] = useState<string>('全部学院');
+  const [selectedCollege, setSelectedCollege] = useState<string>('all');
   const [onlyThisTerm, setOnlyThisTerm] = useState<boolean>(false);
   const [sortBy, setSortBy] = useState<'overall' | 'leniency' | 'quality' | 'attendance'>('overall');
   const [isSearchFocused, setIsSearchFocused] = useState<boolean>(false);
@@ -47,11 +49,31 @@ export const DesktopTeacherSearch: React.FC<DesktopTeacherSearchProps> = ({
     return () => document.removeEventListener('mousedown', handleOutside);
   }, []);
 
+  const collegeOptions = useMemo(() => {
+    if (colleges && colleges.length > 0) {
+      return [
+        { value: 'all', label: '全部学院' },
+        ...colleges.map((c) => ({ value: c.id, label: c.name })),
+      ];
+    }
+    return SWJTU_COLLEGES.map((col) => ({
+      value: col === '全部学院' ? 'all' : col,
+      label: col,
+    }));
+  }, [colleges]);
+
   // Filter and sort
   const filteredTeachers = useMemo(() => {
+    const selectedCollegeName = colleges?.find((c) => c.id === selectedCollege)?.name;
+
     return teachers
       .filter((t) => {
-        const matchesCollege = selectedCollege === '全部学院' || t.college === selectedCollege;
+        const matchesCollege =
+          selectedCollege === 'all' ||
+          selectedCollege === '全部学院' ||
+          t.collegeId === selectedCollege ||
+          t.college === selectedCollege ||
+          (selectedCollegeName && t.college === selectedCollegeName);
         const matchesTerm = !onlyThisTerm || t.isTeachingThisTerm;
         const matchesQuery =
           !searchTerm.trim() ||
@@ -163,7 +185,7 @@ export const DesktopTeacherSearch: React.FC<DesktopTeacherSearchProps> = ({
               id="desktop-college-dropdown"
               value={selectedCollege}
               onChange={setSelectedCollege}
-              options={SWJTU_COLLEGES.map((col) => ({ value: col, label: col }))}
+              options={collegeOptions}
               searchable
               buttonClassName="bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl px-3 py-1.5"
               menuClassName="w-64"
