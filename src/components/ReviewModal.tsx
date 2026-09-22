@@ -11,7 +11,7 @@ interface ReviewModalProps {
   onClose: () => void;
   teachers: Teacher[];
   preselectedTeacher?: Teacher | null;
-  onSubmitReview: (review: Omit<Review, 'id' | 'createdAt' | 'likes'>) => void;
+  onSubmitReview: (review: Omit<Review, 'id' | 'createdAt' | 'likes'>) => Promise<{ success: boolean; message?: string }> | void;
 }
 
 export const ReviewModal: React.FC<ReviewModalProps> = ({
@@ -33,6 +33,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
   const [nickname, setNickname] = useState<string>('犀浦小火车');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [successNotice, setSuccessNotice] = useState<boolean>(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [sensitiveBlockNotice, setSensitiveBlockNotice] = useState<{
     violations: string[];
     reason: string;
@@ -129,8 +130,9 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
     setDimensions((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError(null);
 
     if (comment.trim()) {
       if (comment.trim().length < 5) {
@@ -151,8 +153,8 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      onSubmitReview({
+    try {
+      const res = await onSubmitReview({
         teacherId: selectedTeacherId,
         courseId: selectedCourseId,
         courseName: selectedCourseName || currentTeacher?.courses[0] || '大学核心课程',
@@ -164,13 +166,22 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
         status: 'pending', // <--- Initial status: pending
       });
 
+      if (res && !res.success) {
+        setSubmitError(res.message || '评价未能成功存入数据库，请检查网络或登录状态后重试。');
+        setIsSubmitting(false);
+        return;
+      }
+
       setIsSubmitting(false);
       setSuccessNotice(true);
       setTimeout(() => {
         setSuccessNotice(false);
         onClose();
       }, 2000);
-    }, 500);
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setSubmitError(err?.message || '网络连接异常，提交失败');
+    }
   };
 
   const dimensionDefinitions = [
@@ -282,6 +293,21 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
             <div className="p-5 pb-6 overflow-y-auto min-h-0 space-y-5 flex-1 overscroll-contain">
+              {/* Submission Error Banner */}
+              {submitError && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium flex items-start gap-2.5"
+                >
+                  <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-semibold">评价提交未完成</p>
+                    <p className="text-[11px] text-rose-600 mt-0.5 leading-relaxed">{submitError}</p>
+                  </div>
+                </motion.div>
+              )}
+
               {/* Teacher & Course Selector */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>

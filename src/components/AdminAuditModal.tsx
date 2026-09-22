@@ -14,11 +14,12 @@ interface AdminAuditModalProps {
   onClose: () => void;
   reviews: Review[];
   teachers: Teacher[];
-  onApproveReview: (reviewId: string, authorUserId?: string) => Promise<void>;
-  onRejectReview: (reviewId: string, reason: string) => Promise<void>;
+  onApproveReview: (reviewId: string, authorUserId?: string) => Promise<{ success: boolean; message?: string } | void>;
+  onRejectReview: (reviewId: string, reason: string) => Promise<{ success: boolean; message?: string } | void>;
   onDeleteReview: (reviewId: string) => Promise<void>;
   onRefreshReviews?: () => Promise<void> | void;
   currentUserEmail?: string;
+  currentUserId?: string;
 }
 
 const formatReviewDate = (dateStr?: string) => {
@@ -51,6 +52,7 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
   onDeleteReview,
   onRefreshReviews,
   currentUserEmail,
+  currentUserId,
 }) => {
   // Navigation between Reviews Audit and Admin Users Config
   const [activeSection, setActiveSection] = useState<'reviews' | 'admins'>('reviews');
@@ -70,6 +72,16 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
   const [adminPasscode, setAdminPasscode] = useState('');
   const [authError, setAuthError] = useState('');
   const [adminRole, setAdminRole] = useState<string>('admin');
+
+  // Status feedback toast
+  const [toastNotice, setToastNotice] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null);
+
+  const showToast = (type: 'success' | 'error' | 'warning', text: string) => {
+    setToastNotice({ type, text });
+    setTimeout(() => {
+      setToastNotice((prev) => (prev?.text === text ? null : prev));
+    }, 5000);
+  };
 
   // Dynamic Supabase Admin List state
   const [adminList, setAdminList] = useState<Array<{ id: string; email: string; role: string; nickname: string; is_active: boolean; created_at: string }>>([]);
@@ -201,16 +213,275 @@ CREATE POLICY "Public can manage admin users" ON public.admin_users FOR ALL USIN
   };
 
   const copyRlsSqlCode = () => {
-    const sql = `-- 修复评价审核与读取权限 (允许管理员查询待审核评价并在后台公示或驳回)
+    const sql = `-- ==============================================================================
+-- 西南交大选课评教系统 · 安全审计与零信任加固 SQL
+-- 修复漏洞：
+-- 1. 彻底撤销匿名角色 (anon) 对审核函数的所有权限，仅限认证用户 (authenticated)
+-- 2. 存储过程内部强校验管理员身份（校验 email 是否在 admin_users 启用，或为站长超管）
+-- 3. 重构 RLS 行级安全策略：严禁作者自行把 status 设为 approved
+-- 4. 幂等发分：校验当前状态必须为 pending/rejected，且通过 point_transactions 防重约束杜绝重复发分
+-- ==============================================================================
+
+-- 1. 确保站长超级管理员在后台已登记激活
+INSERT INTO public.admin_users (email, role, nickname, is_active)
+VALUES ('2502087135@qq.com', 'super_admin', '站长超管', true)
+ON CONFLICT (email) DO UPDATE SET is_active = true, role = 'super_admin';
+
+-- 1.1 解除 reviewer_id 的僵化外键约束（避免因 auth.users 与 admin_users 主键差异导致审核阻塞）
+ALTER TABLE public.reviews DROP CONSTRAINT IF EXISTS reviews_reviewer_id_fkey;
+
+-- 2. 评教表基础行级安全策略 (RLS)
+ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
+
+-- 2.1 允许公开读取已过审评价，允许管理员和作者读取待审评价
+DROP POLICY IF EXISTS "reviews_select_policy" ON public.reviews;
 DROP POLICY IF EXISTS "Public can view approved reviews" ON public.reviews;
 DROP POLICY IF EXISTS "Public can view reviews" ON public.reviews;
-CREATE POLICY "Public can view reviews" ON public.reviews FOR SELECT USING (true);
 
+CREATE POLICY "reviews_select_policy" ON public.reviews
+FOR SELECT TO public
+USING (
+  status = 'approved'
+  OR (auth.uid() IS NOT NULL AND user_id = auth.uid()::text)
+  OR (auth.jwt() ->> 'email') = '2502087135@qq.com'
+  OR EXISTS (
+    SELECT 1 FROM public.admin_users 
+    WHERE email = (auth.jwt() ->> 'email') 
+      AND is_active = true
+  )
+);
+
+-- 2.2 允许已登录学生提交待审评价（强制 status 为 pending）
+DROP POLICY IF EXISTS "reviews_insert_policy" ON public.reviews;
+CREATE POLICY "reviews_insert_policy" ON public.reviews
+FOR INSERT TO authenticated
+WITH CHECK (
+  user_id = auth.uid()::text
+  AND status = 'pending'
+);
+
+-- 2.3 管理员专用更新策略（彻底封堵漏洞 3）
+DROP POLICY IF EXISTS "reviews_admin_update_policy" ON public.reviews;
+DROP POLICY IF EXISTS "reviews_update_policy" ON public.reviews;
 DROP POLICY IF EXISTS "Public can update reviews" ON public.reviews;
-CREATE POLICY "Public can update reviews" ON public.reviews FOR UPDATE USING (true) WITH CHECK (true);
 
+CREATE POLICY "reviews_admin_update_policy" ON public.reviews
+FOR UPDATE TO authenticated
+USING (
+  (auth.jwt() ->> 'email') = '2502087135@qq.com'
+  OR EXISTS (
+    SELECT 1 FROM public.admin_users 
+    WHERE email = (auth.jwt() ->> 'email') 
+      AND is_active = true
+  )
+)
+WITH CHECK (
+  (auth.jwt() ->> 'email') = '2502087135@qq.com'
+  OR EXISTS (
+    SELECT 1 FROM public.admin_users 
+    WHERE email = (auth.jwt() ->> 'email') 
+      AND is_active = true
+  )
+);
+
+-- 2.4 学生作者修改策略：仅允许修改 pending 或 rejected 的草稿，且修改后强制锁定为 pending（绝不允许自设 approved）
+DROP POLICY IF EXISTS "reviews_author_update_policy" ON public.reviews;
+CREATE POLICY "reviews_author_update_policy" ON public.reviews
+FOR UPDATE TO authenticated
+USING (
+  auth.uid() IS NOT NULL 
+  AND user_id = auth.uid()::text
+  AND status IN ('pending', 'rejected')
+)
+WITH CHECK (
+  auth.uid() IS NOT NULL 
+  AND user_id = auth.uid()::text
+  AND status = 'pending'
+);
+
+-- 2.5 删除策略：仅管理员或作者本人在 pending/rejected 时可删除
+DROP POLICY IF EXISTS "reviews_delete_policy" ON public.reviews;
 DROP POLICY IF EXISTS "Public can delete reviews" ON public.reviews;
-CREATE POLICY "Public can delete reviews" ON public.reviews FOR DELETE USING (true);`;
+CREATE POLICY "reviews_delete_policy" ON public.reviews
+FOR DELETE TO authenticated
+USING (
+  (auth.jwt() ->> 'email') = '2502087135@qq.com'
+  OR EXISTS (
+    SELECT 1 FROM public.admin_users 
+    WHERE email = (auth.jwt() ->> 'email') 
+      AND is_active = true
+  )
+  OR (auth.uid() IS NOT NULL AND user_id = auth.uid()::text AND status IN ('pending', 'rejected'))
+);
+
+-- ==============================================================================
+-- 3. 审核通过核心存储过程 (修复漏洞 1, 2, 4)
+-- ==============================================================================
+-- 显式清理旧函数签名，避免 42P13: cannot change return type of existing function 报错
+DROP FUNCTION IF EXISTS public.approve_review(TEXT);
+
+CREATE OR REPLACE FUNCTION public.approve_review(p_review_id TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_caller_email TEXT;
+    v_is_admin BOOLEAN := FALSE;
+    v_review RECORD;
+    v_author_id TEXT;
+    v_tx_reason TEXT;
+    v_already_awarded BOOLEAN := FALSE;
+    v_admin_id UUID;
+BEGIN
+    -- [漏洞 1 & 2 防御] 强校验：调用者必须认证，且必须在 admin_users 中激活或为站长超管
+    IF auth.uid() IS NULL THEN
+        RAISE EXCEPTION '未认证用户，禁止执行审核操作';
+    END IF;
+
+    v_caller_email := auth.jwt() ->> 'email';
+    IF v_caller_email = '2502087135@qq.com' THEN
+        v_is_admin := TRUE;
+    ELSE
+        SELECT EXISTS (
+            SELECT 1 FROM public.admin_users
+            WHERE email = v_caller_email AND is_active = true
+        ) INTO v_is_admin;
+    END IF;
+
+    IF NOT v_is_admin THEN
+        RAISE EXCEPTION '越权拦截：账号 % 无审核管理员权限', v_caller_email;
+    END IF;
+
+    -- 查找评价记录并行级锁定
+    SELECT * INTO v_review FROM public.reviews WHERE id = p_review_id FOR UPDATE;
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object('success', false, 'message', '未找到对应的评价记录');
+    END IF;
+
+    -- [漏洞 4 防御] 状态幂等：禁止对已过审评价重复审批
+    IF v_review.status = 'approved' THEN
+        RETURN jsonb_build_object('success', false, 'message', '该评价当前已审核通过，禁止重复审批');
+    END IF;
+
+    -- 获取管理员对应记录 ID（优先使用 admin_users.id，否则使用 auth.uid()）
+    SELECT id INTO v_admin_id FROM public.admin_users WHERE email = v_caller_email LIMIT 1;
+    IF v_admin_id IS NULL THEN
+        v_admin_id := auth.uid();
+    END IF;
+
+    -- 更新评价状态为 approved
+    UPDATE public.reviews
+    SET status = 'approved',
+        reject_reason = NULL,
+        reviewer_id = v_admin_id,
+        reviewed_at = timezone('utc'::text, now())
+    WHERE id = p_review_id;
+
+    -- [漏洞 4 防御] 积分流水幂等校验：检查是否已经为此评价发放过公示积分
+    v_author_id := v_review.user_id;
+    v_tx_reason := '撰写评教审核通过奖励 [ID:' || p_review_id || ']';
+
+    IF v_author_id IS NOT NULL AND v_author_id != '' THEN
+        SELECT EXISTS (
+            SELECT 1 FROM public.point_transactions
+            WHERE user_id = v_author_id AND reason = v_tx_reason
+        ) INTO v_already_awarded;
+
+        -- 仅当该评价从未加过分时才给作者增加 20 积分，杜绝任何刷分漏洞
+        IF NOT v_already_awarded THEN
+            INSERT INTO public.user_profiles (id, points)
+            VALUES (v_author_id, 20)
+            ON CONFLICT (id) DO UPDATE
+            SET points = public.user_profiles.points + 20;
+
+            INSERT INTO public.point_transactions (user_id, amount, balance_after, reason, type)
+            VALUES (
+                v_author_id,
+                20,
+                (SELECT points FROM public.user_profiles WHERE id = v_author_id),
+                v_tx_reason,
+                'earn_review'
+            );
+        END IF;
+    END IF;
+
+    RETURN jsonb_build_object(
+        'success', true, 
+        'message', '评价已成功通过公示',
+        'points_awarded', NOT v_already_awarded
+    );
+END;
+$$;
+
+-- ==============================================================================
+-- 4. 审核驳回核心存储过程 (修复漏洞 1 & 2)
+-- ==============================================================================
+-- 显式清理旧函数签名
+DROP FUNCTION IF EXISTS public.reject_review(TEXT, TEXT);
+
+CREATE OR REPLACE FUNCTION public.reject_review(p_review_id TEXT, p_reason TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_caller_email TEXT;
+    v_is_admin BOOLEAN := FALSE;
+    v_review RECORD;
+    v_admin_id UUID;
+BEGIN
+    -- [漏洞 1 & 2 防御] 强校验管理员身份
+    IF auth.uid() IS NULL THEN
+        RAISE EXCEPTION '未认证用户，禁止执行审核操作';
+    END IF;
+
+    v_caller_email := auth.jwt() ->> 'email';
+    IF v_caller_email = '2502087135@qq.com' THEN
+        v_is_admin := TRUE;
+    ELSE
+        SELECT EXISTS (
+            SELECT 1 FROM public.admin_users
+            WHERE email = v_caller_email AND is_active = true
+        ) INTO v_is_admin;
+    END IF;
+
+    IF NOT v_is_admin THEN
+        RAISE EXCEPTION '越权拦截：账号 % 无审核管理员权限', v_caller_email;
+    END IF;
+
+    SELECT * INTO v_review FROM public.reviews WHERE id = p_review_id FOR UPDATE;
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object('success', false, 'message', '未找到对应的评价记录');
+    END IF;
+
+    -- 获取管理员对应记录 ID（优先使用 admin_users.id，否则使用 auth.uid()）
+    SELECT id INTO v_admin_id FROM public.admin_users WHERE email = v_caller_email LIMIT 1;
+    IF v_admin_id IS NULL THEN
+        v_admin_id := auth.uid();
+    END IF;
+
+    UPDATE public.reviews
+    SET status = 'rejected',
+        reject_reason = p_reason,
+        reviewer_id = v_admin_id,
+        reviewed_at = timezone('utc'::text, now())
+    WHERE id = p_review_id;
+
+    RETURN jsonb_build_object('success', true, 'message', '评价已被驳回');
+END;
+$$;
+
+-- ==============================================================================
+-- 5. 权限彻底收紧 (彻底修复漏洞 1：剥夺 PUBLIC 与 anon 权限，仅限 authenticated)
+-- ==============================================================================
+REVOKE EXECUTE ON FUNCTION public.approve_review(TEXT) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.reject_review(TEXT, TEXT) FROM PUBLIC, anon;
+
+GRANT EXECUTE ON FUNCTION public.approve_review(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.reject_review(TEXT, TEXT) TO authenticated;`;
 
     navigator.clipboard.writeText(sql);
     setCopiedRlsSql(true);
@@ -240,6 +511,16 @@ CREATE POLICY "Public can delete reviews" ON public.reviews FOR DELETE USING (tr
     try {
       const firstTeacher = teachers[0];
       const offering = firstTeacher?.courseOfferings?.[0];
+      
+      // Get current authenticated user
+      const authUser = await supabaseService.getCurrentUser();
+      const resolvedUid = authUser?.id || currentUserId;
+
+      if (!resolvedUid) {
+        showToast('error', '生成待审评价失败：请先登录管理员账号（如 2502087135@qq.com），安全策略需要关联有效用户身份。');
+        return;
+      }
+
       const testRev: Review = {
         id: `rev_test_${Date.now()}`,
         teacherId: firstTeacher?.id || 't_001',
@@ -257,13 +538,23 @@ CREATE POLICY "Public can delete reviews" ON public.reviews FOR DELETE USING (tr
         comment: '（这是一条测试待审核评价）老师授课条理极其清晰，期末还会重点答疑。给分很公道，平时作业认真完成就能拿优秀！',
         authorNickname: '交大测评小助手',
         status: 'pending',
+        userId: resolvedUid,
         createdAt: new Date().toISOString(),
         likes: 0,
       };
-      await supabaseService.submitReview(testRev);
+
+      const res = await supabaseService.submitReview(testRev);
+      if (!res.success) {
+        showToast('error', `生成测试评价未成功：${res.message || '请检查数据库权限'}`);
+        return;
+      }
+
+      showToast('success', '已成功生成一条模拟待审评价！');
       if (onRefreshReviews) {
         await onRefreshReviews();
       }
+    } catch (err: any) {
+      showToast('error', `生成失败: ${err?.message || '未知异常'}`);
     } finally {
       setIsRefreshingReviews(false);
     }
@@ -294,7 +585,14 @@ CREATE POLICY "Public can delete reviews" ON public.reviews FOR DELETE USING (tr
   const handleApprove = async (review: Review) => {
     setProcessingId(review.id);
     try {
-      await onApproveReview(review.id, review.userId);
+      const res = await onApproveReview(review.id, review.userId);
+      if (res && !res.success) {
+        showToast('error', `审核通过本地已生效，但云端同步受阻：${res.message || '权限校验未通过'}`);
+      } else {
+        showToast('success', '【审核通过】评价已成功通过公示！作者已获 +20 积分奖励');
+      }
+    } catch (err: any) {
+      showToast('error', `审核异常: ${err?.message || '未知错误'}`);
     } finally {
       setProcessingId(null);
     }
@@ -305,9 +603,16 @@ CREATE POLICY "Public can delete reviews" ON public.reviews FOR DELETE USING (tr
     const reason = customReason.trim() ? customReason.trim() : selectedReason;
     setProcessingId(rejectingReview.id);
     try {
-      await onRejectReview(rejectingReview.id, reason);
+      const res = await onRejectReview(rejectingReview.id, reason);
       setRejectingReview(null);
       setCustomReason('');
+      if (res && !res.success) {
+        showToast('error', `本地已标记驳回，但云端未同步：${res.message || '权限校验未通过'}`);
+      } else {
+        showToast('warning', `【已驳回】评价已转入驳回归档（理由：${reason}）`);
+      }
+    } catch (err: any) {
+      showToast('error', `驳回异常: ${err?.message || '未知错误'}`);
     } finally {
       setProcessingId(null);
     }
@@ -382,6 +687,38 @@ CREATE POLICY "Public can delete reviews" ON public.reviews FOR DELETE USING (tr
             </button>
           </div>
         </div>
+
+        {/* Action Toast Alert Banner */}
+        {toastNotice && (
+          <div className="px-6 pt-3">
+            <div
+              className={`p-3 rounded-2xl border text-xs font-semibold flex items-center justify-between shadow-2xs transition-all ${
+                toastNotice.type === 'success'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  : toastNotice.type === 'error'
+                  ? 'bg-rose-50 border-rose-200 text-rose-800'
+                  : 'bg-amber-50 border-amber-200 text-amber-800'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {toastNotice.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                ) : toastNotice.type === 'error' ? (
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                ) : (
+                  <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                )}
+                <span>{toastNotice.text}</span>
+              </div>
+              <button
+                onClick={() => setToastNotice(null)}
+                className="text-gray-400 hover:text-gray-700 text-xs ml-3 px-1.5 py-0.5 rounded hover:bg-black/5 cursor-pointer font-bold"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Content Body */}
         {!isAdminAuthenticated ? (

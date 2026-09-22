@@ -351,10 +351,12 @@ export default function App() {
   };
 
   // Submit Review Handler (PRD & Audit State Machine: initial status is 'pending')
-  const handleSubmitReview = (newReviewData: Omit<Review, 'id' | 'createdAt' | 'likes'>) => {
+  const handleSubmitReview = async (
+    newReviewData: Omit<Review, 'id' | 'createdAt' | 'likes'>
+  ): Promise<{ success: boolean; message?: string }> => {
     if (!currentUser) {
       handleOpenAuth('login');
-      return;
+      return { success: false, message: '请先登录您的西南交大账号' };
     }
 
     const nickname = currentUser.user_metadata?.nickname || '西南交大学子';
@@ -370,27 +372,43 @@ export default function App() {
       status: 'pending', // 初始状态为待审核
     };
 
+    // Persist to Supabase and cache with full RLS validation
+    const res = await supabaseService.submitReview(newReview);
+    if (!res.success) {
+      return res;
+    }
+
     // Add into current reviews list
     setReviews((prev) => [newReview, ...prev]);
 
-    // Persist to local cache and Supabase (points awarded upon approval)
-    supabaseService.submitReview(newReview);
+    // Refresh remote reviews list
+    handleRefreshReviews();
+
+    return { success: true };
   };
 
-  // Approve review handler: calls approve_review RPC function (Requirement 5 & 6)
-  const handleApproveReview = async (reviewId: string, _authorUserId?: string) => {
-    const res = await supabaseService.approveReview(reviewId);
-    if (!res.success) {
-      alert(res.message || '审核通过操作失败');
-      return;
-    }
+  // Approve review handler: calls approve_review RPC function with server-side validation
+  const handleApproveReview = async (reviewId: string, _authorUserId?: string): Promise<{ success: boolean; message?: string }> => {
+    const originalReview = reviews.find((r) => r.id === reviewId);
 
-    // 1. Update review status to approved locally
+    // 1. Optimistic UI update: Immediately reflect approved status in local React state
     setReviews((prev) =>
       prev.map((r) =>
         r.id === reviewId ? { ...r, status: 'approved', rejectionReason: undefined } : r
       )
     );
+
+    const res = await supabaseService.approveReview(reviewId);
+
+    // Roll back if rejected by database
+    if (!res.success) {
+      if (originalReview) {
+        setReviews((prev) =>
+          prev.map((r) => (r.id === reviewId ? originalReview : r))
+        );
+      }
+      return res;
+    }
 
     // 2. Refresh reviews and teachers from remote (DB trigger calculates scores and review counts)
     handleRefreshReviews();
@@ -406,22 +424,35 @@ export default function App() {
     if (currentUser) {
       loadUserPointsData(currentUser.id);
     }
+
+    return res;
   };
 
-  // Reject review handler: calls reject_review RPC function (Requirement 5)
-  const handleRejectReview = async (reviewId: string, reason: string) => {
-    const res = await supabaseService.rejectReview(reviewId, reason);
-    if (!res.success) {
-      alert(res.message || '驳回操作失败');
-      return;
-    }
+  // Reject review handler: calls reject_review RPC function with server-side validation
+  const handleRejectReview = async (reviewId: string, reason: string): Promise<{ success: boolean; message?: string }> => {
+    const originalReview = reviews.find((r) => r.id === reviewId);
 
+    // 1. Optimistic UI update: Immediately reflect rejected status in local React state
     setReviews((prev) =>
       prev.map((r) =>
         r.id === reviewId ? { ...r, status: 'rejected', rejectionReason: reason } : r
       )
     );
+
+    const res = await supabaseService.rejectReview(reviewId, reason);
+
+    // Roll back if rejected by database
+    if (!res.success) {
+      if (originalReview) {
+        setReviews((prev) =>
+          prev.map((r) => (r.id === reviewId ? originalReview : r))
+        );
+      }
+      return res;
+    }
+
     handleRefreshReviews();
+    return res;
   };
 
   // Delete review handler
@@ -1005,6 +1036,7 @@ export default function App() {
             onDeleteReview={handleDeleteReview}
             onRefreshReviews={handleRefreshReviews}
             currentUserEmail={currentUser?.email}
+            currentUserId={currentUser?.id}
           />
         )}
       </AnimatePresence>
