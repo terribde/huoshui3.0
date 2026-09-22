@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { Teacher, Review } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Teacher, Review, Course } from '../types';
 import { X, CheckCircle, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AnimatedDropdown } from './AnimatedDropdown';
 import { checkSensitiveContent } from '../utils/sensitiveFilter';
+import { supabaseService } from '../services/supabaseService';
 
 interface ReviewModalProps {
   isOpen: boolean;
@@ -22,10 +23,12 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(
     preselectedTeacher?.id || (teachers[0]?.id ?? '')
   );
-  const [selectedCourse, setSelectedCourse] = useState<string>(
+  const [allCourses, setAllCourses] = useState<Course[]>([]);
+  const [selectedCourseId, setSelectedCourseId] = useState<string>('');
+  const [selectedCourseName, setSelectedCourseName] = useState<string>(
     preselectedTeacher?.courses[0] || (teachers[0]?.courses[0] ?? '')
   );
-  const [yearTerm, setYearTerm] = useState<string>('2024秋季');
+  const [yearTerm, setYearTerm] = useState<string>('2024-2025第1学期');
   const [comment, setComment] = useState<string>('');
   const [nickname, setNickname] = useState<string>('犀浦小火车');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -45,13 +48,80 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
     teachingQuality: 4,
   });
 
+  // Load courses from Supabase
+  useEffect(() => {
+    supabaseService.getCourses().then((list) => {
+      if (list && list.length > 0) {
+        setAllCourses(list);
+      }
+    });
+  }, []);
+
   const currentTeacher = teachers.find((t) => t.id === selectedTeacherId) || teachers[0];
+
+  // Course dropdown options
+  const courseOptions = useMemo(() => {
+    const options: Array<{ value: string; label: string; badge?: string }> = [];
+    const teacherCourseNames = new Set(currentTeacher?.courses || []);
+
+    // 1. First add teacher's specific courses (with IDs if available)
+    if (currentTeacher?.courseOfferings && currentTeacher.courseOfferings.length > 0) {
+      for (const off of currentTeacher.courseOfferings) {
+        options.push({
+          value: off.courseId,
+          label: off.courseName,
+          badge: '主讲课程',
+        });
+      }
+    } else if (currentTeacher?.courses && currentTeacher.courses.length > 0) {
+      for (const cName of currentTeacher.courses) {
+        const matched = allCourses.find((c) => c.name === cName);
+        options.push({
+          value: matched?.id || cName,
+          label: cName,
+          badge: '主讲课程',
+        });
+      }
+    }
+
+    // 2. Add other available courses
+    for (const c of allCourses) {
+      if (!teacherCourseNames.has(c.name) && !options.some((o) => o.value === c.id || o.label === c.name)) {
+        options.push({
+          value: c.id,
+          label: c.name,
+        });
+      }
+    }
+
+    return options;
+  }, [currentTeacher, allCourses]);
+
+  // Sync default selected course on mount or teacher change
+  useEffect(() => {
+    if (courseOptions.length > 0) {
+      const currentExists = courseOptions.find(
+        (o) => o.value === selectedCourseId || o.label === selectedCourseName
+      );
+      if (!currentExists) {
+        setSelectedCourseId(courseOptions[0].value);
+        setSelectedCourseName(courseOptions[0].label);
+      }
+    }
+  }, [courseOptions, selectedCourseId, selectedCourseName]);
 
   const handleTeacherChange = (teacherId: string) => {
     setSelectedTeacherId(teacherId);
-    const t = teachers.find((x) => x.id === teacherId);
-    if (t && t.courses.length > 0) {
-      setSelectedCourse(t.courses[0]);
+  };
+
+  const handleCourseChange = (val: string) => {
+    const matched = courseOptions.find((o) => o.value === val);
+    if (matched) {
+      setSelectedCourseId(matched.value);
+      setSelectedCourseName(matched.label);
+    } else {
+      setSelectedCourseId(val);
+      setSelectedCourseName(val);
     }
   };
 
@@ -84,7 +154,8 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
     setTimeout(() => {
       onSubmitReview({
         teacherId: selectedTeacherId,
-        courseName: selectedCourse || currentTeacher?.courses[0] || '通识课',
+        courseId: selectedCourseId,
+        courseName: selectedCourseName || currentTeacher?.courses[0] || '大学核心课程',
         yearTerm,
         dimensions,
         comment: comment.trim() || undefined,
@@ -237,12 +308,10 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                   <AnimatedDropdown
                     id="review-course-select"
                     className="w-full"
-                    value={selectedCourse}
-                    onChange={setSelectedCourse}
-                    options={(currentTeacher?.courses || []).map((c) => ({
-                      value: c,
-                      label: c,
-                    }))}
+                    value={selectedCourseId}
+                    onChange={handleCourseChange}
+                    options={courseOptions}
+                    searchable
                     placeholder="请选择修读课程..."
                     buttonClassName="w-full bg-gray-50 hover:bg-gray-100/90 text-gray-800 rounded-xl px-3.5 py-2.5 border border-gray-200"
                     menuClassName="w-full"

@@ -238,10 +238,13 @@ CREATE POLICY "Public can delete reviews" ON public.reviews FOR DELETE USING (tr
   const handleCreateTestReview = async () => {
     setIsRefreshingReviews(true);
     try {
+      const firstTeacher = teachers[0];
+      const offering = firstTeacher?.courseOfferings?.[0];
       const testRev: Review = {
         id: `rev_test_${Date.now()}`,
-        teacherId: teachers[0]?.id || 't_001',
-        courseName: '通用必修课 (测试待审样本)',
+        teacherId: firstTeacher?.id || 't_001',
+        courseId: offering?.courseId,
+        courseName: offering?.courseName || firstTeacher?.courses[0] || '高等数学 (测试待审样本)',
         yearTerm: '2024-2025第1学期',
         dimensions: {
           attendanceStrictness: 3,

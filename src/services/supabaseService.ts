@@ -1,11 +1,22 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { Teacher, Review, UserPointTransaction } from '../types';
-import { INITIAL_TEACHERS } from '../data/mockTeachers';
+import { Teacher, Review, UserPointTransaction, Course, Term, PointRule, TeacherCourseOffering } from '../types';
+import { INITIAL_TEACHERS, POPULAR_COURSES } from '../data/mockTeachers';
 
 /**
  * Supabase Data Service
  * Provides real database persistence with graceful local fallback & instant caching
  */
+
+const DEFAULT_ACTION_LABELS: Record<string, string> = {
+  welcome_gift: '新用户注册赠送',
+  register_init: '新用户注册赠送',
+  daily_checkin: '每日签到奖励',
+  review_approved: '撰写教师评价审核通过',
+  ai_question: 'AI 智能问答提问',
+  recommend_query: '智能偏好选课推荐',
+  experience_guide: '解锁经验攻略内容',
+  invite_bonus: '邀请校友注册奖励',
+};
 
 const getStorageKey = (key: string) => `swjtu_${key}`;
 
@@ -266,46 +277,113 @@ export const supabaseService = {
 
   /**
    * Fetch all teachers from Supabase
+   * Aligned with new schema: joins colleges & course_offerings(courses, terms)
    */
   async getTeachers(): Promise<Teacher[] | null> {
     if (!isSupabaseConfigured || !supabase) return null;
     try {
+      let teachersData: any[] = [];
+      
+      // Try relational query first
       const { data, error } = await supabase
         .from('teachers')
-        .select('*')
+        .select(`
+          *,
+          colleges ( id, name ),
+          course_offerings (
+            course_id,
+            courses ( id, name ),
+            term_id,
+            terms ( id, year_term, is_current )
+          )
+        `)
         .order('overall_score', { ascending: false });
 
       if (error) {
-        console.warn('[Supabase] Error fetching teachers:', error.message);
-        return null;
+        console.warn('[Supabase] Relational teachers query note:', error.message);
+        // Fallback to simple query if relational join fails
+        const { data: simpleData, error: simpleError } = await supabase
+          .from('teachers')
+          .select('*')
+          .order('overall_score', { ascending: false });
+        
+        if (simpleError || !simpleData) {
+          console.warn('[Supabase] Error fetching teachers:', simpleError?.message);
+          return null;
+        }
+        teachersData = simpleData;
+      } else if (data) {
+        teachersData = data;
       }
 
-      if (!data || data.length === 0) return null;
+      if (!teachersData || teachersData.length === 0) return null;
 
-      // Transform snake_case columns to camelCase TypeScript model
-      return data.map((row: any) => ({
-        id: row.id,
-        name: row.name,
-        title: row.title || '教师',
-        college: row.college || '西南交通大学',
-        collegeId: row.college_id || undefined,
-        campus: row.campus || '犀浦校区',
-        courses: Array.isArray(row.courses) ? row.courses : (typeof row.courses === 'string' ? JSON.parse(row.courses) : []),
-        isTeachingThisTerm: Boolean(row.is_teaching_this_term),
-        overallScore: Number(row.overall_score) || 4.5,
-        reviewCount: Number(row.review_count) || 0,
-        dimensions: {
-          attendanceStrictness: Number(row.attendance_strictness) || 3,
-          gradingLeniency: Number(row.grading_leniency) || 4,
-          effortMatters: Number(row.effort_matters) || 4,
-          workloadDifficulty: Number(row.workload_difficulty) || 3,
-          approachability: Number(row.approachability) || 4,
-          teachingQuality: Number(row.teaching_quality) || 4,
-        },
-        hasHistoricalData: Boolean(row.has_historical_data),
-        tags: Array.isArray(row.tags) ? row.tags : (typeof row.tags === 'string' ? JSON.parse(row.tags) : []),
-        recentTermCourses: row.recent_term_courses || [],
-      }));
+      // Transform snake_case columns & relation objects to camelCase TypeScript model
+      return teachersData.map((row: any) => {
+        // College name resolution: from colleges.name join, or row.college fallback
+        const collegeName = row.colleges?.name || row.college || '西南交通大学';
+
+        // Course offerings resolution from course_offerings join
+        const rawOfferings: any[] = Array.isArray(row.course_offerings) ? row.course_offerings : [];
+        const offerings: TeacherCourseOffering[] = [];
+        const courseNamesSet = new Set<string>();
+        let isTeachingCurrentTerm = false;
+
+        for (const off of rawOfferings) {
+          const cName = off.courses?.name;
+          const cId = off.course_id || off.courses?.id;
+          const isCurr = Boolean(off.terms?.is_current);
+          if (isCurr) isTeachingCurrentTerm = true;
+          if (cName) {
+            courseNamesSet.add(cName);
+            offerings.push({
+              courseId: cId,
+              courseName: cName,
+              termId: off.term_id,
+              yearTerm: off.terms?.year_term,
+              isCurrentTerm: isCurr,
+            });
+          }
+        }
+
+        // Fallback for mock/legacy courses if course_offerings was empty in database
+        const fallbackCourses = Array.isArray(row.courses)
+          ? row.courses
+          : (typeof row.courses === 'string' ? JSON.parse(row.courses) : []);
+
+        const finalCourses = courseNamesSet.size > 0
+          ? Array.from(courseNamesSet)
+          : fallbackCourses;
+
+        const isTeachingThisTerm = rawOfferings.length > 0
+          ? isTeachingCurrentTerm
+          : Boolean(row.is_teaching_this_term ?? (finalCourses.length > 0));
+
+        return {
+          id: row.id,
+          name: row.name,
+          title: row.title || '教师',
+          college: collegeName,
+          collegeId: row.college_id || row.colleges?.id || undefined,
+          campus: row.campus || '犀浦校区',
+          courses: finalCourses,
+          courseOfferings: offerings,
+          isTeachingThisTerm,
+          overallScore: Number(row.overall_score) || 4.5,
+          reviewCount: Number(row.review_count) || 0,
+          dimensions: {
+            attendanceStrictness: Number(row.attendance_strictness) || 3,
+            gradingLeniency: Number(row.grading_leniency) || 4,
+            effortMatters: Number(row.effort_matters) || 4,
+            workloadDifficulty: Number(row.workload_difficulty) || 3,
+            approachability: Number(row.approachability) || 4,
+            teachingQuality: Number(row.teaching_quality) || 4,
+          },
+          hasHistoricalData: Boolean(row.has_historical_data),
+          tags: Array.isArray(row.tags) ? row.tags : (typeof row.tags === 'string' ? JSON.parse(row.tags) : []),
+          recentTermCourses: row.recent_term_courses || [],
+        };
+      });
     } catch (err) {
       console.warn('[Supabase] Failed to connect to teachers table:', err);
       return null;
@@ -314,13 +392,21 @@ export const supabaseService = {
 
   /**
    * Fetch reviews: Merges remote Supabase records with local user-submitted reviews
+   * Aligned with new schema: joins courses(id, name) and reads reject_reason
    */
   async getReviews(teacherId?: string): Promise<Review[] | null> {
     let remoteReviews: Review[] = [];
 
     if (isSupabaseConfigured && supabase) {
       try {
-        let query = supabase.from('reviews').select('*').order('created_at', { ascending: false });
+        let query = supabase
+          .from('reviews')
+          .select(`
+            *,
+            courses ( id, name )
+          `)
+          .order('created_at', { ascending: false });
+
         if (teacherId) {
           query = query.eq('teacher_id', teacherId);
         }
@@ -330,7 +416,8 @@ export const supabaseService = {
           remoteReviews = data.map((row: any) => ({
             id: row.id,
             teacherId: row.teacher_id,
-            courseName: row.course_name,
+            courseId: row.course_id || row.courses?.id || undefined,
+            courseName: row.courses?.name || row.course_name || '大学核心课程',
             yearTerm: row.year_term || '2024-2025第1学期',
             dimensions: {
               attendanceStrictness: row.attendance_strictness,
@@ -346,10 +433,46 @@ export const supabaseService = {
             userEmail: row.user_email,
             isHistoricalMigrated: Boolean(row.is_historical_migrated),
             status: row.status || 'approved',
-            rejectionReason: row.rejection_reason || undefined,
+            rejectReason: row.reject_reason || row.rejection_reason || undefined,
+            rejectionReason: row.reject_reason || row.rejection_reason || undefined,
+            reviewerId: row.reviewer_id || undefined,
+            reviewedAt: row.reviewed_at || undefined,
             createdAt: row.created_at || new Date().toISOString(),
             likes: Number(row.likes) || 0,
           }));
+        } else if (error) {
+          console.warn('[Supabase] getReviews relational query warning:', error.message);
+          // Fallback to simple query if relational join fails
+          const { data: simpleData } = await supabase.from('reviews').select('*').order('created_at', { ascending: false });
+          if (simpleData) {
+            remoteReviews = simpleData.map((row: any) => ({
+              id: row.id,
+              teacherId: row.teacher_id,
+              courseId: row.course_id || undefined,
+              courseName: row.course_name || '大学核心课程',
+              yearTerm: row.year_term || '2024-2025第1学期',
+              dimensions: {
+                attendanceStrictness: row.attendance_strictness,
+                gradingLeniency: row.grading_leniency,
+                effortMatters: row.effort_matters,
+                workloadDifficulty: row.workload_difficulty,
+                approachability: row.approachability,
+                teachingQuality: row.teaching_quality,
+              },
+              comment: row.comment || '',
+              authorNickname: row.author_nickname || '匿名交大学子',
+              userId: row.user_id,
+              userEmail: row.user_email,
+              isHistoricalMigrated: Boolean(row.is_historical_migrated),
+              status: row.status || 'approved',
+              rejectReason: row.reject_reason || row.rejection_reason || undefined,
+              rejectionReason: row.reject_reason || row.rejection_reason || undefined,
+              reviewerId: row.reviewer_id || undefined,
+              reviewedAt: row.reviewed_at || undefined,
+              createdAt: row.created_at || new Date().toISOString(),
+              likes: Number(row.likes) || 0,
+            }));
+          }
         }
       } catch (err) {
         console.warn('[Supabase] Failed to fetch remote reviews:', err);
@@ -408,6 +531,10 @@ export const supabaseService = {
 
   /**
    * Submit a new teacher review to Supabase & Local Cache
+   * Aligned with new schema:
+   * - Requires course_id (NOT NULL, FK -> courses)
+   * - Does NOT write course_name or user_email (removed from DB)
+   * - Does NOT write to teachers table (no insert policy per RLS)
    */
   async submitReview(review: Review): Promise<boolean> {
     // 1. Always save locally first for instant user feedback and offline safety
@@ -417,23 +544,6 @@ export const supabaseService = {
     if (!isSupabaseConfigured || !supabase) return true;
 
     try {
-      // Ensure the referenced teacher exists in Supabase to avoid foreign key errors
-      // Note: Do NOT write overall_score or dimension averages (managed by database triggers)
-      const mockTeacher = INITIAL_TEACHERS.find((t) => t.id === review.teacherId);
-      if (mockTeacher) {
-        await supabase.from('teachers').upsert({
-          id: mockTeacher.id,
-          name: mockTeacher.name,
-          title: mockTeacher.title,
-          college: mockTeacher.college,
-          campus: mockTeacher.campus,
-          courses: mockTeacher.courses,
-          is_teaching_this_term: mockTeacher.isTeachingThisTerm,
-          has_historical_data: mockTeacher.hasHistoricalData,
-          tags: mockTeacher.tags,
-        }, { onConflict: 'id', ignoreDuplicates: true });
-      }
-
       let validCreatedAt: string = new Date().toISOString();
       if (review.createdAt && !isNaN(Date.parse(review.createdAt))) {
         validCreatedAt = new Date(review.createdAt).toISOString();
@@ -448,10 +558,23 @@ export const supabaseService = {
         return false;
       }
 
+      // Resolve valid course_id
+      let resolvedCourseId = review.courseId;
+      if (!resolvedCourseId && review.courseName) {
+        const found = await this.findCourseByName(review.courseName);
+        if (found) resolvedCourseId = found.id;
+      }
+      if (!resolvedCourseId) {
+        const allCourses = await this.getCourses();
+        if (allCourses && allCourses.length > 0) {
+          resolvedCourseId = allCourses[0].id;
+        }
+      }
+
       const insertPayload: any = {
         id: review.id,
         teacher_id: review.teacherId,
-        course_name: review.courseName,
+        course_id: resolvedCourseId,
         year_term: review.yearTerm,
         attendance_strictness: review.dimensions.attendanceStrictness,
         grading_leniency: review.dimensions.gradingLeniency,
@@ -462,7 +585,6 @@ export const supabaseService = {
         comment: review.comment,
         author_nickname: review.authorNickname,
         user_id: currentUserId,
-        user_email: sessionUser?.email || review.userEmail || null,
         is_historical_migrated: false,
         status: 'pending', // Strictly 'pending' per database requirement
         created_at: validCreatedAt,
@@ -568,9 +690,10 @@ export const supabaseService = {
 
   /**
    * Re-edit user's own review (pending or rejected -> reset to pending for re-audit)
+   * Aligned with new schema: updates course_id and resets reject_reason to null
    */
   async updateMyReview(review: Review): Promise<{ success: boolean; message?: string }> {
-    this.saveLocalReview({ ...review, status: 'pending', rejectionReason: undefined });
+    this.saveLocalReview({ ...review, status: 'pending', rejectReason: undefined, rejectionReason: undefined });
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -579,21 +702,32 @@ export const supabaseService = {
           return { success: false, message: '请先登录' };
         }
 
+        let resolvedCourseId = review.courseId;
+        if (!resolvedCourseId && review.courseName) {
+          const found = await this.findCourseByName(review.courseName);
+          if (found) resolvedCourseId = found.id;
+        }
+
+        const updatePayload: any = {
+          year_term: review.yearTerm,
+          attendance_strictness: review.dimensions.attendanceStrictness,
+          grading_leniency: review.dimensions.gradingLeniency,
+          effort_matters: review.dimensions.effortMatters,
+          workload_difficulty: review.dimensions.workloadDifficulty,
+          approachability: review.dimensions.approachability,
+          teaching_quality: review.dimensions.teachingQuality,
+          comment: review.comment,
+          status: 'pending',
+          reject_reason: null,
+        };
+
+        if (resolvedCourseId) {
+          updatePayload.course_id = resolvedCourseId;
+        }
+
         const { error } = await supabase
           .from('reviews')
-          .update({
-            course_name: review.courseName,
-            year_term: review.yearTerm,
-            attendance_strictness: review.dimensions.attendanceStrictness,
-            grading_leniency: review.dimensions.gradingLeniency,
-            effort_matters: review.dimensions.effortMatters,
-            workload_difficulty: review.dimensions.workloadDifficulty,
-            approachability: review.dimensions.approachability,
-            teaching_quality: review.dimensions.teachingQuality,
-            comment: review.comment,
-            status: 'pending',
-            rejection_reason: null,
-          })
+          .update(updatePayload)
           .eq('id', review.id)
           .eq('user_id', sessionUser.id);
 
@@ -703,7 +837,10 @@ export const supabaseService = {
 
         const { data: txData } = await supabase
           .from('point_transactions')
-          .select('*')
+          .select(`
+            *,
+            point_rules ( label, description )
+          `)
           .eq('user_id', userId)
           .order('timestamp', { ascending: false });
 
@@ -712,10 +849,12 @@ export const supabaseService = {
             points: userData?.points ?? 100,
             transactions: (txData || []).map((t: any) => ({
               id: t.id,
-              action: t.action,
+              actionCode: t.action_code,
+              action: t.point_rules?.label || DEFAULT_ACTION_LABELS[t.action_code] || t.action || '积分变动',
               amount: Number(t.amount),
               timestamp: t.timestamp ? new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '刚刚',
               balanceAfter: Number(t.balance_after),
+              relatedReviewId: t.related_review_id || undefined,
             })),
           };
           // Sync to local cache
@@ -1210,5 +1349,109 @@ export const supabaseService = {
       console.warn('[Supabase] getColleges exception:', err);
       return null;
     }
+  },
+
+  /**
+   * Fetch standardized courses from Supabase `courses` table
+   * New Database Schema: courses reference table (id uuid, name text, college_id uuid)
+   */
+  async getCourses(collegeId?: string): Promise<Course[]> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        let query = supabase.from('courses').select('*').order('name');
+        if (collegeId && collegeId !== 'all') {
+          query = query.eq('college_id', collegeId);
+        }
+        const { data, error } = await query;
+        if (!error && data && data.length > 0) {
+          return data.map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            collegeId: c.college_id,
+            createdAt: c.created_at,
+          }));
+        }
+      } catch (err) {
+        console.warn('[Supabase] getCourses exception:', err);
+      }
+    }
+
+    // Standard fallback courses
+    return POPULAR_COURSES.map((name, idx) => ({
+      id: `course_seed_${idx + 1}`,
+      name,
+    }));
+  },
+
+  /**
+   * Find course by exact or fuzzy name match
+   */
+  async findCourseByName(name: string): Promise<Course | null> {
+    if (!name) return null;
+    const courses = await this.getCourses();
+    const exact = courses.find((c) => c.name.trim().toLowerCase() === name.trim().toLowerCase());
+    if (exact) return exact;
+    const fuzzy = courses.find((c) => c.name.includes(name) || name.includes(c.name));
+    return fuzzy || null;
+  },
+
+  /**
+   * Fetch terms list from Supabase `terms` table
+   */
+  async getTerms(): Promise<Term[]> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('terms')
+          .select('*')
+          .order('is_current', { ascending: false });
+        if (!error && data && data.length > 0) {
+          return data.map((t: any) => ({
+            id: t.id,
+            yearTerm: t.year_term,
+            isCurrent: Boolean(t.is_current),
+            createdAt: t.created_at,
+          }));
+        }
+      } catch (err) {
+        console.warn('[Supabase] getTerms exception:', err);
+      }
+    }
+    return [
+      { id: 'term_current', yearTerm: '2024-2025第1学期', isCurrent: true },
+      { id: 'term_prev_1', yearTerm: '2023-2024第2学期', isCurrent: false },
+      { id: 'term_prev_2', yearTerm: '2023-2024第1学期', isCurrent: false },
+    ];
+  },
+
+  /**
+   * Fetch point rules from Supabase `point_rules` table
+   */
+  async getPointRules(): Promise<PointRule[]> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('point_rules')
+          .select('*')
+          .order('points_delta', { ascending: false });
+        if (!error && data && data.length > 0) {
+          return data.map((r: any) => ({
+            actionCode: r.action_code,
+            label: r.label,
+            pointsDelta: Number(r.points_delta),
+            isActive: Boolean(r.is_active),
+            description: r.description,
+          }));
+        }
+      } catch (err) {
+        console.warn('[Supabase] getPointRules exception:', err);
+      }
+    }
+    return Object.entries(DEFAULT_ACTION_LABELS).map(([actionCode, label]) => ({
+      actionCode,
+      label,
+      pointsDelta: actionCode.includes('checkin') ? 5 : actionCode.includes('review') ? 20 : -2,
+      isActive: true,
+    }));
   },
 };
