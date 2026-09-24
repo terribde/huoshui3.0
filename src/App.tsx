@@ -41,7 +41,11 @@ import {
   Sparkles,
   LogIn,
   LogOut,
-  ShieldCheck
+  ShieldCheck,
+  CheckCircle2,
+  AlertCircle,
+  Info,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -56,7 +60,24 @@ export default function App() {
   const [reviews, setReviews] = useState<Review[]>(INITIAL_REVIEWS);
   const [userPoints, setUserPoints] = useState<number>(0);
   const [hasCheckedInToday, setHasCheckedInToday] = useState<boolean>(false);
+  const [isCheckingIn, setIsCheckingIn] = useState<boolean>(false);
+  const [isCheckinStatusLoading, setIsCheckinStatusLoading] = useState<boolean>(false);
   const [transactions, setTransactions] = useState<UserPointTransaction[]>([]);
+
+  // Floating feedback Toast system (replaces jarring synchronous alerts)
+  const [appToast, setAppToast] = useState<{
+    id: number;
+    message: string;
+    type: 'success' | 'info' | 'error';
+  } | null>(null);
+
+  const showAppToast = useCallback((message: string, type: 'success' | 'info' | 'error' = 'info') => {
+    const id = Date.now();
+    setAppToast({ id, message, type });
+    setTimeout(() => {
+      setAppToast((prev) => (prev?.id === id ? null : prev));
+    }, 4000);
+  }, []);
 
   // Navigation tab
   const [currentTab, setCurrentTab] = useState<NavTab>('home');
@@ -104,14 +125,20 @@ export default function App() {
   }, []);
 
   const loadUserPointsData = useCallback(async (userId: string) => {
-    // Check if user already checked in today
-    const checkedIn = await supabaseService.hasUserCheckedInToday(userId);
-    setHasCheckedInToday(checkedIn);
-
-    const pointData = await supabaseService.getUserPoints(userId);
-    if (pointData) {
-      setUserPoints(pointData.points);
-      setTransactions(pointData.transactions);
+    setIsCheckinStatusLoading(true);
+    try {
+      const pointData = await supabaseService.getUserPoints(userId);
+      if (pointData) {
+        setUserPoints(pointData.points);
+        setTransactions(pointData.transactions);
+        if (typeof pointData.hasCheckedInToday === 'boolean') {
+          setHasCheckedInToday(pointData.hasCheckedInToday);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load user points data:', err);
+    } finally {
+      setIsCheckinStatusLoading(false);
     }
   }, []);
 
@@ -152,10 +179,19 @@ export default function App() {
 
     if (!isSupabaseConfigured) return;
 
-    // Check active auth session
+    // Check active auth session with instant local cache hydration
     supabaseService.getCurrentUser().then((user) => {
       if (user) {
         setCurrentUser(user);
+        const local = supabaseService.getLocalUserPoints(user.id);
+        if (local) {
+          setUserPoints(local.points);
+          setTransactions(local.transactions);
+        }
+        const localDate = supabaseService.getLocalCheckInDate(user.id);
+        if (localDate === supabaseService.getLocalDateString()) {
+          setHasCheckedInToday(true);
+        }
         loadUserPointsData(user.id);
       }
     });
@@ -280,13 +316,13 @@ export default function App() {
     }
 
     if (userPoints < amount) {
-      alert(`积分不足！本次操作需消耗 ${amount} 积分，当前剩余 ${userPoints} 积分。请先每日签到(+5分)或写评价(+20分)赚取积分。`);
+      showAppToast(`积分不足！本次操作需消耗 ${amount} 积分，当前剩余 ${userPoints} 积分。请先每日签到(+5分)或写评价(+20分)赚取积分。`, 'error');
       return false;
     }
 
     const res = await supabaseService.spendPoints(actionCode, reason, amount);
     if (!res.success) {
-      alert(res.message || '扣除积分失败');
+      showAppToast(res.message || '扣除积分失败', 'error');
       return false;
     }
 
@@ -313,31 +349,45 @@ export default function App() {
       return;
     }
 
-    const res = await supabaseService.handleDailyCheckin(currentUser.id);
-    if (!res.success) {
-      alert(res.message || '签到失败，请稍后重试');
+    if (isCheckingIn || isCheckinStatusLoading || hasCheckedInToday) {
+      if (hasCheckedInToday) {
+        showAppToast('您今日已经完成签到啦，明日 00:00 后即可再次签到！', 'info');
+      }
       return;
     }
 
-    setHasCheckedInToday(true);
-    setUserPoints(res.points);
+    setIsCheckingIn(true);
+    try {
+      const res = await supabaseService.handleDailyCheckin(currentUser.id);
+      if (!res.success) {
+        showAppToast(res.message || '签到失败，请稍后重试', 'error');
+        return;
+      }
 
-    if (res.alreadyCheckedIn) {
-      alert('您今日已经完成签到啦，明日 00:00 后即可再次签到领取积分！');
-      return;
+      setHasCheckedInToday(true);
+      setUserPoints(res.points);
+
+      if (res.alreadyCheckedIn) {
+        showAppToast('您今日已经完成签到啦，明日 00:00 后即可再次签到领取积分！', 'info');
+        return;
+      }
+
+      setTransactions((prev) => [
+        {
+          id: `tx_${Date.now()}`,
+          action: '每日签到奖励 (PRD 5.0)',
+          amount: 5,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          balanceAfter: res.points,
+        },
+        ...prev,
+      ]);
+      showAppToast('🎉 签到成功！已获得 +5 积分奖励', 'success');
+    } catch (err: any) {
+      showAppToast(err?.message || '签到异常，请稍后重试', 'error');
+    } finally {
+      setIsCheckingIn(false);
     }
-
-    setTransactions((prev) => [
-      {
-        id: `tx_${Date.now()}`,
-        action: '每日签到奖励 (PRD 5.0)',
-        amount: 5,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        balanceAfter: res.points,
-      },
-      ...prev,
-    ]);
-    alert('签到成功！已获得 +5 积分奖励');
   };
 
   // Guarded Review Open: Requires User Login!
@@ -505,7 +555,42 @@ export default function App() {
     : [];
 
   return (
-    <div className="min-h-screen bg-white sm:bg-slate-100/90 text-gray-900 flex flex-col items-center">
+    <div className="min-h-screen bg-white sm:bg-slate-100/90 text-gray-900 flex flex-col items-center relative">
+      {/* Top Floating Toast Notification Banner */}
+      <AnimatePresence>
+        {appToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -24, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+            className={`fixed top-4 left-1/2 -translate-x-1/2 z-[9999] max-w-md w-[92%] sm:w-auto px-4 py-3 rounded-2xl shadow-xl border flex items-center justify-between gap-3 text-sm font-semibold backdrop-blur-md pointer-events-auto ${
+              appToast.type === 'success'
+                ? 'bg-emerald-50/95 border-emerald-300 text-emerald-900 shadow-emerald-500/10'
+                : appToast.type === 'error'
+                ? 'bg-rose-50/95 border-rose-300 text-rose-900 shadow-rose-500/10'
+                : 'bg-amber-50/95 border-amber-300 text-amber-900 shadow-amber-500/10'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              {appToast.type === 'success' ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              ) : appToast.type === 'error' ? (
+                <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+              ) : (
+                <Info className="w-5 h-5 text-amber-600 shrink-0" />
+              )}
+              <span className="leading-snug">{appToast.message}</span>
+            </div>
+            <button
+              onClick={() => setAppToast(null)}
+              className="p-1 rounded-lg hover:bg-black/5 text-gray-400 hover:text-gray-700 transition-colors ml-2 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* ========================================================= */}
       {/* 1. MOBILE MODE: Pure, 100% faithful Quark mobile layout   */}
       {/* ========================================================= */}
@@ -613,6 +698,8 @@ export default function App() {
                       userPoints={userPoints}
                       transactions={transactions}
                       hasCheckedInToday={hasCheckedInToday}
+                      isCheckingIn={isCheckingIn}
+                      isCheckinStatusLoading={isCheckinStatusLoading}
                       onCheckIn={handleCheckIn}
                       onOpenPointsModal={() => {
                         if (!currentUser) {
@@ -897,6 +984,8 @@ export default function App() {
                     userPoints={userPoints}
                     transactions={transactions}
                     hasCheckedInToday={hasCheckedInToday}
+                    isCheckingIn={isCheckingIn}
+                    isCheckinStatusLoading={isCheckinStatusLoading}
                     onCheckIn={handleCheckIn}
                     onOpenPointsModal={() => {
                       if (!currentUser) {
@@ -975,6 +1064,8 @@ export default function App() {
             points={userPoints}
             transactions={transactions}
             hasCheckedInToday={hasCheckedInToday}
+            isCheckingIn={isCheckingIn}
+            isCheckinStatusLoading={isCheckinStatusLoading}
             onCheckIn={handleCheckIn}
             onOpenReview={() => handleOpenReview()}
           />

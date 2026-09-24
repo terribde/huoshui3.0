@@ -53,6 +53,8 @@ ALTER TABLE public.reviews ADD COLUMN IF NOT EXISTS user_id TEXT;
 ALTER TABLE public.reviews ADD COLUMN IF NOT EXISTS user_email TEXT;
 ALTER TABLE public.reviews ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS last_checkin_date DATE;
+ALTER TABLE public.point_transactions ADD COLUMN IF NOT EXISTS action_code TEXT;
+ALTER TABLE public.point_transactions ADD COLUMN IF NOT EXISTS related_review_id TEXT;
 
 -- 3. 用户与积分表 (user_profiles)
 CREATE TABLE IF NOT EXISTS public.user_profiles (
@@ -162,11 +164,12 @@ BEGIN
     WHERE id = v_user_id;
 
     -- 写入积分流水记录
-    INSERT INTO public.point_transactions (id, user_id, action, amount, balance_after, timestamp)
+    INSERT INTO public.point_transactions (id, user_id, action, action_code, amount, balance_after, timestamp)
     VALUES (
         'tx_' || extract(epoch from now())::bigint || '_' || substr(md5(random()::text), 1, 4),
         v_user_id,
         '每日签到奖励 (PRD 5.0)',
+        'daily_checkin',
         5,
         v_current_points,
         now()
@@ -237,11 +240,12 @@ BEGIN
     WHERE id = v_user_id;
 
     -- 记录流水
-    INSERT INTO public.point_transactions (id, user_id, action, amount, balance_after, timestamp)
+    INSERT INTO public.point_transactions (id, user_id, action, action_code, amount, balance_after, timestamp)
     VALUES (
         'tx_' || extract(epoch from now())::bigint || '_' || substr(md5(random()::text), 1, 4),
         v_user_id,
         v_action_desc,
+        p_action_code,
         -v_cost,
         v_current_points,
         now()

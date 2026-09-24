@@ -10,6 +10,8 @@ interface MobileUserProfileProps {
   userPoints: number;
   transactions: UserPointTransaction[];
   hasCheckedInToday: boolean;
+  isCheckingIn?: boolean;
+  isCheckinStatusLoading?: boolean;
   onCheckIn: () => void;
   onOpenPointsModal: () => void;
   onOpenReview: () => void;
@@ -29,6 +31,8 @@ export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
   userPoints,
   transactions,
   hasCheckedInToday,
+  isCheckingIn = false,
+  isCheckinStatusLoading = false,
   onCheckIn,
   onOpenPointsModal,
   onOpenReview,
@@ -162,14 +166,30 @@ export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
             <div className="flex items-center gap-2">
               <button
                 onClick={onCheckIn}
-                disabled={hasCheckedInToday}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs ${
+                disabled={hasCheckedInToday || isCheckingIn || isCheckinStatusLoading}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 ${
                   hasCheckedInToday
-                    ? 'bg-white/20 text-white cursor-not-allowed'
-                    : 'bg-white text-orange-600 hover:bg-orange-50'
+                    ? 'bg-white/20 text-white cursor-not-allowed opacity-90'
+                    : isCheckingIn || isCheckinStatusLoading
+                    ? 'bg-white/40 text-white cursor-wait animate-pulse'
+                    : 'bg-white text-orange-600 hover:bg-orange-50 active:scale-95 cursor-pointer'
                 }`}
               >
-                {hasCheckedInToday ? '今日已签' : '签到 +5分'}
+                {isCheckinStatusLoading ? (
+                  <>
+                    <RotateCw className="w-3 h-3 animate-spin" />
+                    <span>同步中</span>
+                  </>
+                ) : isCheckingIn ? (
+                  <>
+                    <RotateCw className="w-3 h-3 animate-spin" />
+                    <span>签到中</span>
+                  </>
+                ) : hasCheckedInToday ? (
+                  <span>今日已签</span>
+                ) : (
+                  <span>签到 +5分</span>
+                )}
               </button>
               <button
                 onClick={onOpenPointsModal}

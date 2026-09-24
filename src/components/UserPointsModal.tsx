@@ -1,6 +1,6 @@
 import React from 'react';
 import { UserPointTransaction } from '../types';
-import { X, Coins, Check, Calendar, ArrowUpRight, Shield } from 'lucide-react';
+import { X, Coins, Check, Calendar, ArrowUpRight, Shield, RotateCw } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface UserPointsModalProps {
@@ -9,15 +9,20 @@ interface UserPointsModalProps {
   points: number;
   transactions: UserPointTransaction[];
   hasCheckedInToday: boolean;
+  isCheckingIn?: boolean;
+  isCheckinStatusLoading?: boolean;
   onCheckIn: () => void;
   onOpenReview: () => void;
 }
 
 export const UserPointsModal: React.FC<UserPointsModalProps> = ({
+  isOpen,
   onClose,
   points,
   transactions,
   hasCheckedInToday,
+  isCheckingIn = false,
+  isCheckinStatusLoading = false,
   onCheckIn,
   onOpenReview,
 }) => {
@@ -78,16 +83,28 @@ export const UserPointsModal: React.FC<UserPointsModalProps> = ({
               {/* Checkin button */}
               <motion.button
                 id="daily-checkin-btn"
-                whileTap={hasCheckedInToday ? {} : { scale: 0.92 }}
-                disabled={hasCheckedInToday}
+                whileTap={hasCheckedInToday || isCheckingIn || isCheckinStatusLoading ? {} : { scale: 0.92 }}
+                disabled={hasCheckedInToday || isCheckingIn || isCheckinStatusLoading}
                 onClick={onCheckIn}
                 className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md ${
                   hasCheckedInToday
-                    ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-amber-400 to-orange-400 hover:from-amber-300 hover:to-orange-300 text-gray-950 shadow-amber-500/20 cursor-pointer'
+                    ? 'bg-gray-700 text-gray-400 cursor-not-allowed opacity-90'
+                    : isCheckingIn || isCheckinStatusLoading
+                    ? 'bg-amber-400/50 text-gray-900 cursor-wait animate-pulse'
+                    : 'bg-gradient-to-r from-amber-400 to-orange-400 hover:from-amber-300 hover:to-orange-300 text-gray-950 shadow-amber-500/20 cursor-pointer active:scale-95'
                 }`}
               >
-                {hasCheckedInToday ? (
+                {isCheckinStatusLoading ? (
+                  <>
+                    <RotateCw className="w-3.5 h-3.5 animate-spin" />
+                    同步中...
+                  </>
+                ) : isCheckingIn ? (
+                  <>
+                    <RotateCw className="w-3.5 h-3.5 animate-spin" />
+                    签到中...
+                  </>
+                ) : hasCheckedInToday ? (
                   <>
                     <Check className="w-3.5 h-3.5" />
                     今日已签到

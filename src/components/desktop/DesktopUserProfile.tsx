@@ -10,6 +10,8 @@ interface DesktopUserProfileProps {
   userPoints: number;
   transactions: UserPointTransaction[];
   hasCheckedInToday: boolean;
+  isCheckingIn?: boolean;
+  isCheckinStatusLoading?: boolean;
   onCheckIn: () => void;
   onOpenPointsModal: () => void;
   onOpenReview: () => void;
@@ -29,6 +31,8 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
   userPoints,
   transactions,
   hasCheckedInToday,
+  isCheckingIn = false,
+  isCheckinStatusLoading = false,
   onCheckIn,
   onOpenPointsModal,
   onOpenReview,
@@ -174,15 +178,36 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                 <div className="flex items-center gap-2 pt-1 border-t border-white/20">
                   <button
                     onClick={onCheckIn}
-                    disabled={hasCheckedInToday}
-                    className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1 ${
+                    disabled={hasCheckedInToday || isCheckingIn || isCheckinStatusLoading}
+                    className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 ${
                       hasCheckedInToday
-                        ? 'bg-white/20 text-white cursor-not-allowed'
-                        : 'bg-white text-orange-600 hover:bg-orange-50'
+                        ? 'bg-white/20 text-white cursor-not-allowed opacity-90'
+                        : isCheckingIn || isCheckinStatusLoading
+                        ? 'bg-white/40 text-white cursor-wait animate-pulse'
+                        : 'bg-white text-orange-600 hover:bg-orange-50 active:scale-98 cursor-pointer'
                     }`}
                   >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    {hasCheckedInToday ? '今日已完成签到' : '每日签到 (+5分)'}
+                    {isCheckinStatusLoading ? (
+                      <>
+                        <RotateCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>同步中...</span>
+                      </>
+                    ) : isCheckingIn ? (
+                      <>
+                        <RotateCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>签到中...</span>
+                      </>
+                    ) : hasCheckedInToday ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>今日已完成签到</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>每日签到 (+5分)</span>
+                      </>
+                    )}
                   </button>
                   <button
                     onClick={onOpenPointsModal}

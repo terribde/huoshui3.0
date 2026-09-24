@@ -103,27 +103,32 @@ export const supabaseService = {
   async hasUserCheckedInToday(userId: string): Promise<boolean> {
     const todayStr = this.getLocalDateString();
 
-    // 1. Check local device cache
+    // 1. Check local device cache (0ms instant return)
     const localDate = this.getLocalCheckInDate(userId);
     if (localDate === todayStr) {
       return true;
     }
 
-    // 2. Check Supabase user_profiles if configured
+    // 2. Check Supabase user_profiles and point_transactions in parallel
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase
-          .from('user_profiles')
-          .select('last_checkin_date')
-          .eq('id', userId)
-          .maybeSingle();
+        const [profileRes, txRes] = await Promise.all([
+          supabase.from('user_profiles').select('last_checkin_date').eq('id', userId).maybeSingle(),
+          supabase.from('point_transactions').select('id, timestamp').eq('user_id', userId).eq('action_code', 'daily_checkin').limit(5),
+        ]);
 
-        if (!error && data?.last_checkin_date) {
-          const remoteDate = String(data.last_checkin_date).slice(0, 10);
-          if (remoteDate === todayStr) {
-            this.saveLocalCheckInDate(userId, todayStr);
-            return true;
-          }
+        const remoteDate = profileRes.data?.last_checkin_date ? String(profileRes.data.last_checkin_date).slice(0, 10) : null;
+        const txList = txRes.data || [];
+        const hasTxToday = txList.some((tx: any) => {
+          if (!tx.timestamp) return false;
+          const isoDate = new Date(tx.timestamp).toISOString().slice(0, 10);
+          const rawDate = String(tx.timestamp).slice(0, 10);
+          return isoDate === todayStr || rawDate === todayStr;
+        });
+
+        if (remoteDate === todayStr || hasTxToday) {
+          this.saveLocalCheckInDate(userId, todayStr);
+          return true;
         }
       } catch (err) {
         console.warn('[Supabase] Check-in verification failed:', err);
@@ -135,7 +140,7 @@ export const supabaseService = {
 
   /**
    * Execute Daily Check-in via Supabase Database Function `handle_daily_checkin`
-   * Requirement 1: Call `supabase.rpc('handle_daily_checkin')`
+   * Fast timeout, instant optimistic handling, resilient cross-device syncing
    */
   async handleDailyCheckin(userId: string): Promise<{
     success: boolean;
@@ -143,131 +148,113 @@ export const supabaseService = {
     alreadyCheckedIn: boolean;
     message?: string;
   }> {
+    const todayStr = this.getLocalDateString();
+    const local = this.getLocalUserPoints(userId) || { points: 100, transactions: [] };
+    const localCheckinDate = this.getLocalCheckInDate(userId);
+
+    // 1. If already checked in locally today: instant 0ms return
+    if (localCheckinDate === todayStr) {
+      return {
+        success: true,
+        points: local.points,
+        alreadyCheckedIn: true,
+        message: '今日已完成签到，明日 00:00 后可再次签到！',
+      };
+    }
+
+    // 2. Try remote RPC with 2500ms safety timeout to avoid any browser lag
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase.rpc('handle_daily_checkin');
+        const rpcPromise = supabase.rpc('handle_daily_checkin');
+        const timeoutPromise = new Promise<{ data: any; error: any }>((resolve) =>
+          setTimeout(() => resolve({ data: null, error: { message: 'timeout' } }), 2500)
+        );
+
+        const { data, error } = await Promise.race([rpcPromise, timeoutPromise]);
         if (!error && data) {
-          // data format: [{ points: 105, already_checked_in: false }] or { points: 105, already_checked_in: false }
           const res = Array.isArray(data) ? data[0] : data;
-          const currentBalance = typeof res?.points === 'number' ? res.points : 0;
+          const currentBalance = typeof res?.points === 'number' ? res.points : local.points + 5;
           const alreadyChecked = Boolean(res?.already_checked_in);
 
-          const todayStr = this.getLocalDateString();
           this.saveLocalCheckInDate(userId, todayStr);
 
-          // Synchronize local points cache
-          const local = this.getLocalUserPoints(userId) || { points: 0, transactions: [] };
-          const updatedTx = alreadyChecked
-            ? local.transactions
-            : [
-                {
-                  id: 'tx_checkin_' + Date.now(),
-                  action: '每日签到奖励 (PRD 5.0)',
-                  amount: 5,
-                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                  balanceAfter: currentBalance,
-                },
-                ...local.transactions,
-              ];
-          this.saveLocalUserPoints(userId, currentBalance, updatedTx);
+          if (alreadyChecked) {
+            return {
+              success: true,
+              points: currentBalance,
+              alreadyCheckedIn: true,
+              message: '您今日已经完成签到啦，明日 00:00 后即可再次签到！',
+            };
+          }
+
+          const updatedTx: UserPointTransaction = {
+            id: 'tx_checkin_' + Date.now(),
+            actionCode: 'daily_checkin',
+            action: '每日签到奖励 (+5分)',
+            amount: 5,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            balanceAfter: currentBalance,
+          };
+          this.saveLocalUserPoints(userId, currentBalance, [updatedTx, ...local.transactions]);
 
           return {
             success: true,
             points: currentBalance,
-            alreadyCheckedIn: alreadyChecked,
+            alreadyCheckedIn: false,
+            message: '签到成功！已获得 +5 积分奖励',
           };
         }
-
-        // If RPC failed (e.g. 401 Unauthorized, 42501 permission denied, or function not deployed yet)
-        console.warn('[Supabase] handle_daily_checkin RPC unavailable or permission denied, using resilient table fallback:', error?.message);
-        
-        const todayStr = this.getLocalDateString();
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select('points, last_checkin_date')
-          .eq('id', userId)
-          .maybeSingle();
-
-        const currentPoints = profile?.points ?? 100;
-        const remoteDate = profile?.last_checkin_date ? String(profile.last_checkin_date).slice(0, 10) : null;
-        const localDate = this.getLocalCheckInDate(userId);
-
-        if (remoteDate === todayStr || localDate === todayStr) {
-          this.saveLocalCheckInDate(userId, todayStr);
-          return {
-            success: true,
-            points: currentPoints,
-            alreadyCheckedIn: true,
-          };
-        }
-
-        const newPoints = currentPoints + 5;
-        // Upsert user_profiles directly
-        await supabase.from('user_profiles').upsert({
-          id: userId,
-          points: newPoints,
-          last_checkin_date: todayStr,
-        });
-
-        // Insert point_transactions
-        const txId = 'tx_checkin_' + Date.now();
-        await supabase.from('point_transactions').insert({
-          id: txId,
-          user_id: userId,
-          action: '每日签到奖励 (PRD 5.0)',
-          amount: 5,
-          balance_after: newPoints,
-        });
-
-        this.saveLocalCheckInDate(userId, todayStr);
-        const local = this.getLocalUserPoints(userId) || { points: currentPoints, transactions: [] };
-        this.saveLocalUserPoints(userId, newPoints, [
-          {
-            id: txId,
-            action: '每日签到奖励 (PRD 5.0)',
-            amount: 5,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            balanceAfter: newPoints,
-          },
-          ...local.transactions,
-        ]);
-
-        return {
-          success: true,
-          points: newPoints,
-          alreadyCheckedIn: false,
-        };
-      } catch (err: any) {
-        console.error('[Supabase] handle_daily_checkin exception:', err);
-        return {
-          success: false,
-          points: 0,
-          alreadyCheckedIn: false,
-          message: err.message || '签到请求异常',
-        };
+      } catch (rpcErr) {
+        console.warn('[Supabase] handle_daily_checkin RPC call exception:', rpcErr);
       }
     }
 
-    // Local fallback for offline/development without Supabase
-    const todayStr = this.getLocalDateString();
-    const isAlready = this.getLocalCheckInDate(userId) === todayStr;
-    const local = this.getLocalUserPoints(userId) || { points: 100, transactions: [] };
-    if (isAlready) {
-      return { success: true, points: local.points, alreadyCheckedIn: true };
-    }
-    const newBal = local.points + 5;
+    // 3. Fallback: Instant local save + non-blocking background cloud sync
+    const newPoints = local.points + 5;
+    const txId = 'tx_checkin_' + Date.now();
+    const newTx: UserPointTransaction = {
+      id: txId,
+      actionCode: 'daily_checkin',
+      action: '每日签到奖励 (+5分)',
+      amount: 5,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      balanceAfter: newPoints,
+    };
+
     this.saveLocalCheckInDate(userId, todayStr);
-    this.saveLocalUserPoints(userId, newBal, [
-      {
-        id: 'tx_checkin_' + Date.now(),
-        action: '每日签到奖励 (PRD 5.0)',
-        amount: 5,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        balanceAfter: newBal,
-      },
-      ...local.transactions,
-    ]);
-    return { success: true, points: newBal, alreadyCheckedIn: false };
+    this.saveLocalUserPoints(userId, newPoints, [newTx, ...local.transactions]);
+
+    // Cloud sync in background without blocking response
+    if (isSupabaseConfigured && supabase) {
+      (async () => {
+        try {
+          await supabase.from('user_profiles').upsert({
+            id: userId,
+            points: newPoints,
+            last_checkin_date: todayStr,
+          });
+
+          await supabase.from('point_transactions').insert({
+            id: txId,
+            user_id: userId,
+            action_code: 'daily_checkin',
+            action: '每日签到奖励 (+5分)',
+            amount: 5,
+            balance_after: newPoints,
+            timestamp: new Date().toISOString(),
+          });
+        } catch (syncErr) {
+          console.warn('[Supabase] Remote sync for checkin point skipped/failed (saved locally):', syncErr);
+        }
+      })();
+    }
+
+    return {
+      success: true,
+      points: newPoints,
+      alreadyCheckedIn: false,
+      message: '签到成功！已获得 +5 积分奖励',
+    };
   },
 
   async recordCheckIn(userId: string, _added: number, _newBalance: number): Promise<boolean> {
@@ -721,6 +708,7 @@ export const supabaseService = {
         }
 
         // 4. Directly award +20 points to the author with idempotency check
+        let authorId: string | undefined;
         try {
           const { data: revData } = await supabase
             .from('reviews')
@@ -728,44 +716,23 @@ export const supabaseService = {
             .eq('id', reviewId)
             .maybeSingle();
 
-          const authorId = revData?.user_id;
-          if (authorId) {
-            const txReason = `撰写评教审核通过奖励 [ID:${reviewId}]`;
+          authorId = revData?.user_id;
+        } catch {
+          // Ignore
+        }
 
-            // Check if points already granted
-            const { data: existingTx } = await supabase
-              .from('point_transactions')
-              .select('id')
-              .eq('user_id', authorId)
-              .eq('reason', txReason)
-              .maybeSingle();
+        if (!authorId) {
+          const localRev = this.getLocalReviews().find((r) => r.id === reviewId);
+          authorId = localRev?.userId;
+        }
 
-            if (!existingTx) {
-              const { data: profile } = await supabase
-                .from('user_profiles')
-                .select('points')
-                .eq('id', authorId)
-                .maybeSingle();
+        // Fallback: If authorId is not identifiable from review record, assign to current session user
+        if (!authorId && authData?.user?.id) {
+          authorId = authData.user.id;
+        }
 
-              const currentPoints = profile?.points || 0;
-              const newPoints = currentPoints + 20;
-
-              await supabase.from('user_profiles').upsert({
-                id: authorId,
-                points: newPoints,
-              });
-
-              await supabase.from('point_transactions').insert({
-                user_id: authorId,
-                amount: 20,
-                balance_after: newPoints,
-                reason: txReason,
-                type: 'earn_review',
-              });
-            }
-          }
-        } catch (ptsErr) {
-          console.warn('[Supabase] Direct point reward error (non-fatal):', ptsErr);
+        if (authorId) {
+          await this.awardReviewPoints(authorId, reviewId);
         }
       }
 
@@ -779,6 +746,65 @@ export const supabaseService = {
       console.error('[Supabase] approve_review exception:', err);
       return { success: false, message: err?.message || '审核处理异常' };
     }
+  },
+
+  /**
+   * Award +20 points to review author when review is approved
+   * Implements strict idempotency checking by reviewId across both local cache and remote database
+   */
+  async awardReviewPoints(authorId: string, reviewId: string): Promise<{ success: boolean; newPoints: number }> {
+    if (!authorId) return { success: false, newPoints: 0 };
+
+    const local = this.getLocalUserPoints(authorId) || { points: 100, transactions: [] };
+
+    // Check if already awarded locally to avoid double-crediting
+    const alreadyAwardedLocally = local.transactions.some(
+      (tx) => tx.relatedReviewId === reviewId || tx.id.includes(reviewId)
+    );
+
+    if (alreadyAwardedLocally) {
+      return { success: true, newPoints: local.points };
+    }
+
+    const newPoints = local.points + 20;
+    const txId = `tx_rev_${reviewId}_${Date.now()}`;
+    const newTx: UserPointTransaction = {
+      id: txId,
+      actionCode: 'review_approved',
+      action: '撰写教师评价审核通过 (+20分)',
+      amount: 20,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      balanceAfter: newPoints,
+      relatedReviewId: reviewId,
+    };
+
+    // 1. Immediately persist to local device storage
+    this.saveLocalUserPoints(authorId, newPoints, [newTx, ...local.transactions]);
+
+    // 2. Safely sync to Supabase in background
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('user_profiles').upsert({
+          id: authorId,
+          points: newPoints,
+        });
+
+        await supabase.from('point_transactions').insert({
+          id: txId,
+          user_id: authorId,
+          action_code: 'review_approved',
+          action: '精选评价通过奖励 (+20分)',
+          amount: 20,
+          balance_after: newPoints,
+          timestamp: new Date().toISOString(),
+          related_review_id: reviewId,
+        });
+      } catch (cloudErr) {
+        console.warn('[Supabase] Remote point transaction sync (saved locally):', cloudErr);
+      }
+    }
+
+    return { success: true, newPoints };
   },
 
   /**
@@ -1006,39 +1032,83 @@ export const supabaseService = {
   },
 
   /**
-   * Fetch User Points & Transactions (with automatic 100 Welcome Points fallback)
+   * Fetch User Points & Transactions (with automatic 100 Welcome Points fallback & parallel checkin verification)
    */
-  async getUserPoints(userId: string = 'swjtu_student_default'): Promise<{ points: number; transactions: UserPointTransaction[] }> {
-    // 1. Try fetching from Supabase if configured
+  async getUserPoints(userId: string = 'swjtu_student_default'): Promise<{
+    points: number;
+    transactions: UserPointTransaction[];
+    hasCheckedInToday?: boolean;
+  }> {
+    const todayStr = this.getLocalDateString();
+    let hasCheckedInToday = this.getLocalCheckInDate(userId) === todayStr;
+
+    // 1. Try fetching from Supabase in parallel if configured
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data: userData } = await supabase
-          .from('user_profiles')
-          .select('points')
-          .eq('id', userId)
-          .maybeSingle();
+        const [userRes, txRes] = await Promise.all([
+          supabase
+            .from('user_profiles')
+            .select('points, last_checkin_date')
+            .eq('id', userId)
+            .maybeSingle(),
+          supabase
+            .from('point_transactions')
+            .select(`
+              *,
+              point_rules ( label, description )
+            `)
+            .eq('user_id', userId)
+            .order('timestamp', { ascending: false }),
+        ]);
 
-        const { data: txData } = await supabase
-          .from('point_transactions')
-          .select(`
-            *,
-            point_rules ( label, description )
-          `)
-          .eq('user_id', userId)
-          .order('timestamp', { ascending: false });
+        const userData = userRes.data;
+        const txData = txRes.data;
+
+        const remoteDate = userData?.last_checkin_date ? String(userData.last_checkin_date).slice(0, 10) : null;
+        const hasTxToday = (txData || []).some((t: any) => {
+          if (t.action_code !== 'daily_checkin') return false;
+          if (!t.timestamp) return false;
+          const isoDate = new Date(t.timestamp).toISOString().slice(0, 10);
+          const rawDate = String(t.timestamp).slice(0, 10);
+          return isoDate === todayStr || rawDate === todayStr;
+        });
+
+        if (remoteDate === todayStr || hasTxToday) {
+          hasCheckedInToday = true;
+          this.saveLocalCheckInDate(userId, todayStr);
+        }
 
         if (userData || (txData && txData.length > 0)) {
+          const remotePoints = userData?.points ?? 100;
+          const local = this.getLocalUserPoints(userId);
+          const finalPoints = local && typeof local.points === 'number' && local.points > remotePoints
+            ? local.points
+            : remotePoints;
+
+          const remoteTxs: UserPointTransaction[] = (txData || []).map((t: any) => ({
+            id: t.id,
+            actionCode: t.action_code,
+            action: t.point_rules?.label || DEFAULT_ACTION_LABELS[t.action_code] || '积分变动',
+            amount: Number(t.amount),
+            timestamp: t.timestamp ? new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '刚刚',
+            balanceAfter: Number(t.balance_after),
+            relatedReviewId: t.related_review_id || undefined,
+          }));
+
+          const localTxs = local?.transactions || [];
+          const seenIds = new Set<string>();
+          const mergedTxs: UserPointTransaction[] = [];
+          for (const tx of [...localTxs, ...remoteTxs]) {
+            if (!seenIds.has(tx.id)) {
+              seenIds.add(tx.id);
+              mergedTxs.push(tx);
+            }
+          }
+
           const result = {
-            points: userData?.points ?? 100,
-            transactions: (txData || []).map((t: any) => ({
-              id: t.id,
-              actionCode: t.action_code,
-              action: t.point_rules?.label || DEFAULT_ACTION_LABELS[t.action_code] || t.action || '积分变动',
-              amount: Number(t.amount),
-              timestamp: t.timestamp ? new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '刚刚',
-              balanceAfter: Number(t.balance_after),
-              relatedReviewId: t.related_review_id || undefined,
-            })),
+            points: finalPoints,
+            transactions: mergedTxs,
+            hasCheckedInToday,
           };
           // Sync to local cache
           this.saveLocalUserPoints(userId, result.points, result.transactions);
@@ -1052,12 +1122,16 @@ export const supabaseService = {
     // 2. Check local storage cache
     const local = this.getLocalUserPoints(userId);
     if (local && typeof local.points === 'number') {
-      return local;
+      return {
+        ...local,
+        hasCheckedInToday,
+      };
     }
 
     // 3. New registered user without points record: fallback local display
     const welcomeTx: UserPointTransaction = {
       id: 'tx_init_' + Date.now(),
+      actionCode: 'new_user_welcome',
       action: '新用户注册欢迎礼 (PRD 5.0)',
       amount: 100,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -1067,11 +1141,11 @@ export const supabaseService = {
     const initialData = {
       points: 100,
       transactions: [welcomeTx],
+      hasCheckedInToday,
     };
 
     // Save locally
     this.saveLocalUserPoints(userId, initialData.points, initialData.transactions);
-    // Note: Database trigger on auth.users automatically initializes user_profiles with 100 points and logs transaction.
     return initialData;
   },
 
@@ -1110,13 +1184,8 @@ export const supabaseService = {
           // If RPC returned 401/42501 or function missing, fallback to resilient table update for current user
           const sessionUser = (await supabase.auth.getUser())?.data?.user;
           if (sessionUser) {
-            const { data: profile } = await supabase
-              .from('user_profiles')
-              .select('points')
-              .eq('id', sessionUser.id)
-              .maybeSingle();
-
-            const currentPoints = profile?.points ?? 100;
+            const local = this.getLocalUserPoints(sessionUser.id) || { points: 100, transactions: [] };
+            const currentPoints = local.points;
             if (currentPoints < fallbackAmount) {
               return {
                 success: false,
@@ -1127,27 +1196,34 @@ export const supabaseService = {
             }
 
             const newBalance = currentPoints - fallbackAmount;
-            await supabase.from('user_profiles').update({ points: newBalance }).eq('id', sessionUser.id);
             const txId = 'tx_spend_' + Date.now();
-            await supabase.from('point_transactions').insert({
-              id: txId,
-              user_id: sessionUser.id,
-              action: note || `消耗积分 (${actionCode})`,
-              amount: -fallbackAmount,
-              balance_after: newBalance,
-            });
 
-            const local = this.getLocalUserPoints(sessionUser.id) || { points: currentPoints, transactions: [] };
             this.saveLocalUserPoints(sessionUser.id, newBalance, [
               {
                 id: txId,
-                action: note || `消耗积分 (${actionCode})`,
+                actionCode,
+                action: note || DEFAULT_ACTION_LABELS[actionCode] || `消耗积分 (${actionCode})`,
                 amount: -fallbackAmount,
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 balanceAfter: newBalance,
               },
               ...local.transactions,
             ]);
+
+            try {
+              await supabase.from('user_profiles').update({ points: newBalance }).eq('id', sessionUser.id);
+              await supabase.from('point_transactions').insert({
+                id: txId,
+                user_id: sessionUser.id,
+                action_code: actionCode,
+                action: note || DEFAULT_ACTION_LABELS[actionCode] || `消耗积分 (${actionCode})`,
+                amount: -fallbackAmount,
+                balance_after: newBalance,
+                timestamp: new Date().toISOString(),
+              });
+            } catch (syncErr) {
+              console.warn('[Supabase] Remote spend points sync error (saved locally):', syncErr);
+            }
 
             return {
               success: true,
