@@ -57,21 +57,10 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
   // Navigation between Reviews Audit and Admin Users Config
   const [activeSection, setActiveSection] = useState<'reviews' | 'admins'>('reviews');
 
-  // Admin authentication state
-  const isInitialEmailAdmin = Boolean(
-    currentUserEmail && (
-      currentUserEmail.includes('admin') || 
-      currentUserEmail === '2502087135@qq.com' ||
-      currentUserEmail.endsWith('@swjtu.edu.cn')
-    )
-  );
-
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
-    return isInitialEmailAdmin || localStorage.getItem('swjtu_admin_auth') === 'true';
-  });
-  const [adminPasscode, setAdminPasscode] = useState('');
-  const [authError, setAuthError] = useState('');
-  const [adminRole, setAdminRole] = useState<string>('admin');
+  // Access is derived only from the authenticated server response.
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [isCheckingAdmin, setIsCheckingAdmin] = useState(true);
+  const [adminRole, setAdminRole] = useState<string>('');
 
   // Status feedback toast
   const [toastNotice, setToastNotice] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null);
@@ -104,21 +93,20 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
   const [selectedReason, setSelectedReason] = useState(PRESET_REJECTION_REASONS[0]);
   const [customReason, setCustomReason] = useState('');
 
-  // Dynamically check admin status in Supabase
   useEffect(() => {
-    let isMounted = true;
-    if (currentUserEmail) {
-      supabaseService.checkIsAdmin(currentUserEmail).then((res) => {
-        if (isMounted && res.isAdmin) {
-          setIsAdminAuthenticated(true);
-          setAdminRole(res.role || 'admin');
-        }
-      });
-    }
-    return () => {
-      isMounted = false;
-    };
-  }, [currentUserEmail]);
+    let active = true;
+    setIsAdminAuthenticated(false);
+    setIsCheckingAdmin(true);
+    setAdminRole('');
+    setActiveSection('reviews');
+    supabaseService.checkIsAdmin().then((res) => {
+      if (!active) return;
+      setIsAdminAuthenticated(res.isAdmin);
+      setAdminRole(res.role || '');
+      setIsCheckingAdmin(false);
+    });
+    return () => { active = false; };
+  }, [currentUserId, currentUserEmail]);
 
   // Load admin list when switching to admin config tab
   const loadAdmins = async () => {
@@ -134,24 +122,12 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
   };
 
   useEffect(() => {
-    if (activeSection === 'admins' && isAdminAuthenticated) {
+    if (activeSection === 'admins' && isAdminAuthenticated && adminRole === 'super_admin') {
       loadAdmins();
     }
-  }, [activeSection, isAdminAuthenticated]);
+  }, [activeSection, isAdminAuthenticated, adminRole]);
 
   if (!isOpen) return null;
-
-  // Verify Admin Code
-  const handleVerifyPasscode = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (adminPasscode.trim() === 'swjtu2024' || adminPasscode.trim() === 'admin888') {
-      setIsAdminAuthenticated(true);
-      localStorage.setItem('swjtu_admin_auth', 'true');
-      setAuthError('');
-    } else {
-      setAuthError('口令错误！默认测试口令为 swjtu2024 或 admin888');
-    }
-  };
 
   // Add new admin handler
   const handleAddAdmin = async (e: React.FormEvent) => {
@@ -186,307 +162,14 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
     }
   };
 
-  const copySqlCode = () => {
-    const sql = `-- 5. 管理员动态配置表 (admin_users)
-CREATE TABLE IF NOT EXISTS public.admin_users (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    email TEXT UNIQUE NOT NULL,
-    role TEXT NOT NULL DEFAULT 'admin', -- 'super_admin' | 'admin' | 'moderator'
-    nickname TEXT DEFAULT '评教审核员',
-    is_active BOOLEAN NOT NULL DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 默认插入站长初始超管账号
-INSERT INTO public.admin_users (email, role, nickname, is_active)
-VALUES ('2502087135@qq.com', 'super_admin', '站长超管', true)
-ON CONFLICT (email) DO UPDATE SET is_active = true, role = 'super_admin';
-
--- 启用 RLS
-ALTER TABLE public.admin_users ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public can check active admin status" ON public.admin_users FOR SELECT USING (is_active = true);
-CREATE POLICY "Public can manage admin users" ON public.admin_users FOR ALL USING (true);`;
-
-    navigator.clipboard.writeText(sql);
-    setCopiedSql(true);
-    setTimeout(() => setCopiedSql(false), 2000);
+  const copyMigrationInstructions = async (kind: 'schema' | 'rls') => {
+    // SQL is versioned in the repository; never distribute alternate, weaker policies.
+    await navigator.clipboard.writeText('请按 docs/supabase-p1-migration.md 执行版本化数据库迁移。现有数据库先运行 supabase/preflight.sql 核对结构，不要使用旧版快捷修复 SQL。');
+    if (kind === 'schema') setCopiedSql(true); else setCopiedRlsSql(true);
+    setTimeout(() => { setCopiedSql(false); setCopiedRlsSql(false); }, 2000);
   };
-
-  const copyRlsSqlCode = () => {
-    const sql = `-- ==============================================================================
--- 西南交大选课评教系统 · 安全审计与零信任加固 SQL
--- 修复漏洞：
--- 1. 彻底撤销匿名角色 (anon) 对审核函数的所有权限，仅限认证用户 (authenticated)
--- 2. 存储过程内部强校验管理员身份（校验 email 是否在 admin_users 启用，或为站长超管）
--- 3. 重构 RLS 行级安全策略：严禁作者自行把 status 设为 approved
--- 4. 幂等发分：校验当前状态必须为 pending/rejected，且通过 point_transactions 防重约束杜绝重复发分
--- ==============================================================================
-
--- 1. 确保站长超级管理员在后台已登记激活
-INSERT INTO public.admin_users (email, role, nickname, is_active)
-VALUES ('2502087135@qq.com', 'super_admin', '站长超管', true)
-ON CONFLICT (email) DO UPDATE SET is_active = true, role = 'super_admin';
-
--- 1.1 解除 reviewer_id 的僵化外键约束（避免因 auth.users 与 admin_users 主键差异导致审核阻塞）
-ALTER TABLE public.reviews DROP CONSTRAINT IF EXISTS reviews_reviewer_id_fkey;
-
--- 2. 评教表基础行级安全策略 (RLS)
-ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
-
--- 2.1 允许公开读取已过审评价，允许管理员和作者读取待审评价
-DROP POLICY IF EXISTS "reviews_select_policy" ON public.reviews;
-DROP POLICY IF EXISTS "Public can view approved reviews" ON public.reviews;
-DROP POLICY IF EXISTS "Public can view reviews" ON public.reviews;
-
-CREATE POLICY "reviews_select_policy" ON public.reviews
-FOR SELECT TO public
-USING (
-  status = 'approved'
-  OR (auth.uid() IS NOT NULL AND user_id = auth.uid()::text)
-  OR (auth.jwt() ->> 'email') = '2502087135@qq.com'
-  OR EXISTS (
-    SELECT 1 FROM public.admin_users 
-    WHERE email = (auth.jwt() ->> 'email') 
-      AND is_active = true
-  )
-);
-
--- 2.2 允许已登录学生提交待审评价（强制 status 为 pending）
-DROP POLICY IF EXISTS "reviews_insert_policy" ON public.reviews;
-CREATE POLICY "reviews_insert_policy" ON public.reviews
-FOR INSERT TO authenticated
-WITH CHECK (
-  user_id = auth.uid()::text
-  AND status = 'pending'
-);
-
--- 2.3 管理员专用更新策略（彻底封堵漏洞 3）
-DROP POLICY IF EXISTS "reviews_admin_update_policy" ON public.reviews;
-DROP POLICY IF EXISTS "reviews_update_policy" ON public.reviews;
-DROP POLICY IF EXISTS "Public can update reviews" ON public.reviews;
-
-CREATE POLICY "reviews_admin_update_policy" ON public.reviews
-FOR UPDATE TO authenticated
-USING (
-  (auth.jwt() ->> 'email') = '2502087135@qq.com'
-  OR EXISTS (
-    SELECT 1 FROM public.admin_users 
-    WHERE email = (auth.jwt() ->> 'email') 
-      AND is_active = true
-  )
-)
-WITH CHECK (
-  (auth.jwt() ->> 'email') = '2502087135@qq.com'
-  OR EXISTS (
-    SELECT 1 FROM public.admin_users 
-    WHERE email = (auth.jwt() ->> 'email') 
-      AND is_active = true
-  )
-);
-
--- 2.4 学生作者修改策略：仅允许修改 pending 或 rejected 的草稿，且修改后强制锁定为 pending（绝不允许自设 approved）
-DROP POLICY IF EXISTS "reviews_author_update_policy" ON public.reviews;
-CREATE POLICY "reviews_author_update_policy" ON public.reviews
-FOR UPDATE TO authenticated
-USING (
-  auth.uid() IS NOT NULL 
-  AND user_id = auth.uid()::text
-  AND status IN ('pending', 'rejected')
-)
-WITH CHECK (
-  auth.uid() IS NOT NULL 
-  AND user_id = auth.uid()::text
-  AND status = 'pending'
-);
-
--- 2.5 删除策略：仅管理员或作者本人在 pending/rejected 时可删除
-DROP POLICY IF EXISTS "reviews_delete_policy" ON public.reviews;
-DROP POLICY IF EXISTS "Public can delete reviews" ON public.reviews;
-CREATE POLICY "reviews_delete_policy" ON public.reviews
-FOR DELETE TO authenticated
-USING (
-  (auth.jwt() ->> 'email') = '2502087135@qq.com'
-  OR EXISTS (
-    SELECT 1 FROM public.admin_users 
-    WHERE email = (auth.jwt() ->> 'email') 
-      AND is_active = true
-  )
-  OR (auth.uid() IS NOT NULL AND user_id = auth.uid()::text AND status IN ('pending', 'rejected'))
-);
-
--- ==============================================================================
--- 3. 审核通过核心存储过程 (修复漏洞 1, 2, 4)
--- ==============================================================================
--- 显式清理旧函数签名，避免 42P13: cannot change return type of existing function 报错
-DROP FUNCTION IF EXISTS public.approve_review(TEXT);
-
-CREATE OR REPLACE FUNCTION public.approve_review(p_review_id TEXT)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-    v_caller_email TEXT;
-    v_is_admin BOOLEAN := FALSE;
-    v_review RECORD;
-    v_author_id TEXT;
-    v_tx_reason TEXT;
-    v_already_awarded BOOLEAN := FALSE;
-    v_admin_id UUID;
-BEGIN
-    -- [漏洞 1 & 2 防御] 强校验：调用者必须认证，且必须在 admin_users 中激活或为站长超管
-    IF auth.uid() IS NULL THEN
-        RAISE EXCEPTION '未认证用户，禁止执行审核操作';
-    END IF;
-
-    v_caller_email := auth.jwt() ->> 'email';
-    IF v_caller_email = '2502087135@qq.com' THEN
-        v_is_admin := TRUE;
-    ELSE
-        SELECT EXISTS (
-            SELECT 1 FROM public.admin_users
-            WHERE email = v_caller_email AND is_active = true
-        ) INTO v_is_admin;
-    END IF;
-
-    IF NOT v_is_admin THEN
-        RAISE EXCEPTION '越权拦截：账号 % 无审核管理员权限', v_caller_email;
-    END IF;
-
-    -- 查找评价记录并行级锁定
-    SELECT * INTO v_review FROM public.reviews WHERE id = p_review_id FOR UPDATE;
-    IF NOT FOUND THEN
-        RETURN jsonb_build_object('success', false, 'message', '未找到对应的评价记录');
-    END IF;
-
-    -- [漏洞 4 防御] 状态幂等：禁止对已过审评价重复审批
-    IF v_review.status = 'approved' THEN
-        RETURN jsonb_build_object('success', false, 'message', '该评价当前已审核通过，禁止重复审批');
-    END IF;
-
-    -- 获取管理员对应记录 ID（优先使用 admin_users.id，否则使用 auth.uid()）
-    SELECT id INTO v_admin_id FROM public.admin_users WHERE email = v_caller_email LIMIT 1;
-    IF v_admin_id IS NULL THEN
-        v_admin_id := auth.uid();
-    END IF;
-
-    -- 更新评价状态为 approved
-    UPDATE public.reviews
-    SET status = 'approved',
-        reject_reason = NULL,
-        reviewer_id = v_admin_id,
-        reviewed_at = timezone('utc'::text, now())
-    WHERE id = p_review_id;
-
-    -- [漏洞 4 防御] 积分流水幂等校验：检查是否已经为此评价发放过公示积分
-    v_author_id := v_review.user_id;
-    v_tx_reason := '撰写评教审核通过奖励 [ID:' || p_review_id || ']';
-
-    IF v_author_id IS NOT NULL AND v_author_id != '' THEN
-        SELECT EXISTS (
-            SELECT 1 FROM public.point_transactions
-            WHERE user_id = v_author_id AND reason = v_tx_reason
-        ) INTO v_already_awarded;
-
-        -- 仅当该评价从未加过分时才给作者增加 20 积分，杜绝任何刷分漏洞
-        IF NOT v_already_awarded THEN
-            INSERT INTO public.user_profiles (id, points)
-            VALUES (v_author_id, 20)
-            ON CONFLICT (id) DO UPDATE
-            SET points = public.user_profiles.points + 20;
-
-            INSERT INTO public.point_transactions (user_id, amount, balance_after, reason, type)
-            VALUES (
-                v_author_id,
-                20,
-                (SELECT points FROM public.user_profiles WHERE id = v_author_id),
-                v_tx_reason,
-                'earn_review'
-            );
-        END IF;
-    END IF;
-
-    RETURN jsonb_build_object(
-        'success', true, 
-        'message', '评价已成功通过公示',
-        'points_awarded', NOT v_already_awarded
-    );
-END;
-$$;
-
--- ==============================================================================
--- 4. 审核驳回核心存储过程 (修复漏洞 1 & 2)
--- ==============================================================================
--- 显式清理旧函数签名
-DROP FUNCTION IF EXISTS public.reject_review(TEXT, TEXT);
-
-CREATE OR REPLACE FUNCTION public.reject_review(p_review_id TEXT, p_reason TEXT)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-    v_caller_email TEXT;
-    v_is_admin BOOLEAN := FALSE;
-    v_review RECORD;
-    v_admin_id UUID;
-BEGIN
-    -- [漏洞 1 & 2 防御] 强校验管理员身份
-    IF auth.uid() IS NULL THEN
-        RAISE EXCEPTION '未认证用户，禁止执行审核操作';
-    END IF;
-
-    v_caller_email := auth.jwt() ->> 'email';
-    IF v_caller_email = '2502087135@qq.com' THEN
-        v_is_admin := TRUE;
-    ELSE
-        SELECT EXISTS (
-            SELECT 1 FROM public.admin_users
-            WHERE email = v_caller_email AND is_active = true
-        ) INTO v_is_admin;
-    END IF;
-
-    IF NOT v_is_admin THEN
-        RAISE EXCEPTION '越权拦截：账号 % 无审核管理员权限', v_caller_email;
-    END IF;
-
-    SELECT * INTO v_review FROM public.reviews WHERE id = p_review_id FOR UPDATE;
-    IF NOT FOUND THEN
-        RETURN jsonb_build_object('success', false, 'message', '未找到对应的评价记录');
-    END IF;
-
-    -- 获取管理员对应记录 ID（优先使用 admin_users.id，否则使用 auth.uid()）
-    SELECT id INTO v_admin_id FROM public.admin_users WHERE email = v_caller_email LIMIT 1;
-    IF v_admin_id IS NULL THEN
-        v_admin_id := auth.uid();
-    END IF;
-
-    UPDATE public.reviews
-    SET status = 'rejected',
-        reject_reason = p_reason,
-        reviewer_id = v_admin_id,
-        reviewed_at = timezone('utc'::text, now())
-    WHERE id = p_review_id;
-
-    RETURN jsonb_build_object('success', true, 'message', '评价已被驳回');
-END;
-$$;
-
--- ==============================================================================
--- 5. 权限彻底收紧 (彻底修复漏洞 1：剥夺 PUBLIC 与 anon 权限，仅限 authenticated)
--- ==============================================================================
-REVOKE EXECUTE ON FUNCTION public.approve_review(TEXT) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.reject_review(TEXT, TEXT) FROM PUBLIC, anon;
-
-GRANT EXECUTE ON FUNCTION public.approve_review(TEXT) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.reject_review(TEXT, TEXT) TO authenticated;`;
-
-    navigator.clipboard.writeText(sql);
-    setCopiedRlsSql(true);
-    setTimeout(() => setCopiedRlsSql(false), 2000);
-  };
+  const copySqlCode = () => copyMigrationInstructions('schema');
+  const copyRlsSqlCode = () => copyMigrationInstructions('rls');
 
   const handleManualRefresh = async () => {
     setIsRefreshingReviews(true);
@@ -667,6 +350,8 @@ GRANT EXECUTE ON FUNCTION public.reject_review(TEXT, TEXT) TO authenticated;`;
                   )}
                 </button>
                 <button
+                  disabled={adminRole !== 'super_admin'}
+                  title={adminRole === 'super_admin' ? '管理审核团队' : '仅超级管理员可管理名单'}
                   onClick={() => setActiveSection('admins')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                     activeSection === 'admins'
@@ -732,29 +417,12 @@ GRANT EXECUTE ON FUNCTION public.reject_review(TEXT, TEXT) TO authenticated;`;
               <p className="text-xs text-gray-500 leading-relaxed">
                 当前登录邮箱：<strong>{currentUserEmail || '未登录/普通学生'}</strong>
                 <br />
-                请输入管理员管理口令进入评教审核后台（默认口令：<code className="text-indigo-600 font-mono font-bold">swjtu2024</code> 或 <code className="text-indigo-600 font-mono font-bold">admin888</code>）
+                {isCheckingAdmin ? '正在核验管理员权限…' : '当前账号未获得有效管理员授权，请联系超级管理员。'}
               </p>
             </div>
 
-            <form onSubmit={handleVerifyPasscode} className="w-full max-w-sm space-y-3">
-              <input
-                type="password"
-                value={adminPasscode}
-                onChange={(e) => setAdminPasscode(e.target.value)}
-                placeholder="输入管理员验证口令 (如: swjtu2024)"
-                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 text-center tracking-widest font-mono"
-                autoFocus
-              />
-              {authError && <p className="text-xs text-red-500 font-medium">{authError}</p>}
-              <button
-                type="submit"
-                className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-xs"
-              >
-                验证并进入审核工作台
-              </button>
-            </form>
           </div>
-        ) : activeSection === 'admins' ? (
+        ) : activeSection === 'admins' && adminRole === 'super_admin' ? (
           /* Dynamic Admin Database Management Workspace */
           <div className="flex-1 flex flex-col overflow-y-auto p-6 bg-slate-50 space-y-6">
             {/* Supabase Status Banner */}
@@ -780,10 +448,10 @@ GRANT EXECUTE ON FUNCTION public.reject_review(TEXT, TEXT) TO authenticated;`;
                 <button
                   onClick={copySqlCode}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all"
-                  title="复制建表 SQL 语句"
+                  title="复制数据库升级说明"
                 >
                   {copiedSql ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedSql ? '已复制 SQL' : '复制建表 SQL'}</span>
+                  <span>{copiedSql ? '已复制' : '复制迁移说明'}</span>
                 </button>
                 <button
                   onClick={loadAdmins}
@@ -875,7 +543,7 @@ GRANT EXECUTE ON FUNCTION public.reject_review(TEXT, TEXT) TO authenticated;`;
               <div className="divide-y divide-gray-100">
                 {adminList.length === 0 ? (
                   <div className="p-8 text-center text-xs text-gray-400">
-                    暂未查询到管理员记录，请在下方点击执行 SQL 创建配置表。
+                    暂未查询到管理员记录，请确认账号拥有超级管理员权限。
                   </div>
                 ) : (
                   adminList.map((adm) => (
@@ -946,28 +614,15 @@ GRANT EXECUTE ON FUNCTION public.reject_review(TEXT, TEXT) TO authenticated;`;
                   className="text-xs text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1"
                 >
                   <Copy className="w-3.5 h-3.5" />
-                  <span>{copiedSql ? '已复制' : '复制 SQL'}</span>
+                  <span>{copiedSql ? '已复制' : '复制迁移说明'}</span>
                 </button>
               </div>
 
               <p className="text-xs text-slate-400 leading-relaxed">
-                如果您尚未在 Supabase 中运行建表脚本，请打开 Supabase 控制台的 <strong>SQL Editor</strong>，点击新建查询，粘贴上方 SQL 并点击 <strong>Run</strong> 执行即可。执行完成后，您即可在上方直接动态录入和管理所有管理员。
+                请由项目维护者按照仓库中的数据库迁移说明完成配置；仅超级管理员可以新增或停用管理员。
               </p>
 
-              <pre className="p-3 bg-black/40 rounded-xl text-[11px] font-mono text-emerald-400 overflow-x-auto">
-                {`-- 5. 管理员动态配置表 (admin_users)
-CREATE TABLE IF NOT EXISTS public.admin_users (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    email TEXT UNIQUE NOT NULL,
-    role TEXT NOT NULL DEFAULT 'admin',
-    nickname TEXT DEFAULT '评教审核员',
-    is_active BOOLEAN NOT NULL DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-INSERT INTO public.admin_users (email, role, nickname, is_active)
-VALUES ('2502087135@qq.com', 'super_admin', '站长超管', true)
-ON CONFLICT (email) DO UPDATE SET is_active = true;`}
-              </pre>
+
             </div>
           </div>
         ) : (
@@ -1082,14 +737,14 @@ ON CONFLICT (email) DO UPDATE SET is_active = true;`}
                         </div>
                       </div>
                       <p className="text-[11px] text-amber-800 leading-relaxed">
-                        这是由于 Supabase 数据库默认的 RLS 行级安全策略设置了「仅过审评价可读（status = 'approved'）」，导致数据库拦截了待审评价的读取。
+                        请确认账号已获授权、网络正常且数据库迁移已完成；空列表也可能表示目前没有待审评价。
                       </p>
                       <button
                         onClick={copyRlsSqlCode}
                         className="w-full py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-2xs"
                       >
                         {copiedRlsSql ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedRlsSql ? '已复制修复 SQL，前往 Supabase 粘贴执行' : '复制修复 reviews 权限 SQL (1步搞定)'}</span>
+                        <span>{copiedRlsSql ? '已复制迁移说明' : '复制数据库迁移说明'}</span>
                       </button>
 
                       <button

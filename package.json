@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "schema:build": "node scripts/build-schema.mjs",
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -24,6 +26,7 @@
     "vite": "^6.2.3"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",

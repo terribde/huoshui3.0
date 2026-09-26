@@ -1,6 +1,6 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { Teacher, Review, UserPointTransaction, Course, Term, PointRule, TeacherCourseOffering } from '../types';
-import { INITIAL_TEACHERS, POPULAR_COURSES } from '../data/mockTeachers';
+import { POPULAR_COURSES } from '../data/mockTeachers';
 
 /**
  * Supabase Data Service
@@ -10,9 +10,12 @@ import { INITIAL_TEACHERS, POPULAR_COURSES } from '../data/mockTeachers';
 const DEFAULT_ACTION_LABELS: Record<string, string> = {
   welcome_gift: '新用户注册赠送',
   register_init: '新用户注册赠送',
+  new_user_welcome: '新用户注册欢迎礼',
   daily_checkin: '每日签到奖励',
   review_approved: '撰写教师评价审核通过',
   ai_question: 'AI 智能问答提问',
+  smart_filter: '智能筛选推荐',
+  guide_unlock: '攻略类内容解锁',
   recommend_query: '智能偏好选课推荐',
   experience_guide: '解锁经验攻略内容',
   invite_bonus: '邀请校友注册奖励',
@@ -85,11 +88,10 @@ export const supabaseService = {
    * Check-in date tracking (local and remote)
    */
   getLocalDateString(): string {
-    const d = new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    // Campus check-ins use the same calendar day as the database (Asia/Shanghai).
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date());
   },
 
   getLocalCheckInDate(userId: string): string | null {
@@ -101,160 +103,36 @@ export const supabaseService = {
   },
 
   async hasUserCheckedInToday(userId: string): Promise<boolean> {
-    const todayStr = this.getLocalDateString();
-
-    // 1. Check local device cache (0ms instant return)
-    const localDate = this.getLocalCheckInDate(userId);
-    if (localDate === todayStr) {
-      return true;
-    }
-
-    // 2. Check Supabase user_profiles and point_transactions in parallel
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const [profileRes, txRes] = await Promise.all([
-          supabase.from('user_profiles').select('last_checkin_date').eq('id', userId).maybeSingle(),
-          supabase.from('point_transactions').select('id, timestamp').eq('user_id', userId).eq('action_code', 'daily_checkin').limit(5),
-        ]);
-
-        const remoteDate = profileRes.data?.last_checkin_date ? String(profileRes.data.last_checkin_date).slice(0, 10) : null;
-        const txList = txRes.data || [];
-        const hasTxToday = txList.some((tx: any) => {
-          if (!tx.timestamp) return false;
-          const isoDate = new Date(tx.timestamp).toISOString().slice(0, 10);
-          const rawDate = String(tx.timestamp).slice(0, 10);
-          return isoDate === todayStr || rawDate === todayStr;
-        });
-
-        if (remoteDate === todayStr || hasTxToday) {
-          this.saveLocalCheckInDate(userId, todayStr);
-          return true;
-        }
-      } catch (err) {
-        console.warn('[Supabase] Check-in verification failed:', err);
-      }
-    }
-
-    return false;
+    const data = await this.getUserPoints(userId);
+    return data.hasCheckedInToday === true;
   },
 
   /**
    * Execute Daily Check-in via Supabase Database Function `handle_daily_checkin`
-   * Fast timeout, instant optimistic handling, resilient cross-device syncing
+   * Only a confirmed server response updates the local cache.
    */
   async handleDailyCheckin(userId: string): Promise<{
-    success: boolean;
-    points: number;
-    alreadyCheckedIn: boolean;
-    message?: string;
+    success: boolean; points: number; alreadyCheckedIn: boolean; message?: string;
   }> {
-    const todayStr = this.getLocalDateString();
-    const local = this.getLocalUserPoints(userId) || { points: 100, transactions: [] };
-    const localCheckinDate = this.getLocalCheckInDate(userId);
-
-    // 1. If already checked in locally today: instant 0ms return
-    if (localCheckinDate === todayStr) {
-      return {
-        success: true,
-        points: local.points,
-        alreadyCheckedIn: true,
-        message: '今日已完成签到，明日 00:00 后可再次签到！',
-      };
-    }
-
-    // 2. Try remote RPC with 2500ms safety timeout to avoid any browser lag
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const rpcPromise = supabase.rpc('handle_daily_checkin');
-        const timeoutPromise = new Promise<{ data: any; error: any }>((resolve) =>
-          setTimeout(() => resolve({ data: null, error: { message: 'timeout' } }), 2500)
-        );
-
-        const { data, error } = await Promise.race([rpcPromise, timeoutPromise]);
-        if (!error && data) {
-          const res = Array.isArray(data) ? data[0] : data;
-          const currentBalance = typeof res?.points === 'number' ? res.points : local.points + 5;
-          const alreadyChecked = Boolean(res?.already_checked_in);
-
-          this.saveLocalCheckInDate(userId, todayStr);
-
-          if (alreadyChecked) {
-            return {
-              success: true,
-              points: currentBalance,
-              alreadyCheckedIn: true,
-              message: '您今日已经完成签到啦，明日 00:00 后即可再次签到！',
-            };
-          }
-
-          const updatedTx: UserPointTransaction = {
-            id: 'tx_checkin_' + Date.now(),
-            actionCode: 'daily_checkin',
-            action: '每日签到奖励 (+5分)',
-            amount: 5,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            balanceAfter: currentBalance,
-          };
-          this.saveLocalUserPoints(userId, currentBalance, [updatedTx, ...local.transactions]);
-
-          return {
-            success: true,
-            points: currentBalance,
-            alreadyCheckedIn: false,
-            message: '签到成功！已获得 +5 积分奖励',
-          };
-        }
-      } catch (rpcErr) {
-        console.warn('[Supabase] handle_daily_checkin RPC call exception:', rpcErr);
+    const failure = (message: string) => ({ success: false, points: 0, alreadyCheckedIn: false, message });
+    if (!isSupabaseConfigured || !supabase) return failure('数据库未连接，签到未完成');
+    try {
+      const { data: auth, error: authError } = await supabase.auth.getUser();
+      if (authError || !auth.user || auth.user.id !== userId) return failure('请重新登录后签到');
+      // Never replace an uncertain RPC result with a client-side balance write.
+      const { data, error } = await supabase.rpc('handle_daily_checkin');
+      if (error) return failure(error.message || '签到失败，请稍后重试');
+      const res = Array.isArray(data) ? data[0] : data;
+      if (!res || !Number.isSafeInteger(res.points) || res.points < 0 || typeof res.already_checked_in !== 'boolean') {
+        return failure('签到结果无法确认，请刷新积分后重试');
       }
+      const local = this.getLocalUserPoints(userId);
+      this.saveLocalUserPoints(userId, res.points, local?.transactions || []);
+      this.saveLocalCheckInDate(userId, res.checkin_date || this.getLocalDateString());
+      return { success: true, points: res.points, alreadyCheckedIn: res.already_checked_in };
+    } catch (err: any) {
+      return failure(err?.message || '签到结果无法确认，请刷新积分后重试');
     }
-
-    // 3. Fallback: Instant local save + non-blocking background cloud sync
-    const newPoints = local.points + 5;
-    const txId = 'tx_checkin_' + Date.now();
-    const newTx: UserPointTransaction = {
-      id: txId,
-      actionCode: 'daily_checkin',
-      action: '每日签到奖励 (+5分)',
-      amount: 5,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      balanceAfter: newPoints,
-    };
-
-    this.saveLocalCheckInDate(userId, todayStr);
-    this.saveLocalUserPoints(userId, newPoints, [newTx, ...local.transactions]);
-
-    // Cloud sync in background without blocking response
-    if (isSupabaseConfigured && supabase) {
-      (async () => {
-        try {
-          await supabase.from('user_profiles').upsert({
-            id: userId,
-            points: newPoints,
-            last_checkin_date: todayStr,
-          });
-
-          await supabase.from('point_transactions').insert({
-            id: txId,
-            user_id: userId,
-            action_code: 'daily_checkin',
-            action: '每日签到奖励 (+5分)',
-            amount: 5,
-            balance_after: newPoints,
-            timestamp: new Date().toISOString(),
-          });
-        } catch (syncErr) {
-          console.warn('[Supabase] Remote sync for checkin point skipped/failed (saved locally):', syncErr);
-        }
-      })();
-    }
-
-    return {
-      success: true,
-      points: newPoints,
-      alreadyCheckedIn: false,
-      message: '签到成功！已获得 +5 积分奖励',
-    };
   },
 
   async recordCheckIn(userId: string, _added: number, _newBalance: number): Promise<boolean> {
@@ -627,273 +505,41 @@ export const supabaseService = {
 
   /**
    * Approve a review
-   * Attempts database RPC `approve_review` first;
-   * If RPC fails due to schema/FK mismatch, falls back to direct admin table update
-   * which does not touch reviewer_id, completely bypassing reviews_reviewer_id_fkey!
+   * Uses the database RPC `approve_review` exclusively.
+   * RPC failure is returned to the caller without any direct table writes.
    */
   async approveReview(reviewId: string): Promise<{ success: boolean; message?: string }> {
-    if (!isSupabaseConfigured || !supabase) {
-      this.updateLocalReviewStatus(reviewId, 'approved');
-      return { success: true };
-    }
-
+    if (!isSupabaseConfigured || !supabase) return { success: false, message: '数据库未连接，无法审核' };
     try {
-      // 1. Verify user session & admin privileges on frontend
-      const { data: authData, error: authErr } = await supabase.auth.getUser();
-      if (authErr || !authData?.user) {
-        return { success: false, message: '身份校验未通过：请先登录管理员账号（如 2502087135@qq.com）' };
+      // Authorization, status transition and reward are one database transaction.
+      const { data, error } = await supabase.rpc('approve_review', { p_review_id: reviewId });
+      if (error || data?.success !== true) {
+        return { success: false, message: error?.message || data?.message || '审核未完成，请刷新后重试' };
       }
-
-      const userEmail = (authData.user.email || '').trim().toLowerCase();
-      const roleMeta = authData.user.user_metadata?.role;
-      let isAdmin =
-        userEmail === '2502087135@qq.com' ||
-        userEmail.includes('admin') ||
-        roleMeta === 'admin' ||
-        roleMeta === 'super_admin';
-
-      if (!isAdmin) {
-        try {
-          const { data: adminRow } = await supabase
-            .from('admin_users')
-            .select('id, is_active')
-            .eq('email', userEmail)
-            .eq('is_active', true)
-            .maybeSingle();
-          if (adminRow) {
-            isAdmin = true;
-          }
-        } catch {
-          // Ignore table query error
-        }
-      }
-
-      if (!isAdmin) {
-        return { success: false, message: '无权操作：当前登录账号并非有效的系统管理员' };
-      }
-
-      // 2. Try calling RPC function first
-      let rpcSuccess = false;
-      let rpcMessage = '';
-
-      try {
-        const { data: rpcData, error: rpcError } = await supabase.rpc('approve_review', {
-          p_review_id: reviewId,
-        });
-
-        if (!rpcError && rpcData && typeof rpcData === 'object' && rpcData.success !== false) {
-          rpcSuccess = true;
-          rpcMessage = rpcData.message || '评价已通过审核公示';
-        } else if (rpcError) {
-          console.warn('[Supabase] approve_review RPC error, switching to direct update fallback:', rpcError.message);
-        }
-      } catch (rpcEx) {
-        console.warn('[Supabase] approve_review RPC exception, switching to direct update fallback:', rpcEx);
-      }
-
-      // 3. Fallback: Direct table update if RPC failed (bypasses reviewer_id foreign key constraint)
-      if (!rpcSuccess) {
-        const { error: updateError } = await supabase
-          .from('reviews')
-          .update({
-            status: 'approved',
-            reject_reason: null,
-            reviewed_at: new Date().toISOString(),
-          })
-          .eq('id', reviewId);
-
-        if (updateError) {
-          console.error('[Supabase] Direct update failed:', updateError);
-          return { success: false, message: '云端同步受阻：' + updateError.message };
-        }
-
-        // 4. Directly award +20 points to the author with idempotency check
-        let authorId: string | undefined;
-        try {
-          const { data: revData } = await supabase
-            .from('reviews')
-            .select('user_id')
-            .eq('id', reviewId)
-            .maybeSingle();
-
-          authorId = revData?.user_id;
-        } catch {
-          // Ignore
-        }
-
-        if (!authorId) {
-          const localRev = this.getLocalReviews().find((r) => r.id === reviewId);
-          authorId = localRev?.userId;
-        }
-
-        // Fallback: If authorId is not identifiable from review record, assign to current session user
-        if (!authorId && authData?.user?.id) {
-          authorId = authData.user.id;
-        }
-
-        if (authorId) {
-          await this.awardReviewPoints(authorId, reviewId);
-        }
-      }
-
-      // 5. Update local cache
       this.updateLocalReviewStatus(reviewId, 'approved');
-      return {
-        success: true,
-        message: rpcMessage || '评价已成功通过审核并公示',
-      };
+      return { success: true, message: data.message || '评价已通过审核' };
     } catch (err: any) {
-      console.error('[Supabase] approve_review exception:', err);
-      return { success: false, message: err?.message || '审核处理异常' };
+      return { success: false, message: err?.message || '审核结果无法确认，请刷新后重试' };
     }
-  },
-
-  /**
-   * Award +20 points to review author when review is approved
-   * Implements strict idempotency checking by reviewId across both local cache and remote database
-   */
-  async awardReviewPoints(authorId: string, reviewId: string): Promise<{ success: boolean; newPoints: number }> {
-    if (!authorId) return { success: false, newPoints: 0 };
-
-    const local = this.getLocalUserPoints(authorId) || { points: 100, transactions: [] };
-
-    // Check if already awarded locally to avoid double-crediting
-    const alreadyAwardedLocally = local.transactions.some(
-      (tx) => tx.relatedReviewId === reviewId || tx.id.includes(reviewId)
-    );
-
-    if (alreadyAwardedLocally) {
-      return { success: true, newPoints: local.points };
-    }
-
-    const newPoints = local.points + 20;
-    const txId = `tx_rev_${reviewId}_${Date.now()}`;
-    const newTx: UserPointTransaction = {
-      id: txId,
-      actionCode: 'review_approved',
-      action: '撰写教师评价审核通过 (+20分)',
-      amount: 20,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      balanceAfter: newPoints,
-      relatedReviewId: reviewId,
-    };
-
-    // 1. Immediately persist to local device storage
-    this.saveLocalUserPoints(authorId, newPoints, [newTx, ...local.transactions]);
-
-    // 2. Safely sync to Supabase in background
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from('user_profiles').upsert({
-          id: authorId,
-          points: newPoints,
-        });
-
-        await supabase.from('point_transactions').insert({
-          id: txId,
-          user_id: authorId,
-          action_code: 'review_approved',
-          action: '精选评价通过奖励 (+20分)',
-          amount: 20,
-          balance_after: newPoints,
-          timestamp: new Date().toISOString(),
-          related_review_id: reviewId,
-        });
-      } catch (cloudErr) {
-        console.warn('[Supabase] Remote point transaction sync (saved locally):', cloudErr);
-      }
-    }
-
-    return { success: true, newPoints };
   },
 
   /**
    * Reject a review
-   * Attempts RPC `reject_review` first; falls back to direct update without touching reviewer_id.
+   * Calls the authorized reject_review RPC and fails closed.
    */
   async rejectReview(reviewId: string, reason: string): Promise<{ success: boolean; message?: string }> {
-    if (!isSupabaseConfigured || !supabase) {
-      this.updateLocalReviewStatus(reviewId, 'rejected', reason);
-      return { success: true };
-    }
-
+    if (!isSupabaseConfigured || !supabase) return { success: false, message: '数据库未连接，无法审核' };
     try {
-      const { data: authData, error: authErr } = await supabase.auth.getUser();
-      if (authErr || !authData?.user) {
-        return { success: false, message: '身份校验未通过：请先登录管理员账号' };
+      const { data, error } = await supabase.rpc('reject_review', {
+        p_review_id: reviewId, p_reason: reason || '内容不符合审核规范，请修改后重新提交',
+      });
+      if (error || data?.success !== true) {
+        return { success: false, message: error?.message || data?.message || '驳回未完成，请刷新后重试' };
       }
-
-      const userEmail = (authData.user.email || '').trim().toLowerCase();
-      const roleMeta = authData.user.user_metadata?.role;
-      let isAdmin =
-        userEmail === '2502087135@qq.com' ||
-        userEmail.includes('admin') ||
-        roleMeta === 'admin' ||
-        roleMeta === 'super_admin';
-
-      if (!isAdmin) {
-        try {
-          const { data: adminRow } = await supabase
-            .from('admin_users')
-            .select('id, is_active')
-            .eq('email', userEmail)
-            .eq('is_active', true)
-            .maybeSingle();
-          if (adminRow) {
-            isAdmin = true;
-          }
-        } catch {
-          // Ignore
-        }
-      }
-
-      if (!isAdmin) {
-        return { success: false, message: '无权操作：当前登录账号并非有效的系统管理员' };
-      }
-
-      let rpcSuccess = false;
-      let rpcMessage = '';
-
-      try {
-        const { data: rpcData, error: rpcError } = await supabase.rpc('reject_review', {
-          p_review_id: reviewId,
-          p_reason: reason || '内容不符合审核规范，请修改后重新提交',
-        });
-
-        if (!rpcError && rpcData && typeof rpcData === 'object' && rpcData.success !== false) {
-          rpcSuccess = true;
-          rpcMessage = rpcData.message || '评价已被驳回';
-        } else if (rpcError) {
-          console.warn('[Supabase] reject_review RPC error, switching to direct update fallback:', rpcError.message);
-        }
-      } catch (rpcEx) {
-        console.warn('[Supabase] reject_review RPC exception, switching to direct update fallback:', rpcEx);
-      }
-
-      if (!rpcSuccess) {
-        const { error: updateError } = await supabase
-          .from('reviews')
-          .update({
-            status: 'rejected',
-            reject_reason: reason || '内容不符合审核规范，请修改后重新提交',
-            reviewed_at: new Date().toISOString(),
-          })
-          .eq('id', reviewId);
-
-        if (updateError) {
-          console.error('[Supabase] Direct reject update failed:', updateError);
-          return { success: false, message: '云端同步受阻：' + updateError.message };
-        }
-      }
-
       this.updateLocalReviewStatus(reviewId, 'rejected', reason);
-      return {
-        success: true,
-        message: rpcMessage || '评价已被驳回',
-      };
+      return { success: true, message: data.message || '评价已被驳回' };
     } catch (err: any) {
-      console.error('[Supabase] reject_review exception:', err);
-      return { success: false, message: err?.message || '驳回处理异常' };
+      return { success: false, message: err?.message || '驳回结果无法确认，请刷新后重试' };
     }
   },
 
@@ -1032,121 +678,36 @@ export const supabaseService = {
   },
 
   /**
-   * Fetch User Points & Transactions (with automatic 100 Welcome Points fallback & parallel checkin verification)
+   * Read the authenticated user's authoritative balance and ledger.
    */
-  async getUserPoints(userId: string = 'swjtu_student_default'): Promise<{
-    points: number;
-    transactions: UserPointTransaction[];
-    hasCheckedInToday?: boolean;
+  async getUserPoints(userId: string): Promise<{
+    points: number; transactions: UserPointTransaction[]; hasCheckedInToday: boolean;
   }> {
-    const todayStr = this.getLocalDateString();
-    let hasCheckedInToday = this.getLocalCheckInDate(userId) === todayStr;
-
-    // 1. Try fetching from Supabase in parallel if configured
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const [userRes, txRes] = await Promise.all([
-          supabase
-            .from('user_profiles')
-            .select('points, last_checkin_date')
-            .eq('id', userId)
-            .maybeSingle(),
-          supabase
-            .from('point_transactions')
-            .select(`
-              *,
-              point_rules ( label, description )
-            `)
-            .eq('user_id', userId)
-            .order('timestamp', { ascending: false }),
-        ]);
-
-        const userData = userRes.data;
-        const txData = txRes.data;
-
-        const remoteDate = userData?.last_checkin_date ? String(userData.last_checkin_date).slice(0, 10) : null;
-        const hasTxToday = (txData || []).some((t: any) => {
-          if (t.action_code !== 'daily_checkin') return false;
-          if (!t.timestamp) return false;
-          const isoDate = new Date(t.timestamp).toISOString().slice(0, 10);
-          const rawDate = String(t.timestamp).slice(0, 10);
-          return isoDate === todayStr || rawDate === todayStr;
-        });
-
-        if (remoteDate === todayStr || hasTxToday) {
-          hasCheckedInToday = true;
-          this.saveLocalCheckInDate(userId, todayStr);
-        }
-
-        if (userData || (txData && txData.length > 0)) {
-          const remotePoints = userData?.points ?? 100;
-          const local = this.getLocalUserPoints(userId);
-          const finalPoints = local && typeof local.points === 'number' && local.points > remotePoints
-            ? local.points
-            : remotePoints;
-
-          const remoteTxs: UserPointTransaction[] = (txData || []).map((t: any) => ({
-            id: t.id,
-            actionCode: t.action_code,
-            action: t.point_rules?.label || DEFAULT_ACTION_LABELS[t.action_code] || '积分变动',
-            amount: Number(t.amount),
-            timestamp: t.timestamp ? new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '刚刚',
-            balanceAfter: Number(t.balance_after),
-            relatedReviewId: t.related_review_id || undefined,
-          }));
-
-          const localTxs = local?.transactions || [];
-          const seenIds = new Set<string>();
-          const mergedTxs: UserPointTransaction[] = [];
-          for (const tx of [...localTxs, ...remoteTxs]) {
-            if (!seenIds.has(tx.id)) {
-              seenIds.add(tx.id);
-              mergedTxs.push(tx);
-            }
-          }
-
-          const result = {
-            points: finalPoints,
-            transactions: mergedTxs,
-            hasCheckedInToday,
-          };
-          // Sync to local cache
-          this.saveLocalUserPoints(userId, result.points, result.transactions);
-          return result;
-        }
-      } catch (err) {
-        console.warn('[Supabase] Failed to fetch user points from cloud:', err);
-      }
+    if (!isSupabaseConfigured || !supabase) throw new Error('数据库未连接，无法确认积分');
+    const { data: auth, error: authError } = await supabase.auth.getUser();
+    if (authError || !auth.user || auth.user.id !== userId) throw new Error('请重新登录后查看积分');
+    // No cached balance may override a successful authoritative read, including zero.
+    const [userRes, txRes] = await Promise.all([
+      supabase.from('user_profiles').select('points, last_checkin_date').eq('id', userId).maybeSingle(),
+      supabase.from('point_transactions').select('*').eq('user_id', userId).order('timestamp', { ascending: false }),
+    ]);
+    if (userRes.error) throw new Error(userRes.error.message);
+    if (txRes.error) throw new Error(txRes.error.message);
+    if (!userRes.data || !Number.isSafeInteger(userRes.data.points) || userRes.data.points < 0) {
+      throw new Error('未找到有效积分账户，请确认数据库迁移已完成');
     }
-
-    // 2. Check local storage cache
-    const local = this.getLocalUserPoints(userId);
-    if (local && typeof local.points === 'number') {
-      return {
-        ...local,
-        hasCheckedInToday,
-      };
-    }
-
-    // 3. New registered user without points record: fallback local display
-    const welcomeTx: UserPointTransaction = {
-      id: 'tx_init_' + Date.now(),
-      actionCode: 'new_user_welcome',
-      action: '新用户注册欢迎礼 (PRD 5.0)',
-      amount: 100,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      balanceAfter: 100,
-    };
-
-    const initialData = {
-      points: 100,
-      transactions: [welcomeTx],
-      hasCheckedInToday,
-    };
-
-    // Save locally
-    this.saveLocalUserPoints(userId, initialData.points, initialData.transactions);
-    return initialData;
+    const transactions: UserPointTransaction[] = (txRes.data || []).map((t: any) => ({
+      id: t.id, actionCode: t.action_code,
+      action: t.action || DEFAULT_ACTION_LABELS[t.action_code] || '积分变动',
+      amount: Number(t.amount),
+      timestamp: t.timestamp ? new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '刚刚',
+      balanceAfter: Number(t.balance_after), relatedReviewId: t.related_review_id || undefined,
+    }));
+    const checkinDate = userRes.data.last_checkin_date ? String(userRes.data.last_checkin_date).slice(0, 10) : null;
+    const result = { points: userRes.data.points, transactions, hasCheckedInToday: checkinDate === this.getLocalDateString() };
+    this.saveLocalUserPoints(userId, result.points, transactions);
+    this.saveLocalCheckInDate(userId, checkinDate || '');
+    return result;
   },
 
   /**
@@ -1154,146 +715,24 @@ export const supabaseService = {
    * Requirement 2: Unified RPC deduction function
    */
   async spendPoints(
-    actionCode: 'ai_question' | 'smart_filter' | 'guide_unlock' | string,
-    note?: string,
-    fallbackAmount: number = 2
-  ): Promise<{
-    success: boolean;
-    newBalance: number;
-    message?: string;
-    error?: string;
-  }> {
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { data, error } = await supabase.rpc('spend_points', {
-          p_action_code: actionCode,
-          p_note: note || undefined,
-        });
-
-        if (error) {
-          console.warn('[Supabase] spend_points error:', error);
-          if (error.message?.includes('insufficient points') || error.message?.includes('积分不足')) {
-            return {
-              success: false,
-              newBalance: 0,
-              message: '积分不足！本次操作所需积分超过您的当前余额。请先每日签到(+5分)或提交评价(+20分)获取积分。',
-              error: error.message,
-            };
-          }
-
-          // If RPC returned 401/42501 or function missing, fallback to resilient table update for current user
-          const sessionUser = (await supabase.auth.getUser())?.data?.user;
-          if (sessionUser) {
-            const local = this.getLocalUserPoints(sessionUser.id) || { points: 100, transactions: [] };
-            const currentPoints = local.points;
-            if (currentPoints < fallbackAmount) {
-              return {
-                success: false,
-                newBalance: currentPoints,
-                message: `积分不足！本次操作需要 ${fallbackAmount} 积分，当前余额 ${currentPoints} 积分。`,
-                error: 'insufficient_points',
-              };
-            }
-
-            const newBalance = currentPoints - fallbackAmount;
-            const txId = 'tx_spend_' + Date.now();
-
-            this.saveLocalUserPoints(sessionUser.id, newBalance, [
-              {
-                id: txId,
-                actionCode,
-                action: note || DEFAULT_ACTION_LABELS[actionCode] || `消耗积分 (${actionCode})`,
-                amount: -fallbackAmount,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                balanceAfter: newBalance,
-              },
-              ...local.transactions,
-            ]);
-
-            try {
-              await supabase.from('user_profiles').update({ points: newBalance }).eq('id', sessionUser.id);
-              await supabase.from('point_transactions').insert({
-                id: txId,
-                user_id: sessionUser.id,
-                action_code: actionCode,
-                action: note || DEFAULT_ACTION_LABELS[actionCode] || `消耗积分 (${actionCode})`,
-                amount: -fallbackAmount,
-                balance_after: newBalance,
-                timestamp: new Date().toISOString(),
-              });
-            } catch (syncErr) {
-              console.warn('[Supabase] Remote spend points sync error (saved locally):', syncErr);
-            }
-
-            return {
-              success: true,
-              newBalance,
-            };
-          }
-
-          let userMsg = error.message || '扣除积分失败';
-          if (error.message?.includes('must be logged in') || error.message?.includes('未登录')) {
-            userMsg = '请先登录交大学子账号后再使用该功能。';
-          }
-          return {
-            success: false,
-            newBalance: 0,
-            message: userMsg,
-            error: error.message,
-          };
-        }
-
-        const newBalance = typeof data === 'number' ? data : Number(data);
-        return {
-          success: true,
-          newBalance,
-        };
-      } catch (err: any) {
-        console.error('[Supabase] spend_points exception:', err);
-        return {
-          success: false,
-          newBalance: 0,
-          message: err.message || '网络异常，扣除积分失败',
-          error: err.message,
-        };
-      }
+    actionCode: string, note?: string, _fallbackAmount: number = 2
+  ): Promise<{ success: boolean; newBalance: number; message?: string; error?: string }> {
+    const failure = (message: string) => ({ success: false, newBalance: 0, message, error: message });
+    if (!isSupabaseConfigured || !supabase) return failure('数据库未连接，未完成扣费');
+    try {
+      const { data: auth, error: authError } = await supabase.auth.getUser();
+      if (authError || !auth.user) return failure('请先登录后使用该功能');
+      const { data, error } = await supabase.rpc('spend_points', {
+        p_action_code: actionCode, p_note: note || undefined,
+      });
+      if (error) return failure(error.message || '扣除积分失败');
+      if (!Number.isSafeInteger(data) || data < 0) return failure('扣费结果无法确认，请刷新积分后重试');
+      const local = this.getLocalUserPoints(auth.user.id);
+      this.saveLocalUserPoints(auth.user.id, data, local?.transactions || []);
+      return { success: true, newBalance: data };
+    } catch (err: any) {
+      return failure(err?.message || '扣费结果无法确认，请刷新积分后重试');
     }
-
-    // Local fallback
-    const local = this.getLocalUserPoints('swjtu_student_default');
-    const newBal = Math.max(0, local.points - fallbackAmount);
-    return {
-      success: true,
-      newBalance: newBal,
-    };
-  },
-
-  /**
-   * Save point transaction and update user profile balance
-   */
-  async savePointTransaction(
-    userId: string = 'swjtu_student_default',
-    action: string,
-    amount: number,
-    balanceAfter: number
-  ): Promise<boolean> {
-    const txId = 'tx_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
-    const newTx: UserPointTransaction = {
-      id: txId,
-      action,
-      amount,
-      balanceAfter,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    // 1. Update local cache immediately
-    const local = this.getLocalUserPoints(userId) || { points: 100, transactions: [] };
-    const updatedTransactions = [newTx, ...local.transactions];
-    this.saveLocalUserPoints(userId, balanceAfter, updatedTransactions);
-
-    // Note: Remote point_transactions and user_profiles writes are strictly handled via database RPCs
-    // (handle_daily_checkin, spend_points, approve_review, and auth.users triggers).
-    return true;
   },
 
   /**
@@ -1419,19 +858,8 @@ export const supabaseService = {
   /**
    * Ensure user profile exists (managed by DB trigger on auth.users automatically)
    */
-  async ensureUserProfile(userId: string, _email: string) {
-    // 1. Initialize local cache representation if needed
-    const existing = this.getLocalUserPoints(userId);
-    if (!existing) {
-      const welcomeTx: UserPointTransaction = {
-        id: 'tx_welcome_' + Date.now(),
-        action: '新用户注册欢迎礼 (PRD 5.0)',
-        amount: 100,
-        balanceAfter: 100,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      this.saveLocalUserPoints(userId, 100, [welcomeTx]);
-    }
+  async ensureUserProfile(_userId: string, _email: string) {
+    // Created transactionally by the auth.users trigger; never invent a local balance.
   },
 
   /**
@@ -1447,145 +875,53 @@ export const supabaseService = {
   /**
    * Check whether a user email is an authorized administrator dynamically from Supabase database
    */
-  async checkIsAdmin(email?: string, userMetadata?: any): Promise<{ isAdmin: boolean; role?: string; nickname?: string }> {
-    if (!email) return { isAdmin: false };
-    const normalizedEmail = email.trim().toLowerCase();
-
-    // 1. Hardcoded initial super admin fallback & metadata role (guarantees access even before SQL table is created)
-    const isMetadataAdmin = userMetadata?.role === 'admin' || userMetadata?.role === 'super_admin';
-    const isHardcodedAdmin = 
-      normalizedEmail === '2502087135@qq.com' ||
-      normalizedEmail.includes('admin') ||
-      normalizedEmail.endsWith('@swjtu.edu.cn') ||
-      isMetadataAdmin;
-
-    // 2. Query dynamic database table `admin_users`
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { data, error } = await supabase
-          .from('admin_users')
-          .select('email, role, nickname, is_active')
-          .eq('email', normalizedEmail)
-          .eq('is_active', true)
-          .maybeSingle();
-
-        if (data) {
-          return {
-            isAdmin: true,
-            role: data.role || 'admin',
-            nickname: data.nickname || '审核管理员',
-          };
-        }
-        if (error) {
-          // Table might not be created yet, fallback to hardcoded
-          console.warn('[Supabase] admin_users query warning:', error.message);
-        }
-      } catch (err) {
-        console.warn('[Supabase] checkIsAdmin exception:', err);
+  async checkIsAdmin(_email?: string, _userMetadata?: any): Promise<{ isAdmin: boolean; role?: string; nickname?: string }> {
+    if (!isSupabaseConfigured || !supabase) return { isAdmin: false };
+    try {
+      // The server derives identity from auth.uid(), never from a supplied email or role.
+      const { data, error } = await supabase.rpc('get_my_admin_status');
+      if (error || data?.is_admin !== true || !['super_admin', 'admin', 'moderator'].includes(data.role)) {
+        return { isAdmin: false };
       }
+      return { isAdmin: true, role: data.role, nickname: data.nickname || undefined };
+    } catch {
+      return { isAdmin: false };
     }
-
-    return {
-      isAdmin: isHardcodedAdmin,
-      role: isHardcodedAdmin ? (userMetadata?.role || 'super_admin') : undefined,
-      nickname: isHardcodedAdmin ? (userMetadata?.nickname || '系统超管') : undefined,
-    };
   },
 
   /**
    * Get all admin users from database
    */
   async getAdminList(): Promise<Array<{ id: string; email: string; role: string; nickname: string; is_active: boolean; created_at: string }>> {
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { data, error } = await supabase
-          .from('admin_users')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (data && data.length > 0) {
-          return data;
-        }
-        if (error) {
-          console.warn('[Supabase] getAdminList query warning:', error.message);
-        }
-      } catch (err) {
-        console.warn('[Supabase] getAdminList exception:', err);
-      }
-    }
-
-    // Default fallback admin list
-    return [
-      {
-        id: 'default_super_admin',
-        email: '2502087135@qq.com',
-        role: 'super_admin',
-        nickname: '站长超管',
-        is_active: true,
-        created_at: new Date().toISOString(),
-      },
-    ];
+    if (!isSupabaseConfigured || !supabase) return [];
+    const { data, error } = await supabase.from('admin_users').select('*').order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    return data || [];
   },
 
   /**
    * Add or update an administrator in the database
    */
   async addAdminUser(email: string, role: string = 'admin', nickname: string = '评教审核员'): Promise<boolean> {
-    if (!email) return false;
-    const normalizedEmail = email.trim().toLowerCase();
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { error } = await supabase
-          .from('admin_users')
-          .upsert(
-            {
-              email: normalizedEmail,
-              role,
-              nickname,
-              is_active: true,
-            },
-            { onConflict: 'email' }
-          );
-
-        if (error) {
-          console.warn('[Supabase] addAdminUser error:', error);
-          return false;
-        }
-        return true;
-      } catch (err) {
-        console.warn('[Supabase] addAdminUser exception:', err);
-        return false;
-      }
-    }
-    return true;
+    if (!email || !isSupabaseConfigured || !supabase || !['super_admin', 'admin', 'moderator'].includes(role)) return false;
+    try {
+      const { data, error } = await supabase.from('admin_users').upsert({
+        email: email.trim().toLowerCase(), role, nickname, is_active: true,
+      }, { onConflict: 'email' }).select('id');
+      return !error && data?.length === 1;
+    } catch { return false; }
   },
 
   /**
    * Toggle or remove an administrator
    */
   async toggleAdminStatus(email: string, isActive: boolean): Promise<boolean> {
-    if (!email) return false;
-    const normalizedEmail = email.trim().toLowerCase();
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { error } = await supabase
-          .from('admin_users')
-          .update({ is_active: isActive })
-          .eq('email', normalizedEmail);
-
-        if (error) {
-          console.warn('[Supabase] toggleAdminStatus error:', error);
-          return false;
-        }
-        return true;
-      } catch (err) {
-        console.warn('[Supabase] toggleAdminStatus exception:', err);
-        return false;
-      }
-    }
-    return true;
+    if (!email || !isSupabaseConfigured || !supabase) return false;
+    try {
+      const { data, error } = await supabase.from('admin_users').update({ is_active: isActive })
+        .eq('email', email.trim().toLowerCase()).select('id');
+      return !error && data?.length === 1;
+    } catch { return false; }
   },
 
   /**

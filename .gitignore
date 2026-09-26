@@ -2,6 +2,8 @@ node_modules/
 build/
 dist/
 coverage/
+.npm-cache/
+supabase/inspection/
 .DS_Store
 *.log
 .env*

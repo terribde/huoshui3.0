@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Teacher, Review, UserPointTransaction } from './types';
 import { INITIAL_TEACHERS, INITIAL_REVIEWS } from './data/mockTeachers';
 import { supabaseService } from './services/supabaseService';
@@ -124,11 +124,26 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  const currentUserIdRef = useRef<string | null>(null);
+  const pointsRequestRef = useRef(0);
+  const applyCurrentUser = useCallback((user: any | null) => {
+    const nextId = user?.id || null;
+    if (currentUserIdRef.current !== nextId) {
+      currentUserIdRef.current = nextId;
+      pointsRequestRef.current++;
+      setUserPoints(0);
+      setTransactions([]);
+      setHasCheckedInToday(false);
+    }
+    setCurrentUser(user);
+  }, []);
+
   const loadUserPointsData = useCallback(async (userId: string) => {
+    const request = ++pointsRequestRef.current;
     setIsCheckinStatusLoading(true);
     try {
       const pointData = await supabaseService.getUserPoints(userId);
-      if (pointData) {
+      if (pointData && request === pointsRequestRef.current && currentUserIdRef.current === userId) {
         setUserPoints(pointData.points);
         setTransactions(pointData.transactions);
         if (typeof pointData.hasCheckedInToday === 'boolean') {
@@ -136,9 +151,14 @@ export default function App() {
         }
       }
     } catch (err) {
+      if (request === pointsRequestRef.current && currentUserIdRef.current === userId) {
+        setUserPoints(0);
+        setTransactions([]);
+        setHasCheckedInToday(false);
+      }
       console.warn('Failed to load user points data:', err);
     } finally {
-      setIsCheckinStatusLoading(false);
+      if (request === pointsRequestRef.current) setIsCheckinStatusLoading(false);
     }
   }, []);
 
@@ -179,19 +199,10 @@ export default function App() {
 
     if (!isSupabaseConfigured) return;
 
-    // Check active auth session with instant local cache hydration
+    // Only authoritative balances are displayed after session restoration.
     supabaseService.getCurrentUser().then((user) => {
       if (user) {
-        setCurrentUser(user);
-        const local = supabaseService.getLocalUserPoints(user.id);
-        if (local) {
-          setUserPoints(local.points);
-          setTransactions(local.transactions);
-        }
-        const localDate = supabaseService.getLocalCheckInDate(user.id);
-        if (localDate === supabaseService.getLocalDateString()) {
-          setHasCheckedInToday(true);
-        }
+        applyCurrentUser(user);
         loadUserPointsData(user.id);
       }
     });
@@ -200,13 +211,16 @@ export default function App() {
     const { data: authListener } = supabaseService.onAuthStateChange((event, session) => {
       const user = session?.user || null;
       if (event === 'SIGNED_OUT') {
-        setCurrentUser(null);
+        applyCurrentUser(null);
         setUserPoints(0);
         setTransactions([]);
         setHasCheckedInToday(false);
       } else if (user) {
-        setCurrentUser(user);
-        loadUserPointsData(user.id);
+        applyCurrentUser(user);
+        // Leave the Supabase auth callback before starting another auth request.
+        setTimeout(() => {
+          if (currentUserIdRef.current === user.id) loadUserPointsData(user.id);
+        }, 0);
       }
     });
 
@@ -240,7 +254,7 @@ export default function App() {
       window.removeEventListener('focus', handleSyncOnActive);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [handleRefreshReviews, loadUserPointsData]);
+  }, [handleRefreshReviews, loadUserPointsData, applyCurrentUser]);
 
   // Re-sync reviews and user points whenever user navigates to the 'profile' tab
   useEffect(() => {
@@ -261,24 +275,11 @@ export default function App() {
       return;
     }
 
-    const email = currentUser.email.trim().toLowerCase();
-    const roleMeta = currentUser.user_metadata?.role;
-    // Immediate synchronous check for known admin accounts or role metadata
-    const isKnownAdmin =
-      email === '2502087135@qq.com' ||
-      email.includes('admin') ||
-      email.endsWith('@swjtu.edu.cn') ||
-      roleMeta === 'admin' ||
-      roleMeta === 'super_admin';
-
-    if (isKnownAdmin) {
-      setIsUserAdmin(true);
-    }
-
-    // Dynamic database check from admin_users table in Supabase
-    supabaseService.checkIsAdmin(currentUser.email, currentUser.user_metadata).then((res) => {
+    setIsUserAdmin(false);
+    supabaseService.checkIsAdmin().then((res) => {
       if (isMounted) {
-        setIsUserAdmin(res.isAdmin || isKnownAdmin);
+        setIsUserAdmin(res.isAdmin);
+        if (!res.isAdmin) setIsAdminAuditModalOpen(false);
       }
     });
 
@@ -294,7 +295,7 @@ export default function App() {
 
   const handleLogout = async () => {
     await supabaseService.signOut();
-    setCurrentUser(null);
+    applyCurrentUser(null);
     setIsUserAdmin(false);
     setIsAdminAuditModalOpen(false);
     setUserPoints(0);
@@ -315,29 +316,19 @@ export default function App() {
       return false;
     }
 
-    if (userPoints < amount) {
-      showAppToast(`积分不足！本次操作需消耗 ${amount} 积分，当前剩余 ${userPoints} 积分。请先每日签到(+5分)或写评价(+20分)赚取积分。`, 'error');
-      return false;
-    }
-
     const res = await supabaseService.spendPoints(actionCode, reason, amount);
+    if (currentUserIdRef.current !== currentUser.id) return false;
     if (!res.success) {
       showAppToast(res.message || '扣除积分失败', 'error');
       return false;
     }
 
+    pointsRequestRef.current++;
+    setIsCheckinStatusLoading(false);
     const newBalance = res.newBalance;
     setUserPoints(newBalance);
-    setTransactions((prev) => [
-      {
-        id: `tx_${Date.now()}`,
-        action: reason,
-        amount: -amount,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        balanceAfter: newBalance,
-      },
-      ...prev,
-    ]);
+    // Ledger amounts come from point_rules on the server, not a UI price hint.
+    loadUserPointsData(currentUser.id);
 
     return true;
   };
@@ -359,11 +350,14 @@ export default function App() {
     setIsCheckingIn(true);
     try {
       const res = await supabaseService.handleDailyCheckin(currentUser.id);
+      if (currentUserIdRef.current !== currentUser.id) return;
       if (!res.success) {
         showAppToast(res.message || '签到失败，请稍后重试', 'error');
         return;
       }
 
+      pointsRequestRef.current++;
+      setIsCheckinStatusLoading(false);
       setHasCheckedInToday(true);
       setUserPoints(res.points);
 
@@ -1105,9 +1099,9 @@ export default function App() {
             isOpen={isAuthModalOpen}
             onClose={() => setIsAuthModalOpen(false)}
             initialMode={authModalMode}
-            onAuthSuccess={(user, isNewRegistration) => {
-              setCurrentUser(user);
-              loadUserPointsData(user.id, isNewRegistration);
+            onAuthSuccess={(user) => {
+              applyCurrentUser(user);
+              loadUserPointsData(user.id);
               setIsAuthModalOpen(false);
             }}
           />
