@@ -216,7 +216,7 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
       const resolvedUid = authUser?.id || currentUserId;
 
       if (!resolvedUid) {
-        showToast('error', '生成待审评价失败：请先登录管理员账号（如 2502087135@qq.com），安全策略需要关联有效用户身份。');
+        showToast('error', '生成待审评价失败：请先登录管理员账号，安全策略需要关联有效用户身份。');
         return;
       }
 
@@ -504,7 +504,7 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
                   <input
                     type="email"
                     required
-                    placeholder="如: 2502087135@qq.com 或 stu@swjtu.edu.cn"
+                    placeholder="如: admin@swjtu.edu.cn 或 stu@swjtu.edu.cn"
                     value={newAdminEmail}
                     onChange={(e) => setNewAdminEmail(e.target.value)}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 focus:outline-none focus:border-indigo-600 bg-gray-50 focus:bg-white"

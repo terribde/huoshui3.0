@@ -153,7 +153,7 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
     const text = (textToSend || inputValue).trim();
     if (!text || isLoading) return;
 
-    // Check points (PRD: AI 问答消耗 2 积分)
+    // Check points (AI 问答消耗 2 积分)
     if (userPoints < 2) {
       alert('您的积分不足！提问需要消耗 2 积分。可通过每日签到(+5分)或提交教师评价(+20分)快速获取积分。');
       return;

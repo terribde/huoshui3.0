@@ -68,7 +68,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
   };
 
   // Filter candidates:
-  // PRD 7.0 Requirement: 候选池为本学期开课的授课老师（不含以往教过但本学期未开课的老师）
+  // 候选池为本学期开课的授课老师（不含以往教过但本学期未开课的老师）
   // Database Schema Requirement: 支持通过 college_id 筛选学院
   const rankedTeachers = useMemo(() => {
     const courseToMatch = searchKeyword.trim() || selectedCourse;
@@ -86,7 +86,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
         t.collegeId === selectedCollegeId ||
         (selectedCollegeName && t.college === selectedCollegeName);
 
-      // Hard requirement from PRD: isTeachingThisTerm must be true
+      // isTeachingThisTerm must be true
       return matchCourse && t.isTeachingThisTerm && matchCollege;
     });
 
@@ -100,7 +100,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
 
   return (
     <div id="course-recommend-panel" className="max-w-5xl mx-auto space-y-4 sm:space-y-6 pb-20">
-      {/* Title & PRD banner */}
+      {/* Title & banner */}
       <div className="bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-gray-100 shadow-2xs space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-2.5">
@@ -109,7 +109,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-bold text-gray-900">智能选课偏好推荐</h2>
-              <p className="text-[11px] sm:text-xs text-gray-500">依据本学期开课教师与加权算法动态匹配 (PRD 3.3 / 7)</p>
+              <p className="text-[11px] sm:text-xs text-gray-500">依据本学期开课教师与加权算法动态匹配</p>
             </div>
           </div>
           <button
@@ -326,7 +326,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
         </div>
       </div>
 
-      {/* Recommendation Results (PRD 7: 仅展示排序，候选池为本学期开课老师) */}
+      {/* Recommendation Results (仅展示排序，候选池为本学期开课老师) */}
       <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <div>

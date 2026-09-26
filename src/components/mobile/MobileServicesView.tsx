@@ -265,7 +265,7 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
       <div className="bg-gray-50/80 p-3.5 rounded-2xl border border-gray-100 text-xs text-gray-500 space-y-1.5">
         <div className="flex items-center gap-1.5 font-bold text-gray-700">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-          <span>交大公益社区公约 (PRD 5.0)</span>
+          <span>交大公益社区公约</span>
         </div>
         <p className="text-[11px] leading-relaxed text-gray-500">
           写评价获赠 +20 积分奖励，结构化查老师永久免费。共建交大真实口碑选课社区！

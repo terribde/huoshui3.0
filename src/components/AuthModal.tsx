@@ -101,7 +101,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const cleanEmail = email.trim();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!cleanEmail || !emailRegex.test(cleanEmail)) {
-      setErrorMsg('请输入合规有效的邮箱地址（如 2502087135@qq.com 或交大邮箱）');
+      setErrorMsg('请输入合规有效的邮箱地址（如 student@swjtu.edu.cn 或常用邮箱）');
       return;
     }
 
@@ -387,7 +387,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <input
                   type="email"
                   required
-                  placeholder="如: 2502087135@qq.com 或 student@swjtu.edu.cn"
+                  placeholder="如: student@swjtu.edu.cn 或常用邮箱"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-10 pr-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-xs sm:text-sm text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition-all"

@@ -220,7 +220,7 @@ interface UserPointTransaction {
 
 ---
 
-#### ② 提交教师评价与六维打分 (PRD 核心业务)
+#### ② 提交教师评价与六维打分 (核心业务)
 - **接口路径**：`POST /api/reviews`
 - **是否需鉴权**：是（`Authorization: Bearer <token>`）
 - **业务规则**：
@@ -279,7 +279,7 @@ interface UserPointTransaction {
 
 ### 3.3 智能多维推荐引擎
 
-#### ① 基于权重偏好的排课选课推荐 (PRD 3.3)
+#### ① 基于权重偏好的排课选课推荐
 - **接口路径**：`POST /api/recommend/teachers`
 - **是否需鉴权**：否
 - **说明**：前端滑动条调整 6 维权重（1~5分）和目标课程，后端候选池只筛查 `isTeachingThisTerm: true` 的本学期开课教师，按加权欧式距离或余弦相似度算法排序返回匹配度最高的 Top 3 教师。
@@ -365,7 +365,7 @@ interface UserPointTransaction {
 
 ### 3.5 校园 AI 评教助手
 
-#### ① AI 智能问答 / 导师咨询 (PRD 3.2 & 6.0)
+#### ① AI 智能问答 / 导师咨询
 - **接口路径**：`POST /api/ai/chat`
 - **是否需鉴权**：是（若设计每次提问扣除 5 积分）
 - **Request Body**：

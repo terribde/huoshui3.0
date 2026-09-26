@@ -90,36 +90,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
 
   return (
     <div id="desktop-quark-home" className="w-full max-w-5xl mx-auto pt-2 pb-16 flex flex-col items-center">
-      {/* 1. Status Bar */}
-      <div className="w-full flex items-center justify-between text-xs text-gray-400 mb-6">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="font-medium tracking-tight text-gray-600">西南交通大学 · 犀浦 / 九里校区</span>
-          <span className="text-[11px] px-2 py-0.5 rounded-md bg-gray-100 text-gray-500">
-            数据已同步 2024-2025 学年
-          </span>
-        </div>
-        
-        {isLoggedIn ? (
-          <div 
-            onClick={onOpenPoints}
-            className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full border border-amber-200/80 cursor-pointer transition-colors shadow-2xs"
-          >
-            <Coins className="w-3.5 h-3.5 text-amber-500" />
-            <span className="font-bold">{userPoints}</span>
-            <span className="text-[10px] text-amber-700">积分中心</span>
-          </div>
-        ) : (
-          <button
-            onClick={() => onOpenAuth?.('login')}
-            className="flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3.5 py-1.5 rounded-full border border-indigo-200/80 text-xs font-bold transition-all shadow-2xs"
-          >
-            <span>登录 / 注册享新人积分</span>
-          </button>
-        )}
-      </div>
-
-      {/* 2. Brand Title */}
+      {/* 1. Brand Title */}
       <div className="flex flex-col items-center justify-center my-6 select-none">
         <div className="flex items-center gap-2.5">
           <h1 className="text-5xl font-extrabold tracking-tight text-gray-950 font-sans">
@@ -130,7 +101,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
           </span>
         </div>
         <p className="text-sm text-gray-500 mt-2 tracking-wide text-center">
-          西南交通大学专属教师评价 · 校园智能助手 (PRD标准六维打分 · 选课偏好推荐)
+          西南交通大学专属教师评价 · 校园智能助手 · 六维打分 · 选课偏好推荐
         </p>
       </div>
 
@@ -495,7 +466,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
           <div className="p-4 bg-white rounded-3xl border border-gray-100 text-xs text-gray-500 space-y-2">
             <div className="flex items-center gap-1.5 font-bold text-gray-800">
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <span>交大公益社区共建公约 (PRD 5.0 / 8.0)</span>
+              <span>交大公益社区共建公约</span>
             </div>
             <p className="text-[11px] leading-relaxed text-gray-600">
               结构化查询全校教师永久免费。提交真实上课评价通过审核可获 <strong className="text-amber-600">+20 积分</strong>。严禁注水与人身攻击，真实互助让选课不再踩坑！

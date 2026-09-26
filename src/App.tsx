@@ -25,6 +25,7 @@ import { DesktopTeacherSearch } from './components/desktop/DesktopTeacherSearch'
 import { CourseRecommend } from './components/CourseRecommend';
 import { TeacherDetailModal } from './components/TeacherDetailModal';
 import { AiAssistantModal } from './components/AiAssistantModal';
+import { AgentNoticeModal } from './components/AgentNoticeModal';
 import { ReviewModal } from './components/ReviewModal';
 import { UserPointsModal } from './components/UserPointsModal';
 import { CollegeListModal } from './components/CollegeListModal';
@@ -352,7 +353,7 @@ export default function App() {
 
   const viewMode: 'mobile' | 'desktop' = deviceInfo.isMobile ? 'mobile' : 'desktop';
 
-  // Points Deduction Handler (PRD 5.0) via unified spend_points RPC function
+  // Points Deduction Handler via unified spend_points RPC function
   const handleDeductPoints = async (
     amount: number,
     reason: string,
@@ -416,7 +417,7 @@ export default function App() {
       setTransactions((prev) => [
         {
           id: `tx_${Date.now()}`,
-          action: '每日签到奖励 (PRD 5.0)',
+          action: '每日签到奖励',
           amount: 5,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           balanceAfter: res.points,
@@ -442,7 +443,7 @@ export default function App() {
     setIsReviewModalOpen(true);
   };
 
-  // Submit Review Handler (PRD & Audit State Machine: initial status is 'pending')
+  // Submit Review Handler (Audit State Machine: initial status is 'pending')
   const handleSubmitReview = async (
     newReviewData: Omit<Review, 'id' | 'createdAt' | 'likes'>
   ): Promise<{ success: boolean; message?: string }> => {
@@ -787,7 +788,7 @@ export default function App() {
                 <div>
                   <div className="flex items-center gap-1.5">
                     <span className="font-extrabold text-base tracking-tight text-gray-950 font-sans">
-                      交大评教
+                      交大活水
                     </span>
                     <span className="px-1.5 py-0.2 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-100">
                       Agent
@@ -1068,22 +1069,17 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* 2. AI 问答 / Agent 问答 Modal (PRD 3.2 & 6) */}
+      {/* 2. Agent 维护公告 Modal (版本 pre1.0.1) */}
       <AnimatePresence>
         {isAiModalOpen && (
-          <AiAssistantModal
+          <AgentNoticeModal
             isOpen={isAiModalOpen}
             onClose={() => setIsAiModalOpen(false)}
-            teachers={teachers}
-            userPoints={userPoints}
-            onDeductPoints={handleDeductPoints}
-            onSelectTeacher={(teacher) => setSelectedTeacher(teacher)}
-            initialPrompt={aiInitialPrompt}
           />
         )}
       </AnimatePresence>
 
-      {/* 3. 评价打分 Modal (PRD 4 & 8) */}
+      {/* 3. 评价打分 Modal */}
       <AnimatePresence>
         {isReviewModalOpen && (
           <ReviewModal
@@ -1096,7 +1092,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* 4. 积分中心 Modal (PRD 5) */}
+      {/* 4. 积分中心 Modal */}
       <AnimatePresence>
         {isPointsModalOpen && (
           <UserPointsModal
@@ -1128,7 +1124,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* 6. 经验攻略 / 教务通知 / 历史迁移说明 Modal (PRD 3.4 & 4.1) */}
+      {/* 6. 经验攻略 / 教务通知 / 历史迁移说明 Modal */}
       <AnimatePresence>
         {isExperienceModalOpen && (
           <ExperienceGuideModal
@@ -1155,7 +1151,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* 8. 管理员审核后台工作台 Modal (PRD 核心审核机制) */}
+      {/* 8. 管理员审核后台工作台 Modal */}
       <AnimatePresence>
         {isAdminAuditModalOpen && isUserAdmin && (
           <AdminAuditModal

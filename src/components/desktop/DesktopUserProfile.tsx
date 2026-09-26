@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserPointTransaction, Review, Teacher } from '../../types';
 import { Coins, MessageSquare, Info, History, ArrowUpRight, CheckCircle2, ShieldAlert, Sparkles, User, Database, LogIn, LogOut, Lock, Clock, XCircle, ShieldCheck, Trash2, Edit3, AlertCircle, RotateCw } from 'lucide-react';
 import { isSupabaseConfigured } from '../../lib/supabase';
+import { isRating, RATING_DIMENSIONS } from '../../lib/ratings';
 
 interface DesktopUserProfileProps {
   currentUser: any | null;
@@ -164,7 +165,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
             {isLoggedIn ? (
               <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md shadow-amber-500/10 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-amber-100 font-medium">当前有效积分 (PRD 5.0)</span>
+                  <span className="text-xs text-amber-100 font-medium">当前有效积分</span>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/20 text-white">
                     永久有效
                   </span>
@@ -265,7 +266,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                   {isLoggedIn ? '评价打分 (+20分)' : '登录后写评价'}
                 </span>
                 <span className="text-[10px] text-gray-500 block leading-tight">
-                  {isLoggedIn ? 'PRD 标准六维，可不写文字' : '登录后参与评教并积累积分'}
+                  {isLoggedIn ? '标准六维打分，可不写文字' : '登录后参与评教并积累积分'}
                 </span>
               </button>
 
@@ -427,6 +428,8 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                   const isPending = rev.status === 'pending';
                   const isApproved = rev.status === 'approved';
                   const isRejected = rev.status === 'rejected';
+                  const ratedDims = RATING_DIMENSIONS.filter(d => isRating(rev.dimensions?.[d.key]));
+                  const reviewDate = rev.createdAt ? rev.createdAt.slice(0, 10) : '';
 
                   return (
                     <div
@@ -441,9 +444,12 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                           <span className="text-gray-400">·</span>
                           <span className="text-gray-600 font-medium">{rev.courseName}</span>
                           <span className="text-[10px] text-gray-400">({rev.yearTerm || '近期'})</span>
+                          {reviewDate && (
+                            <span className="text-[10px] text-gray-400">· {reviewDate}</span>
+                          )}
                         </div>
 
-                        {/* Badges according to PRD */}
+                        {/* Status Badges */}
                         {isPending && (
                           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
                             <Clock className="w-3 h-3 text-amber-600 animate-pulse" /> ⏳ 审核中
@@ -521,10 +527,17 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                       )}
 
                       <div className="flex items-center justify-between pt-1 text-[11px] text-gray-500">
-                        <div className="flex items-center gap-3">
-                          <span>给分：<strong className="text-emerald-600">{rev.dimensions?.gradingLeniency ?? 4}分</strong></span>
-                          <span>考勤宽松度：<strong className="text-gray-700">{rev.dimensions?.attendanceStrictness ?? 3}分</strong></span>
-                          <span>质量：<strong className="text-indigo-600">{rev.dimensions?.teachingQuality ?? 4}分</strong></span>
+                        <div className="flex items-center flex-wrap gap-2">
+                          {ratedDims.length > 0 ? (
+                            ratedDims.map(d => (
+                              <span key={d.key} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white border border-gray-200/80 text-[10px]">
+                                <span className="text-gray-400">{d.label}</span>
+                                <strong className="text-indigo-600 font-mono">{rev.dimensions[d.key]!.toFixed(1)}</strong>
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-gray-400 text-[10px]">无详细维度打分</span>
+                          )}
                         </div>
 
                         {teacher && onSelectTeacher && isApproved && (
@@ -578,11 +591,11 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
             </div>
           )}
 
-          {/* PRD 5.0 Points Economy Rules Table */}
+          {/* Points Economy Rules Table */}
           <div className="bg-gray-50/80 p-4 rounded-2xl border border-gray-100 text-xs text-gray-500 space-y-2">
             <div className="flex items-center gap-1.5 font-bold text-gray-700">
               <Coins className="w-3.5 h-3.5 text-amber-500" />
-              <span>PRD 5.0 积分经济体系对照表</span>
+              <span>积分体系对照表</span>
             </div>
             <div className="grid grid-cols-2 gap-3 text-[11px] pt-1">
               <div className="p-2.5 bg-white rounded-xl border border-gray-100 space-y-1">

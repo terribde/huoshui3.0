@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { UserPointTransaction, Review, Teacher } from '../../types';
-import { Coins, MessageSquare, Info, History, CheckCircle2, ArrowUpRight, Database, LogIn, LogOut, Lock, User, Sparkles, Clock, XCircle, ShieldCheck, AlertCircle, Edit3, Trash2, RotateCw } from 'lucide-react';
+import { Coins, MessageSquare, Info, History, CheckCircle2, ArrowUpRight, Database, LogIn, LogOut, Lock, User, Sparkles, Clock, XCircle, ShieldCheck, AlertCircle, Edit3, Trash2, RotateCw, Star } from 'lucide-react';
 import { isSupabaseConfigured } from '../../lib/supabase';
+import { isRating, RATING_DIMENSIONS } from '../../lib/ratings';
 
 interface MobileUserProfileProps {
   currentUser: any | null;
@@ -258,7 +259,7 @@ export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
             <Coins className="w-4 h-4" />
           </div>
           <span className="text-xs font-bold text-gray-900 block group-hover:text-amber-600">
-            积分规则 (PRD 5)
+            积分规则
           </span>
           <span className="text-[10px] text-gray-400 block">永久有效 · 问答扣2分</span>
         </button>
@@ -366,12 +367,21 @@ export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
               const isApproved = rev.status === 'approved';
               const isRejected = rev.status === 'rejected';
 
+              const ratedDims = RATING_DIMENSIONS.filter(d => isRating(rev.dimensions?.[d.key]));
+              const reviewDate = rev.createdAt ? rev.createdAt.slice(0, 10) : '';
+
               return (
                 <div key={rev.id} className="p-3 bg-gray-50/70 rounded-2xl border border-gray-100 text-xs space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-gray-900">
-                      {teacher?.name || '任课老师'} - {rev.courseName}
-                    </span>
+                    <div>
+                      <span className="font-bold text-gray-900">
+                        {teacher?.name || '任课老师'} - {rev.courseName}
+                      </span>
+                      <div className="flex items-center gap-1.5 text-[10px] text-gray-400 mt-0.5">
+                        <span>{rev.yearTerm || '近期'}</span>
+                        {reviewDate && <span>· {reviewDate}</span>}
+                      </div>
+                    </div>
                     {isPending && (
                       <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-0.5">
                         <Clock className="w-2.5 h-2.5" /> ⏳ 审核中
@@ -428,6 +438,16 @@ export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
                   )}
 
                   {rev.comment && <p className="text-gray-600 text-[11px] line-clamp-2">“{rev.comment}”</p>}
+                  {ratedDims.length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {ratedDims.map(d => (
+                        <span key={d.key} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-indigo-50/60 border border-indigo-100 text-[10px] text-slate-600">
+                          <span className="text-gray-400">{d.label}</span>
+                          <span className="font-bold font-mono text-indigo-600">{rev.dimensions[d.key]!.toFixed(1)}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   {teacher && onSelectTeacher && isApproved && (
                     <button
                       onClick={() => onSelectTeacher(teacher)}
@@ -443,14 +463,14 @@ export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
         )}
       </div>
 
-      {/* 4. PRD Background Card */}
+      {/* 4. Background Card */}
       <div className="bg-gray-50/80 p-3.5 rounded-2xl border border-gray-100 text-[11px] text-gray-500 space-y-1.5">
         <div className="flex items-center gap-1.5 font-bold text-gray-700">
           <Info className="w-3.5 h-3.5 text-indigo-600" />
           <span>西南交大教师评价翻新说明</span>
         </div>
         <p className="leading-relaxed">
-          根据 PRD：原公益打分网站自 2024 年起停更两年。本项目定位为「西南交通大学专属 Agent」，包含智能选课推荐、AI 自然语言问答、积分激励机制。
+          原公益打分网站自 2024 年起停更两年。本项目定位为「西南交通大学专属 Agent」，包含智能选课推荐、AI 自然语言问答、积分激励机制。
         </p>
         <p className="text-[10px] text-gray-400">核心团队：2人（产品+技术协同）· 草案 v1</p>
       </div>

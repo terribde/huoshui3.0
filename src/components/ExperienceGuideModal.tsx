@@ -38,7 +38,7 @@ export const ExperienceGuideModal: React.FC<ExperienceGuideModalProps> = ({
         <div className="shrink-0 p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-indigo-50 to-white">
           <div>
             <h3 className="text-lg font-bold text-gray-900">交大知识库 & 校园动态</h3>
-            <p className="text-xs text-gray-500">PRD 3.4 增量内容层 · 经验攻略与教务资讯</p>
+            <p className="text-xs text-gray-500">经验攻略与教务资讯</p>
           </div>
           <motion.button 
             id="close-experience-guide-btn"
@@ -103,7 +103,7 @@ export const ExperienceGuideModal: React.FC<ExperienceGuideModalProps> = ({
           {activeTab === 'guides' && (
             <div className="space-y-3">
               <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-amber-800 flex items-center justify-between">
-                <span>根据PRD规划：攻略库为增量二期内容，当前为精选前瞻预览。</span>
+                <span>攻略库持续更新中，当前为精选前瞻预览。</span>
                 <span className="font-bold text-amber-600">5积分 / 篇</span>
               </div>
 
@@ -199,7 +199,7 @@ export const ExperienceGuideModal: React.FC<ExperienceGuideModalProps> = ({
           {activeTab === 'history' && (
             <div className="space-y-3 text-xs text-gray-700 leading-relaxed">
               <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 space-y-2">
-                <h4 className="font-bold text-sm text-blue-900">PRD 4.1 旧数据迁移说明</h4>
+                <h4 className="font-bold text-sm text-blue-900">旧数据迁移说明</h4>
                 <p>
                   学校现有的公益性质教师评价打分网站自2024年起已两年多未更新。为了让新生与在校同学及时获取真实数据，我们进行了全面翻新，并将2024年前沉淀的历史评价完整导入迁移。
                 </p>

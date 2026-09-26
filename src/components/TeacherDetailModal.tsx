@@ -1,5 +1,5 @@
 import { ModalFrame } from './ModalFrame';
-import { formatRating, isRating } from '../lib/ratings';
+import { formatRating, isRating, RATING_DIMENSIONS } from '../lib/ratings';
 import { RatingRadar } from './RatingRadar';
 import { usePagedQuery } from '../hooks/usePagedQuery';
 import { supabaseService } from '../services/supabaseService';
@@ -40,7 +40,7 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
 
   if (!teacher) return null;
 
-  // Only approved reviews are visible on the public teacher page (PRD moderation spec)
+  // Only approved reviews are visible on the public teacher page
   const teacherReviews = page.items;
 
   return (
@@ -218,44 +218,84 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
                   <p className="text-xs mt-1">成为第一个评价的人，审核通过可得 +20 积分！</p>
                 </div>
               ) : (
-                teacherReviews.map((rev) => (
-                  <div 
-                    key={rev.id}
-                    className="p-4 bg-gray-50/80 rounded-2xl border border-gray-100 space-y-2"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-gray-800">{rev.authorNickname}</span>
-                        <span className="text-[11px] text-gray-400">{rev.yearTerm}</span>
+                teacherReviews.map((rev) => {
+                  const reviewDate = rev.createdAt ? rev.createdAt.slice(0, 10) : '';
+                  const ratedDims = RATING_DIMENSIONS.filter(d => isRating(rev.dimensions?.[d.key]));
+                  const overallScore = ratedDims.length > 0
+                    ? (ratedDims.reduce((acc, d) => acc + (rev.dimensions[d.key] as number), 0) / ratedDims.length).toFixed(1)
+                    : null;
+
+                  return (
+                    <div 
+                      key={rev.id}
+                      className="p-4 bg-gray-50/80 rounded-2xl border border-gray-100 space-y-2.5"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-gray-800">{rev.authorNickname}</span>
+                          <span className="text-[11px] text-gray-400">{rev.yearTerm}</span>
+                          {reviewDate && (
+                            <>
+                              <span className="text-gray-300 text-[10px]">·</span>
+                              <span className="text-[11px] text-gray-400">{reviewDate}</span>
+                            </>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {overallScore && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold font-mono">
+                              <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                              <span>{overallScore}分</span>
+                            </span>
+                          )}
+                          {rev.isHistoricalMigrated && (
+                            <span className="text-[10px] px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full border border-blue-100">
+                              老站迁移
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      {rev.isHistoricalMigrated && (
-                        <span className="text-[10px] px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full border border-blue-100">
-                          老站迁移
-                        </span>
+
+                      {/* Dimension Specific Scores */}
+                      {ratedDims.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-0.5">
+                          {ratedDims.map(d => (
+                            <span
+                              key={d.key}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50/70 border border-indigo-100/80 text-[11px] text-slate-700"
+                            >
+                              <span className="text-slate-500">{d.label}</span>
+                              <span className="font-bold font-mono text-indigo-600">
+                                {rev.dimensions[d.key]!.toFixed(1)}
+                              </span>
+                            </span>
+                          ))}
+                        </div>
                       )}
+
+                      {rev.comment && (
+                        <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
+                          {rev.comment}
+                        </p>
+                      )}
+                      <div className="flex items-center justify-between pt-1 border-t border-gray-100/60 text-xs">
+                        <span className="text-[11px] text-gray-400">课程：{rev.courseName}</span>
+                        <motion.button
+                          whileTap={{ scale: 0.9 }}
+                          onClick={async () => { await onLikeReview(rev.id); page.reload(); }}
+                          disabled={!rev.remote || likesLoading || pendingLikeIds.has(rev.id)}
+                          aria-pressed={likedReviewIds.has(rev.id)}
+                          aria-label={likedReviewIds.has(rev.id) ? "取消点赞" : "点赞"}
+                          title={!rev.remote ? "示例评价不支持云端点赞" : undefined}
+                          className={`min-h-11 px-2 flex items-center gap-1 rounded-lg transition-colors disabled:opacity-40 ${likedReviewIds.has(rev.id) ? "text-indigo-600 bg-indigo-50" : "text-gray-500 hover:text-indigo-600"}`}
+                        >
+                          <ThumbsUp className="w-3.5 h-3.5" />
+                          <span>{rev.likes}</span>
+                        </motion.button>
+                      </div>
                     </div>
-                    {rev.comment && (
-                      <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
-                        {rev.comment}
-                      </p>
-                    )}
-                    <div className="flex items-center justify-between pt-1 border-t border-gray-100/60 text-xs">
-                      <span className="text-[11px] text-gray-400">课程：{rev.courseName}</span>
-                      <motion.button
-                        whileTap={{ scale: 0.9 }}
-                        onClick={async () => { await onLikeReview(rev.id); page.reload(); }}
-                        disabled={!rev.remote || likesLoading || pendingLikeIds.has(rev.id)}
-                        aria-pressed={likedReviewIds.has(rev.id)}
-                        aria-label={likedReviewIds.has(rev.id) ? "取消点赞" : "点赞"}
-                        title={!rev.remote ? "示例评价不支持云端点赞" : undefined}
-                        className={`min-h-11 px-2 flex items-center gap-1 rounded-lg transition-colors disabled:opacity-40 ${likedReviewIds.has(rev.id) ? "text-indigo-600 bg-indigo-50" : "text-gray-500 hover:text-indigo-600"}`}
-                      >
-                        <ThumbsUp className="w-3.5 h-3.5" />
-                        <span>{rev.likes}</span>
-                      </motion.button>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
               <Pagination page={page.page} total={page.total} loading={page.loading} onPageChange={page.setPage} />
             </div>

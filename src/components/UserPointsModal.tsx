@@ -135,11 +135,11 @@ export const UserPointsModal: React.FC<UserPointsModalProps> = ({
             </div>
           </div>
 
-          {/* Rules Breakdown (PRD 5.0 Table) */}
+          {/* Rules Breakdown */}
           <div className="bg-gray-50/80 p-4 rounded-2xl border border-gray-100 space-y-3">
             <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
               <Shield className="w-3.5 h-3.5 text-indigo-600" />
-              PRD 积分获取与消耗规则
+              积分获取与消耗规则
             </h4>
             
             <div className="grid grid-cols-2 gap-2 text-xs">
