@@ -56,8 +56,9 @@ export default function App() {
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
 
   // Core application states
-  const [teachers, setTeachers] = useState<Teacher[]>(INITIAL_TEACHERS);
-  const [reviews, setReviews] = useState<Review[]>(INITIAL_REVIEWS);
+  const [teachers, setTeachers] = useState<Teacher[]>(isSupabaseConfigured ? [] : INITIAL_TEACHERS);
+  const [teacherTotal, setTeacherTotal] = useState(isSupabaseConfigured ? 0 : INITIAL_TEACHERS.length);
+  const [reviews, setReviews] = useState<Review[]>(isSupabaseConfigured ? [] : INITIAL_REVIEWS);
   const [likedReviewIds, setLikedReviewIds] = useState<Set<string>>(new Set());
   const [pendingLikeIds, setPendingLikeIds] = useState<Set<string>>(new Set());
   const likeRequests = useRef(new Set<string>());
@@ -102,6 +103,33 @@ export default function App() {
   const [experienceTab, setExperienceTab] = useState<'guides' | 'notices' | 'history'>('guides');
   const [isAdminAuditModalOpen, setIsAdminAuditModalOpen] = useState<boolean>(false);
   const [isUserAdmin, setIsUserAdmin] = useState<boolean>(false);
+  const [reviewRevision, setReviewRevision] = useState(0);
+  const [pendingReviewCount, setPendingReviewCount] = useState(0);
+  useEffect(() => {
+    if (!isSupabaseConfigured || !isUserAdmin) { setPendingReviewCount(0); return; }
+    let active = true;
+    supabaseService.getReviewCounts().then(counts => {
+      if (active) setPendingReviewCount(counts.pending);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [isUserAdmin, reviewRevision]);
+
+  const reviewScopeRef = useRef({ profile: false });
+  reviewScopeRef.current = { profile: currentTab === 'profile' };
+  const rememberTeachers = useCallback((items: Teacher[]) => {
+    setTeachers(previous => Array.from(new Map([...previous, ...items].map(t => [t.id, t])).values()));
+  }, []);
+  const loadFeaturedTeachers = useCallback(async () => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const result = await supabaseService.getTeachersPage({ pageSize: 20 });
+      setTeacherTotal(result.total);
+      setTeachers(previous => [...result.items, ...previous.filter(t => !result.items.some(item => item.id === t.id))]);
+    } catch (error) { console.warn('教师读取失败', error); }
+  }, []);
+  useEffect(() => {
+    if (selectedTeacher) rememberTeachers([selectedTeacher]);
+  }, [selectedTeacher, rememberTeachers]);
 
   // Automatic Device Detection: Accurately identifies mobile phone vs computer/desktop
   const [deviceInfo, setDeviceInfo] = useState<{ isMobile: boolean; screenWidth: number }>(() => {
@@ -170,16 +198,17 @@ export default function App() {
 
   // Refresh reviews from Supabase & local cache (remote status always takes precedence)
   const handleRefreshReviews = useCallback(async () => {
+    setReviewRevision(value => value + 1);
     const likeVersion = ++likeSyncVersion.current;
     const userId = currentUserIdRef.current;
-    const allReviews = await supabaseService.getReviews();
-    if (currentUserIdRef.current !== userId || likeSyncVersion.current !== likeVersion) return;
-    if (allReviews && allReviews.length > 0) {
-      const existingIds = new Set(allReviews.map((r) => r.id));
-      const combined = [...allReviews, ...INITIAL_REVIEWS.filter((r) => !existingIds.has(r.id))];
-      setReviews(combined);
-    } else {
-      setReviews(INITIAL_REVIEWS);
+    // The homepage never downloads the school-wide review corpus.
+    if (userId && reviewScopeRef.current.profile) {
+      const ownReviews = await supabaseService.getReviews(undefined, { userId });
+      if (currentUserIdRef.current !== userId || likeSyncVersion.current !== likeVersion) return;
+      if (ownReviews) setReviews(ownReviews);
+      const ids = [...new Set((ownReviews || []).map(r => r.teacherId))];
+      const related = await Promise.all(ids.map(id => supabaseService.getTeacherById(id).catch(() => null)));
+      if (currentUserIdRef.current === userId) rememberTeachers(related.filter((t): t is Teacher => t !== null));
     }
     if (userId) {
       setLikesLoading(true);
@@ -194,26 +223,17 @@ export default function App() {
         if (likeSyncVersion.current === likeVersion) setLikesLoading(false);
       }
     }
-  }, []);
+  }, [rememberTeachers]);
 
   useEffect(() => {
     setLikedReviewIds(new Set()); setLikesReady(false); setLikesLoading(false);
+    if (isSupabaseConfigured) setReviews([]);
     handleRefreshReviews();
   }, [currentUser?.id, handleRefreshReviews]);
 
   // Sync Supabase Auth, Initial Data, and Realtime Listeners
   useEffect(() => {
-    // Load initial teachers from Supabase
-    if (isSupabaseConfigured) {
-      supabaseService.getTeachers().then((remoteTeachers) => {
-        if (remoteTeachers && remoteTeachers.length > 0) {
-          setTeachers(remoteTeachers);
-        }
-      });
-    }
-
-    // Initial reviews load
-    handleRefreshReviews();
+    loadFeaturedTeachers();
 
     // Load colleges list
     if (isSupabaseConfigured) {
@@ -281,7 +301,7 @@ export default function App() {
       window.removeEventListener('focus', handleSyncOnActive);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [handleRefreshReviews, loadUserPointsData, applyCurrentUser]);
+  }, [handleRefreshReviews, loadUserPointsData, applyCurrentUser, loadFeaturedTeachers]);
 
   // Re-sync reviews and user points whenever user navigates to the 'profile' tab
   useEffect(() => {
@@ -413,6 +433,7 @@ export default function App() {
 
   // Guarded Review Open: Requires User Login!
   const handleOpenReview = (teacher?: Teacher | null) => {
+    if (teacher) rememberTeachers([teacher]);
     if (!currentUser) {
       handleOpenAuth('login');
       return;
@@ -484,13 +505,7 @@ export default function App() {
 
     // 2. Refresh reviews and teachers from remote (DB trigger calculates scores and review counts)
     handleRefreshReviews();
-    if (isSupabaseConfigured) {
-      supabaseService.getTeachers().then((remoteTeachers) => {
-        if (remoteTeachers && remoteTeachers.length > 0) {
-          setTeachers(remoteTeachers);
-        }
-      });
-    }
+    loadFeaturedTeachers();
 
     // 3. If current user is author, reload user points (+20 awarded by approve_review function)
     if (currentUser) {
@@ -531,6 +546,7 @@ export default function App() {
   const handleDeleteReview = async (reviewId: string) => {
     setReviews((prev) => prev.filter((r) => r.id !== reviewId));
     await supabaseService.deleteReview(reviewId);
+    handleRefreshReviews();
   };
 
   // Like review
@@ -917,9 +933,9 @@ export default function App() {
                   >
                     <ShieldCheck className="w-3.5 h-3.5 text-indigo-400 group-hover:scale-110 transition-transform" />
                     <span>管理审核</span>
-                    {reviews.filter((r) => r.status === 'pending').length > 0 && (
+                    {pendingReviewCount > 0 && (
                       <span className="px-1.5 py-0.2 bg-amber-500 text-slate-950 rounded-full text-[9px] font-black animate-pulse">
-                        {reviews.filter((r) => r.status === 'pending').length}
+                        {pendingReviewCount}
                       </span>
                     )}
                   </motion.button>
@@ -940,6 +956,7 @@ export default function App() {
               >
                 {currentTab === 'home' && (
                   <DesktopQuarkHome
+                    teacherTotal={teacherTotal}
                     currentUser={currentUser}
                     onOpenAuth={handleOpenAuth}
                     teachers={teachers}
@@ -1045,6 +1062,7 @@ export default function App() {
             onLikeReview={handleLikeReview}
             likedReviewIds={likedReviewIds}
             pendingLikeIds={pendingLikeIds}
+            refreshToken={reviewRevision}
             likesLoading={likesLoading}
           />
         )}

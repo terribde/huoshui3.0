@@ -2,6 +2,8 @@ import { formatRating, isRating, compareRatings, RATING_DIMENSIONS } from '../li
 import { ModalFrame } from './ModalFrame';
 import React, { useState, useRef, useEffect } from 'react';
 import { Teacher, AiChatMessage } from '../types';
+import { supabaseService } from '../services/supabaseService';
+import { isSupabaseConfigured } from '../lib/supabase';
 import { Bot, Send, Sparkles, User, AlertCircle, X, HelpCircle, CornerDownRight, Coins } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -10,7 +12,7 @@ interface AiAssistantModalProps {
   onClose: () => void;
   teachers: Teacher[];
   userPoints: number;
-  onDeductPoints: (amount: number, reason: string) => boolean;
+  onDeductPoints: (amount: number, reason: string) => boolean | Promise<boolean>;
   onSelectTeacher: (teacher: Teacher) => void;
   initialPrompt?: string;
 }
@@ -34,6 +36,7 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
   ]);
   const [inputValue, setInputValue] = useState(initialPrompt || '');
   const [isLoading, setIsLoading] = useState(false);
+  const [retrievedTeachers, setRetrievedTeachers] = useState<Teacher[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -54,7 +57,7 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
   ];
 
   // Simulated RAG Answer Generator using real local Teacher records
-  const generateRAGResponse = (query: string): { content: string; citedTeachers?: any[] } => {
+  const generateRAGResponse = (query: string, teachers: Teacher[]): { content: string; citedTeachers?: any[] } => {
     const q = query.toLowerCase();
     const missingRatingResponse = (teacher?: Teacher) => {
       if (!teacher) return { content: '暂无数据，目前没有找到可展示评分的教师。', citedTeachers: [] };
@@ -146,7 +149,7 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
     };
   };
 
-  const handleSend = (textToSend?: string) => {
+  const handleSend = async (textToSend?: string) => {
     const text = (textToSend || inputValue).trim();
     if (!text || isLoading) return;
 
@@ -156,8 +159,25 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
       return;
     }
 
-    const deducted = onDeductPoints(2, `AI 智能问答提问：“${text.slice(0, 15)}...”`);
-    if (!deducted) return;
+    setIsLoading(true);
+    let candidates = teachers;
+    try {
+      if (isSupabaseConfigured) {
+        const keyword = /微积分/.test(text) ? '微积分' : /高数|数学/.test(text) ? '数学'
+          : /计算机|数据结构|算法/.test(text) ? '数据结构' : /土木|力学/.test(text) ? '力学' : '';
+        const result = await supabaseService.getTeachersPage({ query: keyword,
+          sortBy: /点名|签到/.test(text) ? 'attendance' : 'overall', pageSize: 20 });
+        candidates = result.items;
+        setRetrievedTeachers(previous => Array.from(new Map([...previous, ...candidates].map(t => [t.id, t])).values()));
+      }
+      const deducted = await onDeductPoints(2, `AI 智能问答提问：“${text.slice(0, 15)}...”`);
+      if (!deducted) { setIsLoading(false); return; }
+    } catch {
+      setMessages(previous => [...previous, { id: `error_${Date.now()}`, sender: 'assistant',
+        content: '教师数据读取失败，请稍后重试。', timestamp: '刚刚' }]);
+      setIsLoading(false);
+      return;
+    }
 
     const userMsg: AiChatMessage = {
       id: `user_${Date.now()}`,
@@ -168,21 +188,16 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
 
     setMessages((prev) => [...prev, userMsg]);
     setInputValue('');
-    setIsLoading(true);
-
-    // Simulate RAG generation with brief delay
-    setTimeout(() => {
-      const responseData = generateRAGResponse(text);
-      const assistantMsg: AiChatMessage = {
-        id: `ai_${Date.now()}`,
-        sender: 'assistant',
-        content: responseData.content,
-        timestamp: '刚刚',
-        citedTeachers: responseData.citedTeachers
-      };
-      setMessages((prev) => [...prev, assistantMsg]);
-      setIsLoading(false);
-    }, 600);
+    const responseData = generateRAGResponse(text, candidates);
+    const assistantMsg: AiChatMessage = {
+      id: `ai_${Date.now()}`,
+      sender: 'assistant',
+      content: responseData.content,
+      timestamp: '刚刚',
+      citedTeachers: responseData.citedTeachers
+    };
+    setMessages((prev) => [...prev, assistantMsg]);
+    setIsLoading(false);
   };
 
   return (
@@ -271,7 +286,7 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
                     </span>
                     <div className="space-y-1.5">
                       {msg.citedTeachers.map((ct) => {
-                        const actualTeacher = teachers.find(t => t.id === ct.id);
+                        const actualTeacher = retrievedTeachers.find(t => t.id === ct.id) || teachers.find(t => t.id === ct.id);
                         return (
                           <motion.div
                             key={ct.id}

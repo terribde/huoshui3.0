@@ -14,12 +14,17 @@ interface AnimatedDropdownProps {
   value: string;
   onChange: (value: string) => void;
   options: DropdownOption[];
+  selectedOption?: DropdownOption;
+  searchPlaceholder?: string;
+  emptyMessage?: string;
   placeholder?: string;
   className?: string;
   buttonClassName?: string;
   menuClassName?: string;
   align?: 'left' | 'right';
   searchable?: boolean;
+  onSearchChange?: (value: string) => void;
+  loading?: boolean;
 }
 
 export const AnimatedDropdown: React.FC<AnimatedDropdownProps> = ({
@@ -27,18 +32,23 @@ export const AnimatedDropdown: React.FC<AnimatedDropdownProps> = ({
   value,
   onChange,
   options,
+  selectedOption: selectedOverride,
+  searchPlaceholder = '搜索筛选...',
+  emptyMessage = '无匹配选项',
   placeholder = '请选择',
   className = '',
   buttonClassName = '',
   menuClassName = '',
   align = 'left',
   searchable = false,
+  onSearchChange,
+  loading = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const selectedOption = options.find((opt) => opt.value === value);
+  const selectedOption = selectedOverride || options.find((opt) => opt.value === value);
 
   // Close on outside click
   useEffect(() => {
@@ -56,7 +66,7 @@ export const AnimatedDropdown: React.FC<AnimatedDropdownProps> = ({
   }, [isOpen]);
 
   // Filter options if searchable
-  const displayedOptions = searchable && searchFilter.trim()
+  const displayedOptions = searchable && searchFilter.trim() && !onSearchChange
     ? options.filter((opt) => 
         opt.label.toLowerCase().includes(searchFilter.toLowerCase()) ||
         (opt.badge && opt.badge.toLowerCase().includes(searchFilter.toLowerCase()))
@@ -72,6 +82,7 @@ export const AnimatedDropdown: React.FC<AnimatedDropdownProps> = ({
         onClick={() => {
           setIsOpen(!isOpen);
           setSearchFilter('');
+          onSearchChange?.('');
         }}
         className={`w-full flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl text-xs font-medium text-gray-800 bg-gray-50 hover:bg-gray-100/90 active:bg-gray-100 transition-all cursor-pointer border border-gray-200/80 focus:outline-hidden focus:border-indigo-500 ${buttonClassName}`}
       >
@@ -112,8 +123,8 @@ export const AnimatedDropdown: React.FC<AnimatedDropdownProps> = ({
                 <input
                   type="text"
                   value={searchFilter}
-                  onChange={(e) => setSearchFilter(e.target.value)}
-                  placeholder="搜索筛选..."
+                  onChange={(e) => { setSearchFilter(e.target.value); onSearchChange?.(e.target.value); }}
+                  placeholder={searchPlaceholder}
                   autoFocus
                   className="w-full px-2.5 py-1.5 text-xs bg-gray-50 rounded-xl border border-gray-200 text-gray-800 placeholder:text-gray-400 focus:outline-hidden focus:border-indigo-500"
                 />
@@ -121,8 +132,8 @@ export const AnimatedDropdown: React.FC<AnimatedDropdownProps> = ({
             )}
 
             <div className="max-h-56 overflow-y-auto space-y-0.5 scrollbar-thin">
-              {displayedOptions.length === 0 ? (
-                <div className="p-3 text-center text-xs text-gray-400">无匹配选项</div>
+              {loading ? <div role="status" className="p-3 text-center text-xs text-gray-400">正在搜索…</div> : displayedOptions.length === 0 ? (
+                <div className="p-3 text-center text-xs text-gray-400">{emptyMessage}</div>
               ) : (
                 displayedOptions.map((option) => {
                   const isSelected = option.value === value;

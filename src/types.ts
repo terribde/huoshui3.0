@@ -45,6 +45,7 @@ export interface Review {
   remote?: boolean;
   id: string;
   teacherId: string;
+  teacherName?: string;
   courseId?: string; // Foreign key -> courses.id (NOT NULL in DB)
   courseName?: string; // Joined from courses.name
   yearTerm: string;
@@ -68,6 +69,27 @@ export interface College {
   name: string;
   code?: string;
 }
+
+export interface TeacherQuery {
+  query?: string;
+  collegeId?: string;
+  onlyThisTerm?: boolean;
+  courseOnly?: boolean;
+  sortBy?: 'overall' | 'leniency' | 'quality' | 'attendance';
+  page?: number;
+  pageSize?: number;
+}
+
+export interface ReviewQuery {
+  teacherId?: string;
+  userId?: string;
+  status?: Review['status'] | 'all';
+  query?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface DataPage<T> { items: T[]; total: number }
 
 export interface Teacher {
   ratingVersion?: number;

@@ -1,7 +1,11 @@
 import { ModalFrame } from './ModalFrame';
 import { formatRating, isRating } from '../lib/ratings';
 import { RatingRadar } from './RatingRadar';
-import React, { useState } from 'react';
+import { usePagedQuery } from '../hooks/usePagedQuery';
+import { supabaseService } from '../services/supabaseService';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { Pagination, PageFeedback } from './Pagination';
+import React, { useState, useEffect } from 'react';
 import { Teacher, Review } from '../types';
 import { X, Star, Heart, Award, Sparkles, AlertCircle, History, MessageSquarePlus, ThumbsUp, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -15,6 +19,7 @@ interface TeacherDetailModalProps {
   likedReviewIds: Set<string>;
   pendingLikeIds: Set<string>;
   likesLoading: boolean;
+  refreshToken?: number;
 }
 
 export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
@@ -22,16 +27,21 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
   reviews,
   onClose,
   onOpenReview,
-  onLikeReview, likedReviewIds, pendingLikeIds, likesLoading,
+  onLikeReview, likedReviewIds, pendingLikeIds, likesLoading, refreshToken,
 }) => {
   const [activeTab, setActiveTab] = useState<'reviews' | 'dimensions'>('dimensions');
+
+  const page = usePagedQuery<Review>(teacher?.id || '', (index, signal) => {
+    if (isSupabaseConfigured) return supabaseService.getReviewsPage({ teacherId: teacher!.id, status: 'approved', page: index }, signal);
+    const items = reviews.filter(r => r.teacherId === teacher?.id && r.status === 'approved');
+    return Promise.resolve({ items: items.slice(index * 20, (index + 1) * 20), total: items.length });
+  }, Boolean(teacher) && activeTab === 'reviews', likedReviewIds);
+  useEffect(() => { page.reload(); }, [refreshToken]);
 
   if (!teacher) return null;
 
   // Only approved reviews are visible on the public teacher page (PRD moderation spec)
-  const teacherReviews = reviews.filter(
-    (r) => r.teacherId === teacher.id && (r.status === 'approved' || (!r.status && !r.isHistoricalMigrated))
-  );
+  const teacherReviews = page.items;
 
   return (
     <ModalFrame id="teacher-detail-modal" label="教师详情" onClose={onClose}>
@@ -116,7 +126,7 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
             <span className="text-gray-500">评价数: {teacher.reviewCount}条</span>
             {teacher.hasHistoricalData && (
               <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[11px] font-medium border border-blue-100 flex items-center gap-1">
-                <History className="w-3 h-3" /> 含2024前迁移
+                <History className="w-3 h-3" /> 含旧站评价
               </span>
             )}
           </div>
@@ -148,7 +158,7 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
           >
             学生真实评价
             <span className="px-1.5 py-0.2 bg-gray-100 text-gray-600 rounded-full text-xs">
-              {teacherReviews.length}
+              {activeTab === 'reviews' && !page.loading && !page.error ? page.total : teacher.reviewCount}
             </span>
             {activeTab === 'reviews' && (
               <motion.div 
@@ -191,9 +201,9 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
                 <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200 text-xs text-amber-800 flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-semibold">历史数据迁移提示 (PRD 4.1)</p>
+                    <p className="font-semibold">历史数据迁移说明</p>
                     <p className="text-[11px] text-amber-700 mt-0.5">
-                      本教师包含原网站2024年前评价迁移。亲和力与课程质量继承历史分数；新拆分的「给分宽松度」和「努力回报」正在持续积累最新学生评测。
+                      旧站评价保留教学质量、给分宽松度和作业轻松度评分。考勤宽松度、努力回报和师生亲和力由新评价逐步补齐，暂无评分时显示“暂无数据”。
                     </p>
                   </div>
                 </div>
@@ -201,7 +211,8 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
             </div>
           ) : (
             <div className="space-y-3">
-              {teacherReviews.length === 0 ? (
+              <PageFeedback loading={page.loading} error={page.error} onRetry={page.reload} />
+              {page.loading || page.error ? null : teacherReviews.length === 0 ? (
                 <div className="text-center py-10 text-gray-400">
                   <p className="text-sm">暂无该老师的文字评价</p>
                   <p className="text-xs mt-1">成为第一个评价的人，审核通过可得 +20 积分！</p>
@@ -232,7 +243,7 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
                       <span className="text-[11px] text-gray-400">课程：{rev.courseName}</span>
                       <motion.button
                         whileTap={{ scale: 0.9 }}
-                        onClick={() => onLikeReview(rev.id)}
+                        onClick={async () => { await onLikeReview(rev.id); page.reload(); }}
                         disabled={!rev.remote || likesLoading || pendingLikeIds.has(rev.id)}
                         aria-pressed={likedReviewIds.has(rev.id)}
                         aria-label={likedReviewIds.has(rev.id) ? "取消点赞" : "点赞"}
@@ -246,6 +257,7 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
                   </div>
                 ))
               )}
+              <Pagination page={page.page} total={page.total} loading={page.loading} onPageChange={page.setPage} />
             </div>
           )}
         </div>

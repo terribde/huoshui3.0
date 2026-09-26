@@ -1,3 +1,5 @@
+import { useTeacherSearch } from '../../hooks/useTeacherSearch';
+import { Pagination, PageFeedback } from '../Pagination';
 import { formatRating, compareRatings } from '../../lib/ratings';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Teacher, College } from '../../types';
@@ -63,34 +65,12 @@ export const DesktopTeacherSearch: React.FC<DesktopTeacherSearchProps> = ({
     }));
   }, [colleges]);
 
-  // Filter and sort
-  const filteredTeachers = useMemo(() => {
-    const selectedCollegeName = colleges?.find((c) => c.id === selectedCollege)?.name;
-
-    return teachers
-      .filter((t) => {
-        const matchesCollege =
-          selectedCollege === 'all' ||
-          selectedCollege === '全部学院' ||
-          t.collegeId === selectedCollege ||
-          t.college === selectedCollege ||
-          (selectedCollegeName && t.college === selectedCollegeName);
-        const matchesTerm = !onlyThisTerm || t.isTeachingThisTerm;
-        const matchesQuery =
-          !searchTerm.trim() ||
-          t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          t.courses.some((c) => c.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          t.tags.some((tag) => tag.toLowerCase().includes(searchTerm.toLowerCase()));
-        return matchesCollege && matchesTerm && matchesQuery;
-      })
-      .sort((a, b) => {
-        if (sortBy === 'overall') return compareRatings(a.overallScore, b.overallScore);
-        if (sortBy === 'leniency') return compareRatings(a.dimensions.gradingLeniency, b.dimensions.gradingLeniency);
-        if (sortBy === 'quality') return compareRatings(a.dimensions.teachingQuality, b.dimensions.teachingQuality);
-        if (sortBy === 'attendance') return compareRatings(a.dimensions.attendanceStrictness, b.dimensions.attendanceStrictness);
-        return 0;
-      });
-  }, [teachers, searchTerm, selectedCollege, onlyThisTerm, sortBy]);
+  const result = useTeacherSearch(teachers, { query: searchTerm, collegeId: selectedCollege, onlyThisTerm, sortBy });
+  const filteredTeachers = result.items;
+  useEffect(() => {
+    const college = colleges?.find(c => c.id === initialSearch || c.name === initialSearch);
+    if (college) { setSelectedCollege(college.id); setSearchTerm(''); }
+  }, [initialSearch, colleges]);
 
   return (
     <div id="desktop-teacher-search-view" className="w-full max-w-5xl mx-auto space-y-5 pb-16">
@@ -133,7 +113,7 @@ export const DesktopTeacherSearch: React.FC<DesktopTeacherSearchProps> = ({
               >
                 <div className="px-3 py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-between border-b border-gray-50 mb-1">
                   <span>搜索联想推荐</span>
-                  <span>{filteredTeachers.length} 位匹配教师</span>
+                  <span>{result.total} 位匹配教师</span>
                 </div>
                 <div className="space-y-1">
                   {filteredTeachers.slice(0, 6).map((t) => (
@@ -226,14 +206,15 @@ export const DesktopTeacherSearch: React.FC<DesktopTeacherSearchProps> = ({
         </div>
       </div>
 
+      <PageFeedback loading={result.loading} error={result.error} onRetry={result.reload} />
       {/* 2. Count Bar */}
       <div className="flex items-center justify-between px-1 text-xs text-gray-500">
-        <span>共找到 <strong className="text-gray-900 font-bold">{filteredTeachers.length}</strong> 位教师</span>
+        <span>共找到 <strong className="text-gray-900 font-bold">{result.total}</strong> 位教师</span>
         <span className="text-gray-400">结构化全校教师档案 · 永久免费查阅</span>
       </div>
 
       {/* 3. Teachers Grid (2-Column for Desktop) */}
-      {filteredTeachers.length === 0 ? (
+      {result.loading || result.error ? null : filteredTeachers.length === 0 ? (
         <div className="bg-white p-16 rounded-3xl border border-gray-100 text-center text-gray-400 space-y-2">
           <p className="text-base font-semibold text-gray-700">没有找到匹配的老师</p>
           <p className="text-xs">尝试更换关键词或在“全部学院”中搜索</p>
@@ -331,6 +312,7 @@ export const DesktopTeacherSearch: React.FC<DesktopTeacherSearchProps> = ({
           ))}
         </div>
       )}
+      <Pagination page={result.page} total={result.total} loading={result.loading} onPageChange={result.setPage} />
     </div>
   );
 };

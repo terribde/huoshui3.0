@@ -7,6 +7,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { AnimatedDropdown } from './AnimatedDropdown';
 import { checkSensitiveContent } from '../utils/sensitiveFilter';
 import { supabaseService } from '../services/supabaseService';
+import { useTeacherSearch } from '../hooks/useTeacherSearch';
+import { usePagedQuery } from '../hooks/usePagedQuery';
+import { PageFeedback } from './Pagination';
 
 interface ReviewModalProps {
   isOpen: boolean;
@@ -23,12 +26,17 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
   onSubmitReview,
 }) => {
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(
-    preselectedTeacher?.id || (teachers[0]?.id ?? '')
+    preselectedTeacher?.id || ''
   );
-  const [allCourses, setAllCourses] = useState<Course[]>([]);
+  const [teacherKeyword, setTeacherKeyword] = useState('');
+  const [courseKeyword, setCourseKeyword] = useState('');
+  const [chosenTeacher, setChosenTeacher] = useState<Teacher | undefined>(preselectedTeacher || undefined);
+  const teacherSearch = useTeacherSearch(teachers, { query: teacherKeyword }, Boolean(teacherKeyword.trim()));
+  const courseSearch = usePagedQuery<Course>(courseKeyword, (_page, signal) => supabaseService.getCoursesPage(courseKeyword, signal), Boolean(courseKeyword.trim()));
+  const allCourses = courseSearch.items;
   const [selectedCourseId, setSelectedCourseId] = useState<string>('');
   const [selectedCourseName, setSelectedCourseName] = useState<string>(
-    preselectedTeacher?.courses[0] || (teachers[0]?.courses[0] ?? '')
+    preselectedTeacher?.courses[0] || ''
   );
   const [yearTerm, setYearTerm] = useState<string>('2024-2025第1学期');
   const [comment, setComment] = useState<string>('');
@@ -51,16 +59,8 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
     teachingQuality: 4,
   });
 
-  // Load courses from Supabase
-  useEffect(() => {
-    supabaseService.getCourses().then((list) => {
-      if (list && list.length > 0) {
-        setAllCourses(list);
-      }
-    });
-  }, []);
-
-  const currentTeacher = teachers.find((t) => t.id === selectedTeacherId) || teachers[0];
+  const currentTeacher = chosenTeacher || teachers.find((t) => t.id === selectedTeacherId);
+  const teacherChoices = teacherKeyword.trim() ? teacherSearch.items : currentTeacher ? [currentTeacher] : [];
 
   // Course dropdown options
   const courseOptions = useMemo(() => {
@@ -70,6 +70,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
     // 1. First add teacher's specific courses (with IDs if available)
     if (currentTeacher?.courseOfferings && currentTeacher.courseOfferings.length > 0) {
       for (const off of currentTeacher.courseOfferings) {
+        if (options.some(o => o.value === off.courseId)) continue;
         options.push({
           value: off.courseId,
           label: off.courseName,
@@ -97,8 +98,12 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
       }
     }
 
+    // Keep a selected course when another search replaces the remote suggestions.
+    if (selectedCourseId && selectedCourseName && !options.some(o => o.value === selectedCourseId)) {
+      options.push({ value: selectedCourseId, label: selectedCourseName });
+    }
     return options;
-  }, [currentTeacher, allCourses]);
+  }, [currentTeacher, allCourses, selectedCourseId, selectedCourseName]);
 
   // Sync default selected course on mount or teacher change
   useEffect(() => {
@@ -109,12 +114,18 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
       if (!currentExists) {
         setSelectedCourseId(courseOptions[0].value);
         setSelectedCourseName(courseOptions[0].label);
+      } else if (selectedCourseId !== currentExists.value) {
+        setSelectedCourseId(currentExists.value);
       }
     }
   }, [courseOptions, selectedCourseId, selectedCourseName]);
 
   const handleTeacherChange = (teacherId: string) => {
     setSelectedTeacherId(teacherId);
+    setChosenTeacher(teacherChoices.find(t => t.id === teacherId));
+    setSelectedCourseId('');
+    setSelectedCourseName('');
+    setCourseKeyword('');
   };
 
   const handleCourseChange = (val: string) => {
@@ -135,6 +146,11 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
+
+    if (!currentTeacher || !selectedTeacherId) {
+      setSubmitError('请先搜索并选择要评价的教师。');
+      return;
+    }
 
     if (comment.trim()) {
       if (comment.trim().length < 5) {
@@ -276,17 +292,24 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                     id="review-teacher-select"
                     className="w-full"
                     value={selectedTeacherId}
+                    selectedOption={currentTeacher ? { value: currentTeacher.id, label: currentTeacher.name, badge: currentTeacher.college } : undefined}
                     onChange={handleTeacherChange}
-                    options={teachers.map((t) => ({
+                    options={teacherChoices.map((t) => ({
                       value: t.id,
                       label: t.name,
                       badge: t.college,
                     }))}
                     searchable
+                    searchPlaceholder="输入教师姓名或课程名"
+                    emptyMessage={teacherKeyword.trim() ? '无匹配教师，请换个关键词' : '输入姓名或课程名搜索教师'}
+                    onSearchChange={setTeacherKeyword}
+                    loading={teacherSearch.loading}
                     placeholder="请选择教师..."
                     buttonClassName="w-full bg-gray-50 hover:bg-gray-100/90 text-gray-800 rounded-xl px-3.5 py-2.5 border border-gray-200"
                     menuClassName="w-full"
                   />
+                  <PageFeedback loading={false} error={teacherSearch.error} onRetry={teacherSearch.reload} />
+                  {teacherSearch.total > 20 && <p className="mt-1 text-xs text-gray-400">匹配较多，请输入更完整的姓名或课程名。</p>}
                 </div>
 
                 <div>
@@ -296,12 +319,17 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                     className="w-full"
                     value={selectedCourseId}
                     onChange={handleCourseChange}
-                    options={courseOptions}
+                    options={courseKeyword.trim() ? courseOptions.filter(o => o.label.toLowerCase().includes(courseKeyword.trim().toLowerCase())) : courseOptions}
+                    selectedOption={courseOptions.find(o => o.value === selectedCourseId)}
                     searchable
+                    onSearchChange={setCourseKeyword}
+                    searchPlaceholder="输入课程名搜索"
+                    loading={courseSearch.loading}
                     placeholder="请选择修读课程..."
                     buttonClassName="w-full bg-gray-50 hover:bg-gray-100/90 text-gray-800 rounded-xl px-3.5 py-2.5 border border-gray-200"
                     menuClassName="w-full"
                   />
+                  <PageFeedback loading={false} error={courseSearch.error} onRetry={courseSearch.reload} />
                 </div>
               </div>
 

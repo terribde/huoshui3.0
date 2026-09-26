@@ -1,3 +1,6 @@
+import { usePagedQuery } from '../hooks/usePagedQuery';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { Pagination, PageFeedback } from './Pagination';
 import { ModalFrame } from './ModalFrame';
 import React, { useState, useEffect } from 'react';
 import { Review, Teacher } from '../types';
@@ -46,7 +49,7 @@ const PRESET_REJECTION_REASONS = [
 export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
   isOpen,
   onClose,
-  reviews,
+  reviews: initialReviews,
   teachers,
   onApproveReview,
   onRejectReview,
@@ -89,6 +92,19 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
   const [searchKeyword, setSearchKeyword] = useState('');
   const [processingId, setProcessingId] = useState<string | null>(null);
 
+  const [reviewRevision, setReviewRevision] = useState(0);
+  const [reviewCounts, setReviewCounts] = useState({ pending: 0, approved: 0, rejected: 0 });
+  const reviewPage = usePagedQuery<Review>(JSON.stringify([currentUserId, currentTab, searchKeyword]),
+    (page, signal) => supabaseService.getReviewsPage({ status: currentTab, query: searchKeyword, page }, signal),
+    isSupabaseConfigured && isOpen && isAdminAuthenticated && activeSection === 'reviews', reviewRevision);
+  const reviews = isSupabaseConfigured ? reviewPage.items : initialReviews;
+  useEffect(() => {
+    if (!isSupabaseConfigured || !isOpen || !isAdminAuthenticated) return;
+    let active = true;
+    supabaseService.getReviewCounts().then(counts => { if (active) setReviewCounts(counts); }).catch(() => {});
+    return () => { active = false; };
+  }, [isOpen, isAdminAuthenticated, reviewRevision]);
+
   // Reject Dialog state
   const [rejectingReview, setRejectingReview] = useState<Review | null>(null);
   const [selectedReason, setSelectedReason] = useState(PRESET_REJECTION_REASONS[0]);
@@ -127,8 +143,6 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
       loadAdmins();
     }
   }, [activeSection, isAdminAuthenticated, adminRole]);
-
-  if (!isOpen) return null;
 
   // Add new admin handler
   const handleAddAdmin = async (e: React.FormEvent) => {
@@ -180,6 +194,7 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
       }
     } finally {
       setIsRefreshingReviews(false);
+      setReviewRevision(value => value + 1);
     }
   };
 
@@ -241,23 +256,24 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
       showToast('error', `生成失败: ${err?.message || '未知异常'}`);
     } finally {
       setIsRefreshingReviews(false);
+      setReviewRevision(value => value + 1);
     }
   };
 
   // Status counts
-  const pendingCount = reviews.filter((r) => r.status === 'pending').length;
-  const approvedCount = reviews.filter((r) => r.status === 'approved').length;
-  const rejectedCount = reviews.filter((r) => r.status === 'rejected').length;
+  const pendingCount = isSupabaseConfigured ? reviewCounts.pending : reviews.filter((r) => r.status === 'pending').length;
+  const approvedCount = isSupabaseConfigured ? reviewCounts.approved : reviews.filter((r) => r.status === 'approved').length;
+  const rejectedCount = isSupabaseConfigured ? reviewCounts.rejected : reviews.filter((r) => r.status === 'rejected').length;
 
   // Filter reviews
-  const filteredReviews = reviews.filter((r) => {
+  const filteredReviews = isSupabaseConfigured ? reviews : reviews.filter((r) => {
     // 1. Tab filter
     if (currentTab !== 'all' && r.status !== currentTab) return false;
 
     // 2. Search keyword filter
     if (!searchKeyword.trim()) return true;
     const kw = searchKeyword.toLowerCase();
-    const teacher = teachers.find((t) => t.id === r.teacherId);
+    const teacher = teachers.find((t) => t.id === r.teacherId) || { name: r.teacherName };
     return (
       (teacher?.name && teacher.name.toLowerCase().includes(kw)) ||
       (r.courseName && r.courseName.toLowerCase().includes(kw)) ||
@@ -279,6 +295,7 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
       showToast('error', `审核异常: ${err?.message || '未知错误'}`);
     } finally {
       setProcessingId(null);
+      setReviewRevision(value => value + 1);
     }
   };
 
@@ -299,9 +316,11 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
       showToast('error', `驳回异常: ${err?.message || '未知错误'}`);
     } finally {
       setProcessingId(null);
+      setReviewRevision(value => value + 1);
     }
   };
 
+  if (!isOpen) return null;
   return (
     <ModalFrame id="admin-modal" label="管理员工作台" onClose={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" />
@@ -681,7 +700,7 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
                       : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
-                  全部 ({reviews.length})
+                  全部 ({pendingCount + approvedCount + rejectedCount})
                 </button>
               </div>
 
@@ -712,7 +731,9 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
 
             {/* Reviews List */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
-              {filteredReviews.length === 0 ? (
+              <PageFeedback loading={reviewPage.loading} error={reviewPage.error} onRetry={reviewPage.reload} />
+              {isSupabaseConfigured && <Pagination page={reviewPage.page} total={reviewPage.total} loading={reviewPage.loading} onPageChange={reviewPage.setPage} />}
+              {reviewPage.loading || reviewPage.error ? null : filteredReviews.length === 0 ? (
                 <div className="py-12 px-4 text-center space-y-4 max-w-lg mx-auto">
                   <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center">
                     <CheckCircle2 className="w-6 h-6" />
@@ -760,7 +781,7 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
                 </div>
               ) : (
                 filteredReviews.map((rev) => {
-                  const teacher = teachers.find((t) => t.id === rev.teacherId);
+                  const teacher = teachers.find((t) => t.id === rev.teacherId) || { name: rev.teacherName, college: '' };
                   const isProcessing = processingId === rev.id;
                   
                   // Check automated sensitive content scan
@@ -934,6 +955,7 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
                             onClick={async () => {
                               if (confirm('确定要彻底删除此条评价吗？')) {
                                 await onDeleteReview(rev.id);
+                                  setReviewRevision(value => value + 1);
                               }
                             }}
                             className="p-1.5 text-gray-400 hover:text-rose-600 rounded-lg hover:bg-gray-100 transition-colors"

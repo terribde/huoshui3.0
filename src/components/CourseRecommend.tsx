@@ -1,5 +1,8 @@
 import { formatRating, ratingMatchPercent } from '../lib/ratings';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { supabaseService } from '../services/supabaseService';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { Pagination, PageFeedback } from './Pagination';
 import { Teacher, RecommendationWeights, College } from '../types';
 import { POPULAR_COURSES } from '../data/mockTeachers';
 import { Sliders, Sparkles, CheckCircle2, ChevronRight, HelpCircle, Star, Award, RotateCcw, Building2 } from 'lucide-react';
@@ -23,6 +26,25 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
   const [selectedCollegeId, setSelectedCollegeId] = useState<string>('all');
   const [searchKeyword, setSearchKeyword] = useState<string>('');
   const [hasCalculated, setHasCalculated] = useState<boolean>(true);
+  const [candidates, setCandidates] = useState<Teacher[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  const [page, setPage] = useState(0);
+  const courseToMatch = searchKeyword.trim() || selectedCourse;
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    let active = true;
+    const controller = new AbortController();
+    setLoading(true); setError(null); setCandidates([]); setPage(0);
+    const timer = setTimeout(() => {
+      supabaseService.getTeachersForCourse(courseToMatch, selectedCollegeId, controller.signal)
+        .then(items => { if (active) setCandidates(items); })
+        .catch(error => { if (active) setError(error.message); })
+        .finally(() => { if (active) setLoading(false); });
+    }, 250);
+    return () => { active = false; clearTimeout(timer); controller.abort(); };
+  }, [courseToMatch, selectedCollegeId, retry]);
 
   // Weights (0 to 100) for user preferences
   const [weights, setWeights] = useState<RecommendationWeights>({
@@ -45,15 +67,6 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
     });
   };
 
-  // Find all unique courses available across teachers
-  const allAvailableCourses = useMemo(() => {
-    const set = new Set<string>();
-    teachers.forEach((t) => {
-      t.courses.forEach((c) => set.add(c));
-    });
-    return Array.from(set);
-  }, [teachers]);
-
   // Filter candidates:
   // PRD 7.0 Requirement: 候选池为本学期开课的授课老师（不含以往教过但本学期未开课的老师）
   // Database Schema Requirement: 支持通过 college_id 筛选学院
@@ -64,7 +77,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
     const selectedCollegeName = colleges?.find((c) => c.id === selectedCollegeId)?.name;
 
     // Filter teachers who teach this course AND are teaching this semester AND match college
-    const candidates = teachers.filter((t) => {
+    const matchingTeachers = (isSupabaseConfigured ? candidates : teachers).filter((t) => {
       const matchCourse = t.courses.some((c) => 
         c.toLowerCase().includes(courseToMatch.toLowerCase())
       );
@@ -78,11 +91,12 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
     });
 
     // Missing selected dimensions cannot produce a reliable match percentage.
-    return candidates.map(teacher => ({
+    return matchingTeachers.map(teacher => ({
       teacher,
       matchPercent: ratingMatchPercent(teacher.dimensions, weights),
     })).sort((a,b) => (b.matchPercent ?? -1) - (a.matchPercent ?? -1));
-  }, [teachers, selectedCourse, searchKeyword, selectedCollegeId, colleges, weights]);
+  }, [teachers, candidates, selectedCourse, searchKeyword, selectedCollegeId, colleges, weights]);
+  useEffect(() => { setPage(0); }, [weights, selectedCourse, searchKeyword, selectedCollegeId]);
 
   return (
     <div id="course-recommend-panel" className="max-w-5xl mx-auto space-y-4 sm:space-y-6 pb-20">
@@ -329,14 +343,15 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
           </span>
         </div>
 
-        {rankedTeachers.length === 0 ? (
+        <PageFeedback loading={loading} error={error} onRetry={() => setRetry(value => value + 1)} />
+        {loading || error ? null : rankedTeachers.length === 0 ? (
           <div className="py-12 text-center text-gray-400 space-y-2">
             <p className="text-sm font-medium">本学期暂无开设该课程的教师数据</p>
             <p className="text-xs text-gray-400">试试热门课程：高等数学、微积分、数据结构、大学物理</p>
           </div>
         ) : (
           <div className="space-y-3">
-            {rankedTeachers.map(({ teacher, matchPercent }, index) => (
+            {rankedTeachers.slice(page * 20, (page + 1) * 20).map(({ teacher, matchPercent }, index) => (
               <div
                 key={teacher.id}
                 onClick={() => onSelectTeacher(teacher)}
@@ -345,15 +360,15 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
                 <div className="flex items-center gap-3.5">
                   {/* Rank Badge */}
                   <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm ${
-                    index === 0 
+                    page === 0 && index === 0
                       ? 'bg-amber-500 text-white shadow-xs' 
-                      : index === 1 
+                      : page === 0 && index === 1
                       ? 'bg-slate-400 text-white' 
-                      : index === 2 
+                      : page === 0 && index === 2
                       ? 'bg-amber-700/60 text-white'
                       : 'bg-gray-100 text-gray-500'
                   }`}>
-                    {index + 1}
+                    {page * 20 + index + 1}
                   </div>
 
                   <div>
@@ -401,6 +416,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
             ))}
           </div>
         )}
+        <Pagination page={page} total={rankedTeachers.length} loading={loading} onPageChange={setPage} />
       </div>
     </div>
   );

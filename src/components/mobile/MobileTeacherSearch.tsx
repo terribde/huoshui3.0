@@ -1,3 +1,5 @@
+import { useTeacherSearch } from '../../hooks/useTeacherSearch';
+import { Pagination, PageFeedback } from '../Pagination';
 import { formatRating, compareRatings } from '../../lib/ratings';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Teacher, College } from '../../types';
@@ -88,34 +90,12 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
     ];
   }, [colleges]);
 
-  // Filter and sort
-  const filteredTeachers = useMemo(() => {
-    const selectedCollegeName = colleges?.find((c) => c.id === selectedCollege)?.name;
-
-    return teachers
-      .filter((t) => {
-        const matchesCollege =
-          selectedCollege === 'all' ||
-          selectedCollege === '全部学院' ||
-          t.collegeId === selectedCollege ||
-          t.college === selectedCollege ||
-          (selectedCollegeName && t.college === selectedCollegeName);
-        const matchesTerm = !onlyThisTerm || t.isTeachingThisTerm;
-        const matchesQuery =
-          !searchTerm.trim() ||
-          t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          t.courses.some((c) => c.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          t.tags.some((tag) => tag.toLowerCase().includes(searchTerm.toLowerCase()));
-        return matchesCollege && matchesTerm && matchesQuery;
-      })
-      .sort((a, b) => {
-        if (sortBy === 'overall') return compareRatings(a.overallScore, b.overallScore);
-        if (sortBy === 'leniency') return compareRatings(a.dimensions.gradingLeniency, b.dimensions.gradingLeniency);
-        if (sortBy === 'quality') return compareRatings(a.dimensions.teachingQuality, b.dimensions.teachingQuality);
-        if (sortBy === 'attendance') return compareRatings(a.dimensions.attendanceStrictness, b.dimensions.attendanceStrictness);
-        return 0;
-      });
-  }, [teachers, searchTerm, selectedCollege, onlyThisTerm, sortBy, colleges]);
+  const result = useTeacherSearch(teachers, { query: searchTerm, collegeId: selectedCollege, onlyThisTerm, sortBy });
+  const filteredTeachers = result.items;
+  useEffect(() => {
+    const college = colleges?.find(c => c.id === initialSearch || c.name === initialSearch);
+    if (college) { setSelectedCollege(college.id); setSearchTerm(''); }
+  }, [initialSearch, colleges]);
 
   return (
     <div 
@@ -161,7 +141,7 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
               >
                 <div className="px-2 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center justify-between">
                   <span>智能联想推荐</span>
-                  <span>{filteredTeachers.length} 位匹配教师</span>
+                  <span>{result.total} 位匹配教师</span>
                 </div>
                 <div className="space-y-1 mt-1">
                   {filteredTeachers.slice(0, 5).map((t) => (
@@ -271,14 +251,15 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
       </div>
 
       {/* 2. Teachers Count Header */}
+      <PageFeedback loading={result.loading} error={result.error} onRetry={result.reload} />
       <div className="flex items-center justify-between px-1 text-[11px] text-gray-500">
-        <span>共找到 <strong className="text-gray-900">{filteredTeachers.length}</strong> 位教师</span>
+        <span>共找到 <strong className="text-gray-900">{result.total}</strong> 位教师</span>
         <span className="text-gray-400">永久免费查询</span>
       </div>
 
       {/* 3. Teachers List (Single Column Compact Mobile Cards) */}
       <div className="space-y-2.5">
-        {filteredTeachers.length === 0 ? (
+        {result.loading || result.error ? null : filteredTeachers.length === 0 ? (
           <div className="bg-white p-8 rounded-2xl border border-gray-100 text-center text-gray-400 space-y-1.5">
             <p className="text-xs font-medium text-gray-600">没有找到匹配的老师</p>
             <p className="text-[11px]">尝试缩短关键词或在“全部”中搜索</p>
@@ -375,6 +356,7 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
           ))
         )}
       </div>
+      <Pagination page={result.page} total={result.total} loading={result.loading} onPageChange={result.setPage} />
     </div>
   );
 };

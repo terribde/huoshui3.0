@@ -10,26 +10,57 @@ const source = fs.readFileSync(new URL('../src/services/supabaseService.ts',impo
 const compiled = ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
 const ratingsSource=fs.readFileSync(new URL('../src/lib/ratings.ts',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'').replaceAll('export ','');
 const ratingsCompiled=ts.transpileModule(ratingsSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
-function setup({points=37,rpcData=null,rpcError=null,readError=null,configured=true,likedIds=[],teacherRows=[]}={}) {
-  const storage=new Map(); const writes=[]; const calls=[];
+function setup({points=37,rpcData=null,rpcError=null,readError=null,configured=true,likedIds=[],teacherRows=[],reviewRows=[],courseRows=[],pageLimit=1000,omitCounts=false,relationError=false,pageError=null}={}) {
+  const storage=new Map(); const writes=[]; const calls=[]; const queries=[];
   const supabase={
     auth:{getUser:async()=>({data:{user:{id:'student'}},error:null})},
     rpc:async(name,args)=>{calls.push({name,args});return{data:rpcData,error:rpcError};},
     from(table){
-      let method='select', start=0, end=999;
+      let method='select', start=0, end=999, columns='*', selectOptions={};
+      const filters=[],orders=[],patterns=[],ors=[],notFilters=[];
+      let signal;
       const q={};
-      for(const key of ['select','eq','order','limit']) q[key]=()=>q;
+      q.select=(value,options={})=>{columns=value;selectOptions=options;return q;};
+      q.eq=(column,value)=>{filters.push([column,value]);return q;};
+      q.ilike=(column,value)=>{patterns.push([column,value]);return q;};
+      q.or=value=>{ors.push(value);return q;};
+      q.not=(...args)=>{notFilters.push(args);return q;};
+      q.abortSignal=value=>{signal=value;return q;};
+      q.order=(column,options={})=>{orders.push([column,options]);return q;};
+      q.limit=value=>{end=start+value-1;return q;};
       q.range=(from,to)=>{start=from;end=to;return q;};
       for(const key of ['insert','update','upsert','delete']) q[key]=(payload)=>{method=key;writes.push({table,method,payload});return q;};
-      const result=()=>({data:method==='select'?(table==='user_profiles'?{points,last_checkin_date:null}:table==='review_likes'?likedIds.slice(start,end+1).map(review_id=>({review_id})):table==='teachers'?teacherRows:[]):null,error:readError});
-      q.maybeSingle=async()=>result();q.then=(resolve,reject)=>Promise.resolve(result()).then(resolve,reject);return q;
+      const result=()=>{
+        queries.push({table,start,end,columns,filters:[...filters],orders:[...orders],patterns:[...patterns],ors:[...ors],notFilters:[...notFilters],signal,selectOptions});
+        const error=readError || (relationError && columns.includes('(') ? {message:'relationship missing'} : null) || pageError?.({table,start,columns});
+        let data=method==='select'?(table==='user_profiles'?{points,last_checkin_date:null}:table==='review_likes'?likedIds.map(review_id=>({review_id,user_id:'student'})):table==='teachers'?teacherRows:table==='reviews'?reviewRows:table==='courses'?courseRows:[]):null;
+        let count=null;
+        if(Array.isArray(data)) {
+          data=data.filter(row=>filters.every(([key,value])=>row[key]===value));
+          data.sort((a,b)=>{
+            for(const [key,{ascending=true,nullsFirst=!ascending}] of orders) {
+              const av=a[key],bv=b[key];
+              if(av==null && bv==null)continue;
+              if(av==null)return nullsFirst?-1:1;
+              if(bv==null)return nullsFirst?1:-1;
+              if(av!==bv)return (av<bv?-1:1)*(ascending?1:-1);
+            }
+            return 0;
+          });
+          if(selectOptions.count==='exact'&&!omitCounts)count=data.length;
+          data=data.slice(start,Math.min(end+1,start+pageLimit));
+        }
+        return {data,error,count};
+      };
+      q.maybeSingle=async()=>{const r=result();return {...r,data:Array.isArray(r.data)?r.data[0]??null:r.data};};
+      q.then=(resolve,reject)=>Promise.resolve(result()).then(resolve,reject);return q;
     },
   };
   const context={supabase,isSupabaseConfigured:configured,POPULAR_COURSES:[],window:{},
     localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},
     console:{warn(){},error(){}},setTimeout};
   vm.createContext(context);vm.runInContext(ratingsCompiled,context);vm.runInContext(compiled,context);
-  return {service:context.service,writes,calls};
+  return {service:context.service,writes,calls,queries};
 }
 
 test('remote balance including zero replaces a higher local cache and old ledger',async()=>{
@@ -156,12 +187,66 @@ test('unrated teacher database defaults are hidden while real and historical rat
     {...defaults,id:'rated',review_count:1,has_historical_data:false},
     {...defaults,id:'history',review_count:0,has_historical_data:true},
   ]});
-  const [fresh,rated,history]=await service.getTeachers();
+  const teachers=await service.getTeachers();
+  const fresh=teachers.find(t=>t.id==='new'),rated=teachers.find(t=>t.id==='rated'),history=teachers.find(t=>t.id==='history');
   assert.equal(fresh.overallScore,null);
   assert.ok(Object.values(fresh.dimensions).every(value=>value===null));
   assert.equal(rated.overallScore,4.5);
   assert.equal(history.overallScore,4.5);
   assert.equal(history.dimensions.teachingQuality,4.5);
+});
+
+test('teacher reads include all 2624 rows, lower scores and 809 unrated teachers sorted last',async()=>{
+  const teacherRows=Array.from({length:2624},(_,i)=>({id:`teacher-${String(i).padStart(4,'0')}`,name:`Teacher ${i}`,
+    rating_version:2,review_count:i<809?0:1,has_historical_data:i>=809,overall_score:i<809?null:i<1166?5:2.3,
+    teaching_quality:i<809?null:4,grading_leniency:i<809?null:2,workload_difficulty:i<809?null:1})).reverse();
+  const {service,queries}=setup({teacherRows});
+  const result=await service.getTeachers();
+  assert.equal(result.length,2624);
+  assert.equal(new Set(result.map(t=>t.id)).size,2624);
+  assert.equal(result.filter(t=>t.overallScore===2.3).length,1458);
+  assert.ok(result.slice(-809).every(t=>t.overallScore===null));
+  assert.ok(queries.every(q=>q.orders.some(([column])=>column==='id')));
+  assert.deepEqual(queries.map(q=>[q.start,q.end]),[[0,999],[1000,1999],[2000,2623]]);
+});
+
+test('old reviews beyond the first 1000 remain available with stable ordering and remote status precedence',async()=>{
+  const reviewRows=Array.from({length:2401},(_,i)=>({id:`review-${String(i).padStart(4,'0')}`,teacher_id:'history',
+    rating_version:2,status:'approved',is_historical_migrated:true,created_at:'2024-03-20T00:00:00Z',
+    comment:`Original ${i}`,courses:{id:'course',name:'历史课程'},grading_leniency:4,workload_difficulty:3,teaching_quality:5})).reverse();
+  const {service,queries}=setup({reviewRows});
+  service.saveLocalReview({id:'review-2000',teacherId:'history',ratingVersion:2,status:'pending',dimensions:{}});
+  const result=await service.getReviews();
+  assert.equal(result.length,2401);
+  assert.equal(new Set(result.map(r=>r.id)).size,2401);
+  const old=result.find(r=>r.id==='review-2000');
+  assert.equal(old.status,'approved');assert.equal(old.comment,'Original 2000');assert.equal(old.courseName,'历史课程');
+  assert.ok(queries.every(q=>q.orders.some(([column])=>column==='id')));
+});
+
+test('teacher-specific review fallback keeps filters on every page with lower server limits',async()=>{
+  const reviewRows=Array.from({length:901},(_,i)=>({id:`review-${String(i).padStart(4,'0')}`,teacher_id:i%2?'other':'wanted',
+    rating_version:2,status:'approved',created_at:'2025-01-01',comment:'历史原文'}));
+  const {service,queries}=setup({reviewRows,relationError:true,pageLimit:150});
+  const result=await service.getReviews('wanted');
+  assert.equal(result.length,451);assert.ok(result.every(r=>r.teacherId==='wanted'));
+  assert.ok(queries.every(q=>q.filters.some(([key,value])=>key==='teacher_id'&&value==='wanted')));
+  assert.deepEqual(queries.filter(q=>q.columns==='*').map(q=>q.start),[0,150,300,450]);
+});
+
+test('course catalog pagination works with filters even when exact counts are absent',async()=>{
+  const courseRows=Array.from({length:1251},(_,i)=>({id:`course-${String(i).padStart(4,'0')}`,name:'同名课程',college_id:i%2?'other':'wanted'}));
+  const {service}=setup({courseRows,pageLimit:200,omitCounts:true});
+  const result=await service.getCourses('wanted');
+  assert.equal(result.length,626);assert.equal(new Set(result.map(c=>c.id)).size,626);
+  assert.ok(result.every(c=>c.collegeId==='wanted'));
+});
+
+test('later-page failures never return a truncated remote list',async()=>{
+  const rows=Array.from({length:1100},(_,i)=>({id:String(i),rating_version:2,review_count:1,overall_score:4}));
+  const {service}=setup({teacherRows:rows,reviewRows:rows,pageError:({start})=>start>0?{message:'network failure'}:null});
+  assert.equal(await service.getTeachers(),null);
+  assert.equal(await service.getReviews(),null);
 });
 
 test('missing ratings sort last and selected missing dimensions have no match percentage',()=>{
@@ -172,4 +257,97 @@ test('missing ratings sort last and selected missing dimensions have no match pe
   assert.equal(vm.runInContext('ratingMatchPercent({teachingQuality:5,gradingLeniency:null},{teachingQuality:80,gradingLeniency:20})',context),null);
   assert.equal(vm.runInContext('ratingMatchPercent({teachingQuality:5,gradingLeniency:null},{teachingQuality:80,gradingLeniency:0})',context),99);
   assert.equal(vm.runInContext('ratingMatchPercent({teachingQuality:5},{teachingQuality:0})',context),null);
+});
+
+test('teacher browsing reads only the requested page and keeps tied scores stable',async()=>{
+  const teacherRows=Array.from({length:2624},(_,i)=>({id:`teacher-${String(i).padStart(4,'0')}`,
+    rating_version:2,review_count:1,overall_score:i===0?null:4})).reverse();
+  const {service,queries}=setup({teacherRows});
+  const first=await service.getTeachersPage();
+  assert.equal(first.items.length,20);assert.equal(first.total,2624);
+  assert.equal(queries.length,1);assert.equal(queries[0].end,19);
+  const second=await service.getTeachersPage({page:1});
+  assert.equal(second.items.length,20);
+  assert.equal(new Set([...first.items,...second.items].map(t=>t.id)).size,40);
+  assert.equal(second.items[0].id,'teacher-0021');
+  const last=await service.getTeachersPage({page:131});
+  assert.equal(last.items.length,4);assert.equal(last.items.at(-1).overallScore,null);
+});
+
+test('college and dimension sorting are applied to the whole library before limiting',async()=>{
+  const teacherRows=Array.from({length:2400},(_,i)=>({id:String(i),rating_version:2,
+    college_id:i%2?'science':'arts',review_count:1,overall_score:5,teaching_quality:i/500}));
+  const {service}=setup({teacherRows});
+  const result=await service.getTeachersPage({collegeId:'science',sortBy:'quality'});
+  assert.equal(result.total,1200);assert.equal(result.items.length,20);
+  assert.equal(result.items[0].id,'2399');
+  assert.ok(result.items.every(t=>t.collegeId==='science'));
+});
+
+test('remote search safely quotes user punctuation and forwards cancellation',async()=>{
+  const {service,queries}=setup();
+  const controller=new AbortController();
+  await service.getTeachersPage({query:'A",(id.not.is.null)_%*\\',onlyThisTerm:true},controller.signal);
+  const query=queries[0];
+  assert.equal(query.signal,controller.signal);
+  assert.ok(query.columns.includes('course_matches:course_offerings(courses!inner())'));
+  assert.ok(query.columns.includes('current_offerings:course_offerings!inner(terms!inner())'));
+  assert.ok(query.filters.some(([key,value])=>key==='current_offerings.terms.is_current'&&value===true));
+  assert.ok(query.ors[0].startsWith('name.ilike."%A\\",(id.not.is.null)'));
+  assert.equal(query.patterns[0][1],'%A",(id.not.is.null)\\_\\%\\*\\\\%');
+  assert.equal(query.start,0);assert.equal(query.end,19);
+});
+
+test('paged reviews expose older history without loading unrelated teachers or users',async()=>{
+  const reviewRows=Array.from({length:2200},(_,i)=>({id:`r-${String(i).padStart(4,'0')}`,
+    teacher_id:i%2?'other':'wanted',user_id:i%3?'student':'other',status:i%5?'approved':'pending',
+    rating_version:2,created_at:'2024-01-01',comment:`Original ${i}`,teachers:{name:'历史教师'}}));
+  const {service,queries}=setup({reviewRows});
+  const eligible=reviewRows.filter(r=>r.teacher_id==='wanted'&&r.user_id==='student'&&r.status==='approved');
+  const result=await service.getReviewsPage({teacherId:'wanted',userId:'student',status:'approved',page:2});
+  assert.equal(result.total,eligible.length);assert.equal(result.items.length,20);
+  assert.deepEqual(Array.from(result.items,r=>r.id),eligible.slice(40,60).map(r=>r.id));
+  assert.ok(result.items.every(r=>r.teacherName==='历史教师'));
+  assert.equal(queries.length,1);assert.equal(queries[0].start,40);assert.equal(queries[0].end,59);
+});
+
+test('scoped personal reviews exclude another account cache and return an empty success',async()=>{
+  const {service}=setup();
+  service.saveLocalReview({id:'someone-else',userId:'other',ratingVersion:2,dimensions:{}});
+  assert.equal((await service.getReviews(undefined,{userId:'student'})).length,0);
+});
+
+test('single teacher lookup and course suggestions stay bounded',async()=>{
+  const {service,queries}=setup({teacherRows:[{id:'wanted',name:'名字',rating_version:2}],
+    courseRows:Array.from({length:2000},(_,i)=>({id:String(i),name:'数学'}))});
+  assert.equal((await service.getTeacherById('wanted')).name,'名字');
+  assert.equal(await service.getTeacherById('missing'),null);
+  const courses=await service.getCoursesPage('数学');
+  assert.equal(courses.items.length,20);assert.equal(courses.total,2000);
+  assert.equal(queries.at(-1).end,19);
+});
+
+test('course recommendation fetches every matching candidate before weighted ranking',async()=>{
+  const teacherRows=Array.from({length:205},(_,i)=>({id:String(i),rating_version:2,
+    'current_offerings.terms.is_current':true}));
+  const {service,queries}=setup({teacherRows});
+  assert.equal((await service.getTeachersForCourse('数学')).length,205);
+  assert.deepEqual(queries.map(q=>q.start),[0,100,200]);
+  assert.ok(queries.every(q=>q.notFilters.some(([key,op,val])=>key==='course_matches'&&op==='is'&&val===null)));
+  assert.equal((await service.getTeachersForCourse('   ')).length,0);
+  assert.equal(queries.length,3);
+});
+
+test('page read errors remain errors rather than empty successful search results',async()=>{
+  const {service}=setup({readError:{message:'network unavailable'}});
+  await assert.rejects(service.getTeachersPage(),/network unavailable/);
+  await assert.rejects(service.getReviewsPage({teacherId:'wanted'}),/network unavailable/);
+  await assert.rejects(service.getCoursesPage('数学'),/network unavailable/);
+});
+
+test('moderation counts use bodyless requests instead of downloading reviews',async()=>{
+  const {service,queries}=setup({reviewRows:[{status:'pending'},{status:'approved'},{status:'approved'}]});
+  const counts=await service.getReviewCounts();
+  assert.equal(counts.pending,1);assert.equal(counts.approved,2);assert.equal(counts.rejected,0);
+  assert.ok(queries.every(q=>q.selectOptions.head===true&&q.columns==='id'));
 });

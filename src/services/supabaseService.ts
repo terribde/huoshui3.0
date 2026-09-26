@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { Teacher, Review, UserPointTransaction, Course, Term, PointRule, TeacherCourseOffering } from '../types';
+import { Teacher, Review, UserPointTransaction, Course, Term, PointRule, TeacherCourseOffering, TeacherQuery, ReviewQuery, DataPage } from '../types';
 import { POPULAR_COURSES } from '../data/mockTeachers';
 import { normalizeRatingRecord, readRating, RATING_VERSION } from '../lib/ratings';
 
@@ -43,7 +43,241 @@ function setLocalItem<T>(key: string, value: T): void {
   }
 }
 
+type RowPage = { data: any[] | null; error: { message: string } | null; count?: number | null };
+
+const TEACHER_SELECT = '*,colleges(id,name),course_offerings(course_id,courses(id,name),term_id,terms(id,year_term,is_current))';
+const REVIEW_SELECT = '*,courses(id,name),teachers(name)';
+const searchPattern = (text: string) => `%${text.replace(/[\\%_*]/g, '\\$&')}%`;
+// Quote PostgREST filter values, including punctuation in course/teacher names.
+const filterValue = (value: string) => `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+const pageBounds = (page = 0, size = 20) => {
+  const pageSize = Math.min(100, Math.max(1, Math.floor(size) || 20));
+  const from = Math.max(0, Math.floor(page) || 0) * pageSize;
+  return { from, to: from + pageSize - 1 };
+};
+
+// PostgREST caps a response at 1,000 rows. Read every page before publishing a
+// result; a later-page failure must not look like a complete teacher/review list.
+async function readAllRows(loadPage: (from: number, to: number) => PromiseLike<RowPage>): Promise<any[]> {
+  const readPage = async (from: number, to: number) => {
+    const result = await loadPage(from, to);
+    if (result.error) throw new Error(result.error.message);
+    if (!result.data) throw new Error('数据库未返回查询结果');
+    return { rows: result.data, count: result.count };
+  };
+  const first = await readPage(0, 999);
+  const rows = [...first.rows];
+  if (typeof first.count === 'number') {
+    if (!rows.length && first.count > 0) throw new Error('数据库分页结果不完整');
+    // Use the observed page size if the server is configured below 1,000.
+    const pageSize = first.rows.length || 1000;
+    for (let from = rows.length; from < first.count; from += pageSize * 4) {
+      const offsets = Array.from({ length: Math.min(4, Math.ceil((first.count - from) / pageSize)) }, (_, i) => from + i * pageSize);
+      const pages = await Promise.all(offsets.map(offset => readPage(offset, Math.min(offset + pageSize, first.count!) - 1)));
+      for (let i = 0; i < pages.length; i++) {
+        if (pages[i].rows.length !== Math.min(pageSize, first.count - offsets[i])) throw new Error('数据在读取期间发生变化，请刷新重试');
+        rows.push(...pages[i].rows);
+      }
+    }
+  } else {
+    // Older endpoints may omit counts; continue until an empty page.
+    while (rows.length) {
+      const page = await readPage(rows.length, rows.length + 999);
+      if (!page.rows.length) break;
+      rows.push(...page.rows);
+    }
+  }
+  return rows;
+}
+
+function mapTeacherRow(row: any): Teacher {
+        // College name resolution: from colleges.name join, or row.college fallback
+        const collegeName = row.colleges?.name || row.college || '西南交通大学';
+
+        // Course offerings resolution from course_offerings join
+        const rawOfferings: any[] = Array.isArray(row.course_offerings) ? row.course_offerings : [];
+        const offerings: TeacherCourseOffering[] = [];
+        const courseNamesSet = new Set<string>();
+        let isTeachingCurrentTerm = false;
+
+        for (const off of rawOfferings) {
+          const cName = off.courses?.name;
+          const cId = off.course_id || off.courses?.id;
+          const isCurr = Boolean(off.terms?.is_current);
+          if (isCurr) isTeachingCurrentTerm = true;
+          if (cName) {
+            courseNamesSet.add(cName);
+            offerings.push({
+              courseId: cId,
+              courseName: cName,
+              termId: off.term_id,
+              yearTerm: off.terms?.year_term,
+              isCurrentTerm: isCurr,
+            });
+          }
+        }
+
+        // Fallback for mock/legacy courses if course_offerings was empty in database
+        const fallbackCourses = Array.isArray(row.courses)
+          ? row.courses
+          : (typeof row.courses === 'string' ? JSON.parse(row.courses) : []);
+
+        const finalCourses = courseNamesSet.size > 0
+          ? Array.from(courseNamesSet)
+          : fallbackCourses;
+
+        const isTeachingThisTerm = rawOfferings.length > 0
+          ? isTeachingCurrentTerm
+          : Boolean(row.is_teaching_this_term ?? (finalCourses.length > 0));
+
+        // New teachers have numeric database defaults even before any rating exists.
+        // Only review statistics or explicitly imported history establish rating data.
+        const hasRatingData = Number(row.review_count) > 0 || row.has_historical_data === true;
+        const rating = (value: unknown) => hasRatingData ? readRating(value) : null;
+        return normalizeRatingRecord({
+          ratingVersion: row.rating_version ?? 1,
+          id: row.id,
+          name: row.name,
+          title: row.title || '教师',
+          college: collegeName,
+          collegeId: row.college_id || row.colleges?.id || undefined,
+          campus: row.campus || '犀浦校区',
+          courses: finalCourses,
+          courseOfferings: offerings,
+          isTeachingThisTerm,
+          overallScore: rating(row.overall_score),
+          reviewCount: Number(row.review_count) || 0,
+          dimensions: {
+            attendanceStrictness: rating(row.attendance_strictness),
+            gradingLeniency: rating(row.grading_leniency),
+            effortMatters: rating(row.effort_matters),
+            workloadDifficulty: rating(row.workload_difficulty),
+            approachability: rating(row.approachability),
+            teachingQuality: rating(row.teaching_quality),
+          },
+          hasHistoricalData: Boolean(row.has_historical_data),
+          tags: Array.isArray(row.tags) ? row.tags : (typeof row.tags === 'string' ? JSON.parse(row.tags) : []),
+          recentTermCourses: row.recent_term_courses || [],
+        });
+}
+
+function mapReviewRow(row: any): Review {
+  return normalizeRatingRecord({
+            ratingVersion: row.rating_version ?? 1,
+            remote: true,
+            id: row.id,
+            teacherId: row.teacher_id,
+            courseId: row.course_id || row.courses?.id || undefined,
+            courseName: row.courses?.name || row.course_name || '大学核心课程',
+            yearTerm: row.year_term || '2024-2025第1学期',
+            dimensions: {
+              attendanceStrictness: row.attendance_strictness,
+              gradingLeniency: row.grading_leniency,
+              effortMatters: row.effort_matters,
+              workloadDifficulty: row.workload_difficulty,
+              approachability: row.approachability,
+              teachingQuality: row.teaching_quality,
+            },
+            comment: row.comment || '',
+            authorNickname: row.author_nickname || '匿名交大学子',
+            userId: row.user_id,
+            userEmail: row.user_email,
+            isHistoricalMigrated: Boolean(row.is_historical_migrated),
+            status: row.status || 'approved',
+            rejectReason: row.reject_reason || row.rejection_reason || undefined,
+            rejectionReason: row.reject_reason || row.rejection_reason || undefined,
+            reviewerId: row.reviewer_id || undefined,
+            reviewedAt: row.reviewed_at || undefined,
+            createdAt: row.created_at || new Date().toISOString(),
+            likes: Number(row.likes) || 0,
+    teacherName: row.teachers?.name,
+  });
+}
+
 export const supabaseService = {
+  async getTeachersPage(options: TeacherQuery = {}, signal?: AbortSignal): Promise<DataPage<Teacher>> {
+    if (!isSupabaseConfigured || !supabase) throw new Error('数据库尚未连接');
+    const text = options.query?.trim() || '';
+    const { from, to } = pageBounds(options.page, options.pageSize);
+    let select = TEACHER_SELECT;
+    if (text) select += ',course_matches:course_offerings(courses!inner())';
+    if (options.onlyThisTerm) select += ',current_offerings:course_offerings!inner(terms!inner())';
+    let query = supabase.from('teachers').select(select, { count: 'exact' });
+    if (text) {
+      const pattern = searchPattern(text);
+      query = query.ilike('course_matches.courses.name', pattern);
+      query = options.courseOnly ? query.not('course_matches', 'is', null)
+        : query.or(`name.ilike.${filterValue(pattern)},tags.cs.${filterValue(JSON.stringify([text]))},course_matches.not.is.null`);
+    }
+    if (options.collegeId && options.collegeId !== 'all') query = query.eq('college_id', options.collegeId);
+    if (options.onlyThisTerm) query = query.eq('current_offerings.terms.is_current', true);
+    const sortColumns = { overall: 'overall_score', leniency: 'grading_leniency', quality: 'teaching_quality', attendance: 'attendance_strictness' };
+    query = query.order(sortColumns[options.sortBy || 'overall'], { ascending: false, nullsFirst: false })
+      .order('review_count', { ascending: false }).order('id', { ascending: true }).range(from, to);
+    if (signal) query = query.abortSignal(signal);
+    const { data, error, count } = await query;
+    if (error) throw new Error(error.message);
+    return { items: (data || []).map(mapTeacherRow), total: count ?? 0 };
+  },
+
+  async getTeacherById(id: string): Promise<Teacher | null> {
+    if (!isSupabaseConfigured || !supabase) return null;
+    const { data, error } = await supabase.from('teachers').select(TEACHER_SELECT).eq('id', id).maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? mapTeacherRow(data) : null;
+  },
+
+  async getTeachersForCourse(query: string, collegeId?: string, signal?: AbortSignal): Promise<Teacher[]> {
+    if (!query.trim()) return [];
+    const options = { query, collegeId, courseOnly: true, onlyThisTerm: true, pageSize: 100 };
+    const first = await this.getTeachersPage(options, signal);
+    const items = [...first.items];
+    // Rank the complete candidate pool for this course, never just its first page.
+    for (let page = 1; items.length < first.total; page++) {
+      const next = await this.getTeachersPage({ ...options, page }, signal);
+      if (!next.items.length) break;
+      items.push(...next.items);
+    }
+    return items;
+  },
+
+  async getReviewsPage(options: ReviewQuery, signal?: AbortSignal): Promise<DataPage<Review>> {
+    if (!isSupabaseConfigured || !supabase) throw new Error('数据库尚未连接');
+    const { from, to } = pageBounds(options.page, options.pageSize);
+    const text = options.query?.trim();
+    let query = supabase.from('reviews').select(REVIEW_SELECT + (text ? ',teacher_match:teachers(),course_match:courses()' : ''), { count: 'exact' });
+    if (options.teacherId) query = query.eq('teacher_id', options.teacherId);
+    if (options.userId) query = query.eq('user_id', options.userId);
+    if (options.status && options.status !== 'all') query = query.eq('status', options.status);
+    if (text) {
+      const pattern = searchPattern(text);
+      query = query.ilike('teacher_match.name', pattern).ilike('course_match.name', pattern)
+        .or(`comment.ilike.${filterValue(pattern)},author_nickname.ilike.${filterValue(pattern)},teacher_match.not.is.null,course_match.not.is.null`);
+    }
+    query = query.order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to);
+    if (signal) query = query.abortSignal(signal);
+    const { data, error, count } = await query;
+    if (error) throw new Error(error.message);
+    return { items: (data || []).map(mapReviewRow), total: count ?? 0 };
+  },
+
+  async getReviewCounts(): Promise<Record<Review['status'], number>> {
+    if (!isSupabaseConfigured || !supabase) throw new Error('数据库尚未连接');
+    const statuses = ['pending', 'approved', 'rejected'] as const;
+    const results = await Promise.all(statuses.map(status => supabase!.from('reviews').select('id', { count: 'exact', head: true }).eq('status', status)));
+    for (const result of results) if (result.error) throw new Error(result.error.message);
+    return Object.fromEntries(statuses.map((status, i) => [status, results[i].count ?? 0])) as Record<Review['status'], number>;
+  },
+
+  async getCoursesPage(text: string, signal?: AbortSignal): Promise<DataPage<Course>> {
+    if (!isSupabaseConfigured || !supabase) return { items: [], total: 0 };
+    let query = supabase.from('courses').select('id,name,college_id', { count: 'exact' })
+      .ilike('name', searchPattern(text.trim())).order('name').order('id').range(0, 19);
+    if (signal) query = query.abortSignal(signal);
+    const { data, error, count } = await query;
+    if (error) throw new Error(error.message);
+    return { items: (data || []).map(c => ({ id: c.id, name: c.name, collegeId: c.college_id })), total: count ?? 0 };
+  },
   /**
    * Local storage helpers for reviews & user points
    */
@@ -150,10 +384,15 @@ export const supabaseService = {
     try {
       let teachersData: any[] = [];
       
-      // Try relational query first
-      const { data, error } = await supabase
+      const loadTeachers = (select: string) => readAllRows((from, to) => supabase!
         .from('teachers')
-        .select(`
+        .select(select, { count: from === 0 ? 'exact' : undefined })
+        .order('overall_score', { ascending: false, nullsFirst: false })
+        .order('id', { ascending: true })
+        .range(from, to));
+      // Try relational query first; restart all pages if joins are unavailable.
+      try {
+        teachersData = await loadTeachers(`
           *,
           colleges ( id, name ),
           course_offerings (
@@ -162,99 +401,16 @@ export const supabaseService = {
             term_id,
             terms ( id, year_term, is_current )
           )
-        `)
-        .order('overall_score', { ascending: false });
-
-      if (error) {
-        console.warn('[Supabase] Relational teachers query note:', error.message);
-        // Fallback to simple query if relational join fails
-        const { data: simpleData, error: simpleError } = await supabase
-          .from('teachers')
-          .select('*')
-          .order('overall_score', { ascending: false });
-        
-        if (simpleError || !simpleData) {
-          console.warn('[Supabase] Error fetching teachers:', simpleError?.message);
-          return null;
-        }
-        teachersData = simpleData;
-      } else if (data) {
-        teachersData = data;
+        `);
+      } catch (error) {
+        console.warn('[Supabase] Relational teachers query note:', error);
+        teachersData = await loadTeachers('*');
       }
 
       if (!teachersData || teachersData.length === 0) return null;
 
       // Transform snake_case columns & relation objects to camelCase TypeScript model
-      return teachersData.map((row: any) => {
-        // College name resolution: from colleges.name join, or row.college fallback
-        const collegeName = row.colleges?.name || row.college || '西南交通大学';
-
-        // Course offerings resolution from course_offerings join
-        const rawOfferings: any[] = Array.isArray(row.course_offerings) ? row.course_offerings : [];
-        const offerings: TeacherCourseOffering[] = [];
-        const courseNamesSet = new Set<string>();
-        let isTeachingCurrentTerm = false;
-
-        for (const off of rawOfferings) {
-          const cName = off.courses?.name;
-          const cId = off.course_id || off.courses?.id;
-          const isCurr = Boolean(off.terms?.is_current);
-          if (isCurr) isTeachingCurrentTerm = true;
-          if (cName) {
-            courseNamesSet.add(cName);
-            offerings.push({
-              courseId: cId,
-              courseName: cName,
-              termId: off.term_id,
-              yearTerm: off.terms?.year_term,
-              isCurrentTerm: isCurr,
-            });
-          }
-        }
-
-        // Fallback for mock/legacy courses if course_offerings was empty in database
-        const fallbackCourses = Array.isArray(row.courses)
-          ? row.courses
-          : (typeof row.courses === 'string' ? JSON.parse(row.courses) : []);
-
-        const finalCourses = courseNamesSet.size > 0
-          ? Array.from(courseNamesSet)
-          : fallbackCourses;
-
-        const isTeachingThisTerm = rawOfferings.length > 0
-          ? isTeachingCurrentTerm
-          : Boolean(row.is_teaching_this_term ?? (finalCourses.length > 0));
-
-        // New teachers have numeric database defaults even before any rating exists.
-        // Only review statistics or explicitly imported history establish rating data.
-        const hasRatingData = Number(row.review_count) > 0 || row.has_historical_data === true;
-        const rating = (value: unknown) => hasRatingData ? readRating(value) : null;
-        return normalizeRatingRecord({
-          ratingVersion: row.rating_version ?? 1,
-          id: row.id,
-          name: row.name,
-          title: row.title || '教师',
-          college: collegeName,
-          collegeId: row.college_id || row.colleges?.id || undefined,
-          campus: row.campus || '犀浦校区',
-          courses: finalCourses,
-          courseOfferings: offerings,
-          isTeachingThisTerm,
-          overallScore: rating(row.overall_score),
-          reviewCount: Number(row.review_count) || 0,
-          dimensions: {
-            attendanceStrictness: rating(row.attendance_strictness),
-            gradingLeniency: rating(row.grading_leniency),
-            effortMatters: rating(row.effort_matters),
-            workloadDifficulty: rating(row.workload_difficulty),
-            approachability: rating(row.approachability),
-            teachingQuality: rating(row.teaching_quality),
-          },
-          hasHistoricalData: Boolean(row.has_historical_data),
-          tags: Array.isArray(row.tags) ? row.tags : (typeof row.tags === 'string' ? JSON.parse(row.tags) : []),
-          recentTermCourses: row.recent_term_courses || [],
-        });
-      });
+      return teachersData.map(mapTeacherRow);
     } catch (err) {
       console.warn('[Supabase] Failed to connect to teachers table:', err);
       return null;
@@ -265,90 +421,31 @@ export const supabaseService = {
    * Fetch reviews: Merges remote Supabase records with local user-submitted reviews
    * Aligned with new schema: joins courses(id, name) and reads reject_reason
    */
-  async getReviews(teacherId?: string): Promise<Review[] | null> {
+  async getReviews(teacherId?: string, scope?: { userId?: string }): Promise<Review[] | null> {
     let remoteReviews: Review[] = [];
+    let remoteLoaded = false;
 
     if (isSupabaseConfigured && supabase) {
       try {
-        let query = supabase
-          .from('reviews')
-          .select(`
-            *,
-            courses ( id, name )
-          `)
-          .order('created_at', { ascending: false });
-
-        if (teacherId) {
-          query = query.eq('teacher_id', teacherId);
+        const loadReviews = (select: string) => readAllRows((from, to) => {
+          let query = supabase!.from('reviews')
+            .select(select, { count: from === 0 ? 'exact' : undefined })
+            .order('created_at', { ascending: false })
+            .order('id', { ascending: true });
+          if (teacherId) query = query.eq('teacher_id', teacherId);
+          if (scope?.userId) query = query.eq('user_id', scope.userId);
+          return query.range(from, to);
+        });
+        let data: any[];
+        try {
+          data = await loadReviews(REVIEW_SELECT);
+        } catch (error) {
+          console.warn('[Supabase] getReviews relational query warning:', error);
+          // The fallback must retain both the teacher filter and pagination.
+          data = await loadReviews('*');
         }
-
-        const { data, error } = await query;
-        if (!error && data) {
-          remoteReviews = data.map((row: any) => ({
-            ratingVersion: row.rating_version ?? 1,
-            remote: true,
-            id: row.id,
-            teacherId: row.teacher_id,
-            courseId: row.course_id || row.courses?.id || undefined,
-            courseName: row.courses?.name || row.course_name || '大学核心课程',
-            yearTerm: row.year_term || '2024-2025第1学期',
-            dimensions: {
-              attendanceStrictness: row.attendance_strictness,
-              gradingLeniency: row.grading_leniency,
-              effortMatters: row.effort_matters,
-              workloadDifficulty: row.workload_difficulty,
-              approachability: row.approachability,
-              teachingQuality: row.teaching_quality,
-            },
-            comment: row.comment || '',
-            authorNickname: row.author_nickname || '匿名交大学子',
-            userId: row.user_id,
-            userEmail: row.user_email,
-            isHistoricalMigrated: Boolean(row.is_historical_migrated),
-            status: row.status || 'approved',
-            rejectReason: row.reject_reason || row.rejection_reason || undefined,
-            rejectionReason: row.reject_reason || row.rejection_reason || undefined,
-            reviewerId: row.reviewer_id || undefined,
-            reviewedAt: row.reviewed_at || undefined,
-            createdAt: row.created_at || new Date().toISOString(),
-            likes: Number(row.likes) || 0,
-          }));
-        } else if (error) {
-          console.warn('[Supabase] getReviews relational query warning:', error.message);
-          // Fallback to simple query if relational join fails
-          const { data: simpleData } = await supabase.from('reviews').select('*').order('created_at', { ascending: false });
-          if (simpleData) {
-            remoteReviews = simpleData.map((row: any) => ({
-              ratingVersion: row.rating_version ?? 1,
-              remote: true,
-              id: row.id,
-              teacherId: row.teacher_id,
-              courseId: row.course_id || undefined,
-              courseName: row.course_name || '大学核心课程',
-              yearTerm: row.year_term || '2024-2025第1学期',
-              dimensions: {
-                attendanceStrictness: row.attendance_strictness,
-                gradingLeniency: row.grading_leniency,
-                effortMatters: row.effort_matters,
-                workloadDifficulty: row.workload_difficulty,
-                approachability: row.approachability,
-                teachingQuality: row.teaching_quality,
-              },
-              comment: row.comment || '',
-              authorNickname: row.author_nickname || '匿名交大学子',
-              userId: row.user_id,
-              userEmail: row.user_email,
-              isHistoricalMigrated: Boolean(row.is_historical_migrated),
-              status: row.status || 'approved',
-              rejectReason: row.reject_reason || row.rejection_reason || undefined,
-              rejectionReason: row.reject_reason || row.rejection_reason || undefined,
-              reviewerId: row.reviewer_id || undefined,
-              reviewedAt: row.reviewed_at || undefined,
-              createdAt: row.created_at || new Date().toISOString(),
-              likes: Number(row.likes) || 0,
-            }));
-          }
-        }
+        remoteReviews = data.map(mapReviewRow);
+        remoteLoaded = true;
       } catch (err) {
         console.warn('[Supabase] Failed to fetch remote reviews:', err);
       }
@@ -359,6 +456,7 @@ export const supabaseService = {
     if (teacherId) {
       localReviews = localReviews.filter((r) => r.teacherId === teacherId);
     }
+    if (scope?.userId) localReviews = localReviews.filter(r => r.userId === scope.userId);
 
     // Merge deduplicated by id:
     // Remote database (Supabase) is the single source of truth for moderation and audit status.
@@ -401,7 +499,7 @@ export const supabaseService = {
     }
 
     const merged = Array.from(reviewMap.values()).map(normalizeRatingRecord);
-    return merged.length > 0 ? merged : null;
+    return merged.length > 0 || (scope?.userId && remoteLoaded) ? merged : null;
   },
 
   /**
@@ -992,12 +1090,13 @@ export const supabaseService = {
   async getCourses(collegeId?: string): Promise<Course[]> {
     if (isSupabaseConfigured && supabase) {
       try {
-        let query = supabase.from('courses').select('*').order('name');
-        if (collegeId && collegeId !== 'all') {
-          query = query.eq('college_id', collegeId);
-        }
-        const { data, error } = await query;
-        if (!error && data && data.length > 0) {
+        const data = await readAllRows((from, to) => {
+          let query = supabase!.from('courses').select('*', { count: from === 0 ? 'exact' : undefined })
+            .order('name').order('id', { ascending: true });
+          if (collegeId && collegeId !== 'all') query = query.eq('college_id', collegeId);
+          return query.range(from, to);
+        });
+        if (data.length > 0) {
           return data.map((c: any) => ({
             id: c.id,
             name: c.name,

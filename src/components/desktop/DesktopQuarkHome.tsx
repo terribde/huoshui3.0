@@ -25,6 +25,7 @@ interface DesktopQuarkHomeProps {
   currentUser?: any | null;
   onOpenAuth?: (mode?: 'login' | 'register') => void;
   teachers: Teacher[];
+  teacherTotal?: number;
   userPoints: number;
   onOpenSearch: (query?: string) => void;
   onOpenRecommend: (course?: string) => void;
@@ -40,6 +41,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
   currentUser,
   onOpenAuth,
   teachers,
+  teacherTotal,
   userPoints,
   onOpenSearch,
   onOpenRecommend,
@@ -374,7 +376,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
               onClick={() => onOpenSearch()}
               className="text-xs text-gray-400 hover:text-indigo-600 flex items-center gap-0.5 transition-colors font-medium"
             >
-              进入完整教师库 ({teachers.length}) <ChevronRight className="w-3.5 h-3.5" />
+              进入完整教师库 ({teacherTotal ?? teachers.length}) <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
