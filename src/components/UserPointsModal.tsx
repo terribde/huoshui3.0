@@ -1,3 +1,4 @@
+import { ModalFrame } from './ModalFrame';
 import React from 'react';
 import { UserPointTransaction } from '../types';
 import { X, Coins, Check, Calendar, ArrowUpRight, Shield, RotateCw } from 'lucide-react';
@@ -27,7 +28,7 @@ export const UserPointsModal: React.FC<UserPointsModalProps> = ({
   onOpenReview,
 }) => {
   return (
-    <div id="points-center-modal" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
+    <ModalFrame id="points-center-modal" label="积分中心" onClose={onClose}>
       {/* Backdrop */}
       <motion.div 
         initial={{ opacity: 0 }}
@@ -43,7 +44,7 @@ export const UserPointsModal: React.FC<UserPointsModalProps> = ({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 30, scale: 0.96 }}
         transition={{ type: 'spring', damping: 28, stiffness: 350 }}
-        className="relative z-10 bg-white w-full max-w-lg h-[88vh] h-[88dvh] sm:h-auto max-h-[88vh] max-h-[88dvh] sm:max-h-[85vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
+        className="modal-panel relative z-10 bg-white w-full max-w-lg h-[88vh] h-[88dvh] sm:h-auto max-h-[88vh] max-h-[88dvh] sm:max-h-[85vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
       >
         {/* Header */}
         <div className="shrink-0 p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-amber-500/10 via-orange-50 to-white">
@@ -53,13 +54,14 @@ export const UserPointsModal: React.FC<UserPointsModalProps> = ({
             </div>
             <div>
               <h3 className="text-lg font-bold text-gray-900">交大积分中心</h3>
-              <p className="text-xs text-gray-500">写评价换权限 · 永久有效不扣除 (PRD 5.0)</p>
+              <p className="text-xs text-gray-500">签到、评价奖励与积分流水</p>
             </div>
           </div>
           <motion.button 
             id="close-points-center-btn"
             whileTap={{ scale: 0.88 }}
             onClick={onClose}
+            data-modal-close aria-label="关闭窗口"
             className="p-2 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -195,6 +197,6 @@ export const UserPointsModal: React.FC<UserPointsModalProps> = ({
           </div>
         </div>
       </motion.div>
-    </div>
+    </ModalFrame>
   );
 };

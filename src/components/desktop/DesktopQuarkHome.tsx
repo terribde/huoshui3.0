@@ -406,9 +406,9 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
                     <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
                       <span className="text-gray-700 font-medium">{teacher.courses[0]}</span>
                       <span>·</span>
-                      <span className="text-emerald-600 font-medium">给分松紧 {teacher.dimensions.gradingLeniency}分</span>
+                      <span className="text-emerald-600 font-medium">给分宽松 {teacher.dimensions.gradingLeniency}分</span>
                       <span>·</span>
-                      <span>点名 {teacher.dimensions.attendanceStrictness}分</span>
+                      <span>考勤宽松度 {teacher.dimensions.attendanceStrictness}分</span>
                     </div>
                   </div>
                 </div>

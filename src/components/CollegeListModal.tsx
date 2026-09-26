@@ -1,3 +1,4 @@
+import { ModalFrame } from './ModalFrame';
 import React, { useEffect, useState } from 'react';
 import { SWJTU_COLLEGES } from '../data/mockTeachers';
 import { X, Building2, ChevronRight, Search } from 'lucide-react';
@@ -49,7 +50,7 @@ export const CollegeListModal: React.FC<CollegeListModalProps> = ({
   );
 
   return (
-    <div id="colleges-modal" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
+    <ModalFrame id="colleges-modal" label="学院列表" onClose={onClose}>
       {/* Backdrop */}
       <motion.div 
         initial={{ opacity: 0 }}
@@ -65,7 +66,7 @@ export const CollegeListModal: React.FC<CollegeListModalProps> = ({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 30, scale: 0.96 }}
         transition={{ type: 'spring', damping: 28, stiffness: 350 }}
-        className="relative z-10 bg-white w-full max-w-md h-[85vh] h-[85dvh] sm:h-auto max-h-[85vh] max-h-[85dvh] sm:max-h-[85vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
+        className="modal-panel relative z-10 bg-white w-full max-w-md h-[85vh] h-[85dvh] sm:h-auto max-h-[85vh] max-h-[85dvh] sm:max-h-[85vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
       >
         <div className="shrink-0 p-5 border-b border-gray-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -75,6 +76,7 @@ export const CollegeListModal: React.FC<CollegeListModalProps> = ({
           <motion.button 
             whileTap={{ scale: 0.88 }}
             onClick={onClose}
+            data-modal-close aria-label="关闭窗口"
             className="p-1.5 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -128,6 +130,6 @@ export const CollegeListModal: React.FC<CollegeListModalProps> = ({
           )}
         </div>
       </motion.div>
-    </div>
+    </ModalFrame>
   );
 };

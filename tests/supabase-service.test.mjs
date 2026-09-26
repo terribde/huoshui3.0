@@ -8,24 +8,27 @@ import ts from 'typescript';
 const source = fs.readFileSync(new URL('../src/services/supabaseService.ts',import.meta.url),'utf8')
   .replace(/^import .*;\r?\n/gm,'').replace('export const supabaseService =','globalThis.service =');
 const compiled = ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
-function setup({points=37,rpcData=null,rpcError=null,readError=null,configured=true}={}) {
+const ratingsSource=fs.readFileSync(new URL('../src/lib/ratings.ts',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'').replaceAll('export ','');
+const ratingsCompiled=ts.transpileModule(ratingsSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
+function setup({points=37,rpcData=null,rpcError=null,readError=null,configured=true,likedIds=[]}={}) {
   const storage=new Map(); const writes=[]; const calls=[];
   const supabase={
     auth:{getUser:async()=>({data:{user:{id:'student'}},error:null})},
     rpc:async(name,args)=>{calls.push({name,args});return{data:rpcData,error:rpcError};},
     from(table){
-      let method='select';
+      let method='select', start=0, end=999;
       const q={};
       for(const key of ['select','eq','order','limit']) q[key]=()=>q;
+      q.range=(from,to)=>{start=from;end=to;return q;};
       for(const key of ['insert','update','upsert','delete']) q[key]=(payload)=>{method=key;writes.push({table,method,payload});return q;};
-      const result=()=>({data:method==='select'?(table==='user_profiles'?{points,last_checkin_date:null}:[]):null,error:readError});
+      const result=()=>({data:method==='select'?(table==='user_profiles'?{points,last_checkin_date:null}:table==='review_likes'?likedIds.slice(start,end+1).map(review_id=>({review_id})):[]):null,error:readError});
       q.maybeSingle=async()=>result();q.then=(resolve,reject)=>Promise.resolve(result()).then(resolve,reject);return q;
     },
   };
   const context={supabase,isSupabaseConfigured:configured,POPULAR_COURSES:[],window:{},
     localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},
     console:{warn(){},error(){}},setTimeout};
-  vm.createContext(context);vm.runInContext(compiled,context);
+  vm.createContext(context);vm.runInContext(ratingsCompiled,context);vm.runInContext(compiled,context);
   return {service:context.service,writes,calls};
 }
 
@@ -88,4 +91,43 @@ test('unconfigured database fails closed for privileged operations',async()=>{
   assert.equal((await service.spendPoints('ai_question')).success,false);
   assert.equal((await service.approveReview('review')).success,false);
   assert.equal((await service.checkIsAdmin('admin@example.test')).isAdmin,false);
+});
+
+test('likes use explicit desired state via RPC, never direct count writes',async()=>{
+  const {service,calls,writes}=setup({rpcData:{likes:7,liked:true}});
+  assert.equal((await service.setReviewLike('review',true)).likes,7);
+  assert.equal(calls[0].name,'set_review_like');
+  assert.equal(calls[0].args.p_liked,true);
+  assert.equal(writes.length,0);
+  for(const config of [{rpcError:{message:'denied'}},{rpcData:{likes:-1,liked:true}},{rpcData:null}]) {
+    const {service,writes}=setup(config);
+    await assert.rejects(service.setReviewLike('review',false));assert.equal(writes.length,0);
+  }
+});
+
+test('legacy rating conversion preserves missing scores and is idempotent',()=>{
+  const context={}; vm.createContext(context);vm.runInContext(ratingsCompiled,context);
+  const record={dimensions:{attendanceStrictness:1,workloadDifficulty:2,gradingLeniency:4,approachability:null}};
+  const converted=context.normalizeRatingRecord(record);
+  assert.equal(converted.dimensions.attendanceStrictness,5);
+  assert.equal(converted.dimensions.workloadDifficulty,4);
+  assert.equal(converted.dimensions.approachability,null);
+  assert.equal(context.normalizeRatingRecord(converted).dimensions.attendanceStrictness,5);
+});
+
+test('own likes load across server pages and fail on read errors',async()=>{
+  const likedIds=Array.from({length:1200},(_,i)=>`review-${String(i).padStart(4,'0')}`);
+  const {service}=setup({likedIds});
+  assert.deepEqual(Array.from(await service.getMyLikedReviewIds()),likedIds);
+  await assert.rejects(setup({readError:{message:'denied'}}).service.getMyLikedReviewIds(),/点赞状态读取失败/);
+});
+
+test('new reviews send the explicit v2 score version and never send fake like counts',async()=>{
+  const {service,writes}=setup();
+  const result=await service.submitReview({id:'review',teacherId:'teacher',courseId:'course',yearTerm:'2026',
+    userId:'student',dimensions:{attendanceStrictness:5,workloadDifficulty:5},likes:99});
+  assert.equal(result.success,true);
+  assert.equal(writes[0].payload.rating_version,2);
+  assert.equal(writes[0].payload.attendance_strictness,5);
+  assert.equal(writes[0].payload.likes,0);
 });

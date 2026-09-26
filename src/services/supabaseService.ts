@@ -1,6 +1,7 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { Teacher, Review, UserPointTransaction, Course, Term, PointRule, TeacherCourseOffering } from '../types';
 import { POPULAR_COURSES } from '../data/mockTeachers';
+import { normalizeRatingRecord, RATING_VERSION } from '../lib/ratings';
 
 /**
  * Supabase Data Service
@@ -47,7 +48,7 @@ export const supabaseService = {
    * Local storage helpers for reviews & user points
    */
   getLocalReviews(): Review[] {
-    const local = getLocalItem<Review[]>('submitted_reviews', []);
+    const local = getLocalItem<Review[]>('submitted_reviews', []).map(normalizeRatingRecord);
     if (local.length === 0) {
       try {
         const legacy = localStorage.getItem('swjtu_local_reviews');
@@ -56,7 +57,7 @@ export const supabaseService = {
           if (Array.isArray(parsed) && parsed.length > 0) {
             setLocalItem('submitted_reviews', parsed);
             localStorage.removeItem('swjtu_local_reviews');
-            return parsed;
+            return parsed.map(normalizeRatingRecord);
           }
         }
       } catch (e) {
@@ -68,7 +69,7 @@ export const supabaseService = {
 
   saveLocalReview(review: Review): void {
     const existing = this.getLocalReviews();
-    const updated = [review, ...existing.filter((r) => r.id !== review.id)];
+    const updated = [{ ...review, ratingVersion: RATING_VERSION }, ...existing.filter((r) => r.id !== review.id)];
     setLocalItem('submitted_reviews', updated);
   },
 
@@ -224,7 +225,8 @@ export const supabaseService = {
           ? isTeachingCurrentTerm
           : Boolean(row.is_teaching_this_term ?? (finalCourses.length > 0));
 
-        return {
+        return normalizeRatingRecord({
+          ratingVersion: row.rating_version ?? 1,
           id: row.id,
           name: row.name,
           title: row.title || '教师',
@@ -237,17 +239,17 @@ export const supabaseService = {
           overallScore: Number(row.overall_score) || 4.5,
           reviewCount: Number(row.review_count) || 0,
           dimensions: {
-            attendanceStrictness: Number(row.attendance_strictness) || 3,
-            gradingLeniency: Number(row.grading_leniency) || 4,
-            effortMatters: Number(row.effort_matters) || 4,
-            workloadDifficulty: Number(row.workload_difficulty) || 3,
-            approachability: Number(row.approachability) || 4,
-            teachingQuality: Number(row.teaching_quality) || 4,
+            attendanceStrictness: Number(row.attendance_strictness ?? NaN),
+            gradingLeniency: Number(row.grading_leniency ?? NaN),
+            effortMatters: Number(row.effort_matters ?? NaN),
+            workloadDifficulty: Number(row.workload_difficulty ?? NaN),
+            approachability: Number(row.approachability ?? NaN),
+            teachingQuality: Number(row.teaching_quality ?? NaN),
           },
           hasHistoricalData: Boolean(row.has_historical_data),
           tags: Array.isArray(row.tags) ? row.tags : (typeof row.tags === 'string' ? JSON.parse(row.tags) : []),
           recentTermCourses: row.recent_term_courses || [],
-        };
+        });
       });
     } catch (err) {
       console.warn('[Supabase] Failed to connect to teachers table:', err);
@@ -279,6 +281,8 @@ export const supabaseService = {
         const { data, error } = await query;
         if (!error && data) {
           remoteReviews = data.map((row: any) => ({
+            ratingVersion: row.rating_version ?? 1,
+            remote: true,
             id: row.id,
             teacherId: row.teacher_id,
             courseId: row.course_id || row.courses?.id || undefined,
@@ -311,6 +315,8 @@ export const supabaseService = {
           const { data: simpleData } = await supabase.from('reviews').select('*').order('created_at', { ascending: false });
           if (simpleData) {
             remoteReviews = simpleData.map((row: any) => ({
+              ratingVersion: row.rating_version ?? 1,
+              remote: true,
               id: row.id,
               teacherId: row.teacher_id,
               courseId: row.course_id || undefined,
@@ -390,7 +396,7 @@ export const supabaseService = {
       setLocalItem('submitted_reviews', allLocal);
     }
 
-    const merged = Array.from(reviewMap.values());
+    const merged = Array.from(reviewMap.values()).map(normalizeRatingRecord);
     return merged.length > 0 ? merged : null;
   },
 
@@ -448,6 +454,7 @@ export const supabaseService = {
       }
 
       const insertPayload: any = {
+        rating_version: RATING_VERSION,
         id: review.id,
         teacher_id: review.teacherId,
         course_id: resolvedCourseId,
@@ -523,6 +530,33 @@ export const supabaseService = {
     }
   },
 
+  async getMyLikedReviewIds(): Promise<string[]> {
+    if (!isSupabaseConfigured || !supabase) return [];
+    const { data: auth, error: authError } = await supabase.auth.getUser();
+    if (authError || !auth.user) return [];
+    const ids: string[] = [];
+    const pageSize = 500;
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await supabase.from('review_likes').select('review_id')
+        .eq('user_id', auth.user.id).order('review_id').range(offset, offset + pageSize - 1);
+      if (error) throw new Error('点赞状态读取失败，请刷新后重试');
+      ids.push(...(data || []).map(row => row.review_id));
+      if (!data || data.length < pageSize) return ids;
+    }
+  },
+
+  async setReviewLike(reviewId: string, liked: boolean): Promise<{ likes: number; liked: boolean }> {
+    if (!isSupabaseConfigured || !supabase) throw new Error('数据库未连接，点赞未保存');
+    const { data: auth, error: authError } = await supabase.auth.getUser();
+    if (authError || !auth.user) throw new Error('请先登录后点赞');
+    const { data, error } = await supabase.rpc('set_review_like', { p_review_id: reviewId, p_liked: liked });
+    if (error) throw new Error(error.message);
+    if (!data || !Number.isSafeInteger(data.likes) || data.likes < 0 || typeof data.liked !== 'boolean') {
+      throw new Error('点赞结果无法确认，请刷新后重试');
+    }
+    return data;
+  },
+
   /**
    * Reject a review
    * Calls the authorized reject_review RPC and fails closed.
@@ -564,6 +598,7 @@ export const supabaseService = {
         }
 
         const updatePayload: any = {
+          rating_version: RATING_VERSION,
           year_term: review.yearTerm,
           attendance_strictness: review.dimensions.attendanceStrictness,
           grading_leniency: review.dimensions.gradingLeniency,

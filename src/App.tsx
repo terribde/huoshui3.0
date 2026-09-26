@@ -58,6 +58,12 @@ export default function App() {
   // Core application states
   const [teachers, setTeachers] = useState<Teacher[]>(INITIAL_TEACHERS);
   const [reviews, setReviews] = useState<Review[]>(INITIAL_REVIEWS);
+  const [likedReviewIds, setLikedReviewIds] = useState<Set<string>>(new Set());
+  const [pendingLikeIds, setPendingLikeIds] = useState<Set<string>>(new Set());
+  const likeRequests = useRef(new Set<string>());
+  const likeSyncVersion = useRef(0);
+  const [likesLoading, setLikesLoading] = useState(false);
+  const [likesReady, setLikesReady] = useState(false);
   const [userPoints, setUserPoints] = useState<number>(0);
   const [hasCheckedInToday, setHasCheckedInToday] = useState<boolean>(false);
   const [isCheckingIn, setIsCheckingIn] = useState<boolean>(false);
@@ -164,7 +170,10 @@ export default function App() {
 
   // Refresh reviews from Supabase & local cache (remote status always takes precedence)
   const handleRefreshReviews = useCallback(async () => {
+    const likeVersion = ++likeSyncVersion.current;
+    const userId = currentUserIdRef.current;
     const allReviews = await supabaseService.getReviews();
+    if (currentUserIdRef.current !== userId || likeSyncVersion.current !== likeVersion) return;
     if (allReviews && allReviews.length > 0) {
       const existingIds = new Set(allReviews.map((r) => r.id));
       const combined = [...allReviews, ...INITIAL_REVIEWS.filter((r) => !existingIds.has(r.id))];
@@ -172,7 +181,25 @@ export default function App() {
     } else {
       setReviews(INITIAL_REVIEWS);
     }
+    if (userId) {
+      setLikesLoading(true);
+      try {
+        const ids = await supabaseService.getMyLikedReviewIds();
+        if (currentUserIdRef.current === userId && likeSyncVersion.current === likeVersion) {
+          setLikedReviewIds(new Set(ids)); setLikesReady(true);
+        }
+      } catch {
+        if (currentUserIdRef.current === userId && likeSyncVersion.current === likeVersion) setLikesReady(false);
+      } finally {
+        if (likeSyncVersion.current === likeVersion) setLikesLoading(false);
+      }
+    }
   }, []);
+
+  useEffect(() => {
+    setLikedReviewIds(new Set()); setLikesReady(false); setLikesLoading(false);
+    handleRefreshReviews();
+  }, [currentUser?.id, handleRefreshReviews]);
 
   // Sync Supabase Auth, Initial Data, and Realtime Listeners
   useEffect(() => {
@@ -414,6 +441,7 @@ export default function App() {
       createdAt: nowIso,
       likes: 0,
       status: 'pending', // 初始状态为待审核
+      ratingVersion: 2,
     };
 
     // Persist to Supabase and cache with full RLS validation
@@ -506,34 +534,32 @@ export default function App() {
   };
 
   // Like review
-  const handleLikeReview = (reviewId: string) => {
-    setReviews((prev) =>
-      prev.map((r) => (r.id === reviewId ? { ...r, likes: r.likes + 1 } : r))
-    );
+  const handleLikeReview = async (reviewId: string) => {
+    const uid = currentUserIdRef.current;
+    if (!uid) { handleOpenAuth('login'); return; }
+    if (!likesReady) {
+      showAppToast('点赞状态尚未同步，请稍后重试', 'error'); handleRefreshReviews(); return;
+    }
+    if (likeRequests.current.has(reviewId)) return;
+    likeRequests.current.add(reviewId); setPendingLikeIds(new Set(likeRequests.current));
+    ++likeSyncVersion.current;
+    try {
+      const result = await supabaseService.setReviewLike(reviewId, !likedReviewIds.has(reviewId));
+      if (currentUserIdRef.current !== uid) return;
+      ++likeSyncVersion.current;
+      setReviews(prev => prev.map(r => r.id === reviewId ? { ...r, likes: result.likes } : r));
+      setLikedReviewIds(prev => { const next=new Set(prev); result.liked ? next.add(reviewId) : next.delete(reviewId); return next; });
+    } catch (error) {
+      if (currentUserIdRef.current === uid) {
+        showAppToast(error instanceof Error ? error.message : '点赞未保存，请重试', 'error');
+        handleRefreshReviews();
+      }
+    } finally {
+      likeRequests.current.delete(reviewId); setPendingLikeIds(new Set(likeRequests.current));
+      setLikesLoading(false);
+    }
   };
 
-  // Lock background scroll when any modal is open to prevent scrollbar flicker & layout jump
-  const isAnyModalOpen = Boolean(
-    selectedTeacher ||
-    isAiModalOpen ||
-    isReviewModalOpen ||
-    isPointsModalOpen ||
-    isCollegesModalOpen ||
-    isExperienceModalOpen ||
-    isAuthModalOpen ||
-    isAdminAuditModalOpen
-  );
-
-  useEffect(() => {
-    if (isAnyModalOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [isAnyModalOpen]);
 
   // Filter reviews written by current user (supports user id, email, nickname, and local client submissions)
   const myUserNickname = currentUser?.user_metadata?.nickname;
@@ -1012,11 +1038,14 @@ export default function App() {
       <AnimatePresence>
         {selectedTeacher && (
           <TeacherDetailModal
-            teacher={selectedTeacher}
+            teacher={teachers.find(t => t.id === selectedTeacher.id) || selectedTeacher}
             reviews={reviews}
             onClose={() => setSelectedTeacher(null)}
             onOpenReview={(t) => handleOpenReview(t)}
             onLikeReview={handleLikeReview}
+            likedReviewIds={likedReviewIds}
+            pendingLikeIds={pendingLikeIds}
+            likesLoading={likesLoading}
           />
         )}
       </AnimatePresence>

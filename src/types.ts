@@ -1,8 +1,8 @@
 export interface TeacherDimensions {
-  attendanceStrictness: number; // 1 = 从不点名, 5 = 每次都点
+  attendanceStrictness: number; // 1 = 每次都点, 5 = 几乎不点名
   gradingLeniency: number;      // 1 = 杀手给分低, 5 = 整体给分大方
-  effortMatters: number;        // 1 = 躺平拿高分, 5 = 必须认真投入
-  workloadDifficulty: number;   // 1 = 极少作业, 5 = 作业繁重烧脑
+  effortMatters: number;        // 1 = 努力回报少, 5 = 认真投入有合理回报
+  workloadDifficulty: number;   // 1 = 作业繁重, 5 = 作业少负担轻
   approachability: number;      // 1 = 严肃难沟通, 5 = 亲和友善好相处
   teachingQuality: number;      // 1 = 照念PPT, 5 = 干货满满讲得透
 }
@@ -39,6 +39,8 @@ export interface TeacherCourseOffering {
 }
 
 export interface Review {
+  ratingVersion?: number;
+  remote?: boolean;
   id: string;
   teacherId: string;
   courseId?: string; // Foreign key -> courses.id (NOT NULL in DB)
@@ -66,6 +68,7 @@ export interface College {
 }
 
 export interface Teacher {
+  ratingVersion?: number;
   id: string;
   name: string;
   title: string; // 教授、副教授、讲师

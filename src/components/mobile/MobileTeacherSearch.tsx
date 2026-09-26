@@ -111,7 +111,7 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
         if (sortBy === 'overall') return b.overallScore - a.overallScore;
         if (sortBy === 'leniency') return b.dimensions.gradingLeniency - a.dimensions.gradingLeniency;
         if (sortBy === 'quality') return b.dimensions.teachingQuality - a.dimensions.teachingQuality;
-        if (sortBy === 'attendance') return a.dimensions.attendanceStrictness - b.dimensions.attendanceStrictness;
+        if (sortBy === 'attendance') return b.dimensions.attendanceStrictness - a.dimensions.attendanceStrictness;
         return 0;
       });
   }, [teachers, searchTerm, selectedCollege, onlyThisTerm, sortBy, colleges]);
@@ -335,10 +335,10 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
                 ))}
               </div>
 
-              {/* 3 Core Dimensions (点名严度 / 给分大方 / 教学质量) */}
+              {/* 3 Core Dimensions (考勤宽松度 / 给分大方 / 教学质量) */}
               <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-gray-50 text-[10px]">
                 <div className="flex items-center justify-between px-2 py-1 bg-gray-50 rounded-lg">
-                  <span className="text-gray-500">点名严度</span>
+                  <span className="text-gray-500">考勤宽松度</span>
                   <span className="font-bold text-gray-800">{teacher.dimensions.attendanceStrictness}分</span>
                 </div>
                 <div className="flex items-center justify-between px-2 py-1 bg-gray-50 rounded-lg">

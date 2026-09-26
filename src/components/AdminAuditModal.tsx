@@ -1,3 +1,4 @@
+import { ModalFrame } from './ModalFrame';
 import React, { useState, useEffect } from 'react';
 import { Review, Teacher } from '../types';
 import { 
@@ -302,21 +303,22 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-xs">
+    <ModalFrame id="admin-modal" label="管理员工作台" onClose={onClose}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" />
       <motion.div
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.96 }}
-        className="bg-white w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-gray-100"
+        className="modal-panel relative bg-white w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-gray-100"
       >
         {/* Header */}
-        <div className="px-6 py-4 bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="px-4 sm:px-6 py-4 bg-slate-900 text-white grid grid-cols-[minmax(0,1fr)_44px] gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-400/30 shrink-0">
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-base font-bold tracking-tight text-white">
                   西南交大选课评教 · 管理工作台
                 </h3>
@@ -330,9 +332,14 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <button
+            onClick={onClose} data-modal-close aria-label="关闭窗口"
+            className="self-start rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
             {isAdminAuthenticated && (
-              <div className="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700">
+              <div className="col-span-2 flex flex-wrap items-center bg-slate-800 p-1 rounded-xl border border-slate-700">
                 <button
                   onClick={() => setActiveSection('reviews')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
@@ -364,13 +371,6 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
                 </button>
               </div>
             )}
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors shrink-0"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
         </div>
 
         {/* Action Toast Alert Banner */}
@@ -408,7 +408,7 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
         {/* Content Body */}
         {!isAdminAuthenticated ? (
           /* Admin Login Gate */
-          <div className="p-8 sm:p-12 flex flex-col items-center justify-center text-center space-y-5 my-auto">
+          <div className="flex-1 overflow-y-auto p-8 sm:p-12 text-center space-y-5">
             <div className="w-16 h-16 rounded-3xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-xs">
               <Lock className="w-8 h-8" />
             </div>
@@ -629,9 +629,9 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
           /* Moderation Workspace */
           <div className="flex-1 flex flex-col overflow-hidden bg-slate-50/50">
             {/* Top Toolbar */}
-            <div className="p-4 bg-white border-b border-gray-100 flex flex-col sm:flex-row gap-3 items-center justify-between">
+            <div className="shrink-0 p-4 bg-white border-b border-gray-100 flex flex-col sm:flex-row gap-3 items-center justify-between">
               {/* Tab Pills */}
-              <div className="flex items-center gap-1.5 p-1 bg-gray-100/80 rounded-2xl w-full sm:w-auto overflow-x-auto">
+              <div className="flex items-center gap-1.5 p-1 bg-gray-100/80 rounded-2xl w-full sm:w-auto overflow-x-auto [&>button]:shrink-0 [&>button]:whitespace-nowrap">
                 <button
                   onClick={() => setCurrentTab('pending')}
                   className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
@@ -812,16 +812,16 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
                       {/* Dimension Scores */}
                       <div className="flex flex-wrap gap-2 text-[11px] text-gray-600 bg-gray-50/80 p-2.5 rounded-xl">
                         <span className="px-2 py-0.5 bg-white rounded-md border border-gray-100">
-                          给分松紧：<strong className="text-emerald-600">{rev.dimensions.gradingLeniency ?? '-'}分</strong>
+                          给分宽松：<strong className="text-emerald-600">{rev.dimensions.gradingLeniency ?? '-'}分</strong>
                         </span>
                         <span className="px-2 py-0.5 bg-white rounded-md border border-gray-100">
-                          点名严格：<strong className="text-amber-600">{rev.dimensions.attendanceStrictness ?? '-'}分</strong>
+                          考勤宽松度：<strong className="text-amber-600">{rev.dimensions.attendanceStrictness ?? '-'}分</strong>
                         </span>
                         <span className="px-2 py-0.5 bg-white rounded-md border border-gray-100">
                           教学质量：<strong className="text-indigo-600">{rev.dimensions.teachingQuality ?? '-'}分</strong>
                         </span>
                         <span className="px-2 py-0.5 bg-white rounded-md border border-gray-100">
-                          作业难度：<strong className="text-purple-600">{rev.dimensions.workloadDifficulty ?? '-'}分</strong>
+                          作业轻松度：<strong className="text-purple-600">{rev.dimensions.workloadDifficulty ?? '-'}分</strong>
                         </span>
                       </div>
 
@@ -952,7 +952,7 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
         )}
 
         {/* Footer info */}
-        <div className="px-6 py-3 bg-gray-50 border-t border-gray-100 text-[11px] text-gray-500 flex items-center justify-between">
+        <div className="shrink-0 px-4 sm:px-6 py-3 bg-gray-50 border-t border-gray-100 text-[11px] text-gray-500 flex items-center justify-between">
           <span>
             {isAdminAuthenticated ? '✓ 已通过管理员权限认证' : '未授权状态'}
           </span>
@@ -1049,6 +1049,6 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </ModalFrame>
   );
 };

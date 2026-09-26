@@ -13,6 +13,51 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Unlayered rules deliberately override individual Tailwind vh/h-auto utilities. */
+.app-modal {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100dvh;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: max(12px, env(safe-area-inset-top)) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  isolation: isolate;
+}
+.app-modal .modal-panel {
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.modal-panel > .flex-1 { min-height: 0; }
+.modal-panel > :first-child { flex-shrink: 0; min-width: 0; }
+.modal-panel > :first-child > div { min-width: 0; overflow-wrap: anywhere; }
+.modal-panel [data-modal-close] {
+  flex: 0 0 44px;
+  width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-panel [class*="overflow-y-auto"] {
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+@media (min-width: 640px) {
+  .app-modal { align-items: center; padding: max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom)); }
+  .app-modal .modal-panel { height: min(820px, 100%); border-radius: 24px; }
+}
+@media (max-width: 639px) {
+  .modal-panel input, .modal-panel textarea, .modal-panel select { font-size: 16px; }
+}
+
 /* Clean, unobtrusive overlay scrollbars */
 ::-webkit-scrollbar {
   width: 6px;

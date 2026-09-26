@@ -1,3 +1,5 @@
+import { ModalFrame } from './ModalFrame';
+import { RatingRadar } from './RatingRadar';
 import React, { useState } from 'react';
 import { Teacher, Review } from '../types';
 import { X, Star, Heart, Award, Sparkles, AlertCircle, History, MessageSquarePlus, ThumbsUp, CheckCircle2 } from 'lucide-react';
@@ -9,6 +11,9 @@ interface TeacherDetailModalProps {
   onClose: () => void;
   onOpenReview: (teacher: Teacher) => void;
   onLikeReview: (reviewId: string) => void;
+  likedReviewIds: Set<string>;
+  pendingLikeIds: Set<string>;
+  likesLoading: boolean;
 }
 
 export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
@@ -16,7 +21,7 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
   reviews,
   onClose,
   onOpenReview,
-  onLikeReview,
+  onLikeReview, likedReviewIds, pendingLikeIds, likesLoading,
 }) => {
   const [activeTab, setActiveTab] = useState<'reviews' | 'dimensions'>('dimensions');
 
@@ -27,60 +32,8 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
     (r) => r.teacherId === teacher.id && (r.status === 'approved' || (!r.status && !r.isHistoricalMigrated))
   );
 
-  // 6 dimensions specifications according to PRD
-  const dimensionConfigs = [
-    {
-      key: 'attendanceStrictness',
-      label: '点名/签到严格度',
-      desc: '1分从不点名 ↔ 5分每次必点',
-      value: teacher.dimensions.attendanceStrictness,
-      color: 'bg-amber-500',
-      tag: teacher.dimensions.attendanceStrictness <= 2 ? '极少点名' : teacher.dimensions.attendanceStrictness >= 4.5 ? '逢课必点' : '偶尔抽查'
-    },
-    {
-      key: 'gradingLeniency',
-      label: '给分松紧度',
-      desc: '1分给分极紧 ↔ 5分大方保A',
-      value: teacher.dimensions.gradingLeniency,
-      color: 'bg-emerald-500',
-      tag: teacher.dimensions.gradingLeniency >= 4.5 ? '给分超大方' : teacher.dimensions.gradingLeniency <= 2.5 ? '给分严格' : '按卷面折算'
-    },
-    {
-      key: 'effortMatters',
-      label: '给分是否看努力',
-      desc: '1分躺平高分 ↔ 5分必须认真投入',
-      value: teacher.dimensions.effortMatters,
-      color: 'bg-blue-500',
-      tag: teacher.dimensions.effortMatters >= 4.5 ? '付出会回报' : '作业随缘'
-    },
-    {
-      key: 'workloadDifficulty',
-      label: '作业量 / 难度',
-      desc: '1分作业极少 ↔ 5分大作业连环',
-      value: teacher.dimensions.workloadDifficulty,
-      color: 'bg-purple-500',
-      tag: teacher.dimensions.workloadDifficulty <= 2 ? '作业轻松' : teacher.dimensions.workloadDifficulty >= 4 ? '作业硬核' : '题量适中'
-    },
-    {
-      key: 'approachability',
-      label: '课后答疑亲和力',
-      desc: '1分高冷难约 ↔ 5分秒回耐心',
-      value: teacher.dimensions.approachability,
-      color: 'bg-pink-500',
-      tag: teacher.dimensions.approachability >= 4.7 ? '亦师亦友' : '严肃治学'
-    },
-    {
-      key: 'teachingQuality',
-      label: '课程教学质量',
-      desc: '1分照念PPT ↔ 5分干货拉满',
-      value: teacher.dimensions.teachingQuality,
-      color: 'bg-indigo-500',
-      tag: teacher.dimensions.teachingQuality >= 4.7 ? '封神好课' : '通俗易懂'
-    }
-  ];
-
   return (
-    <div id="teacher-detail-modal" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
+    <ModalFrame id="teacher-detail-modal" label="教师详情" onClose={onClose}>
       {/* Backdrop */}
       <motion.div 
         initial={{ opacity: 0 }}
@@ -97,16 +50,16 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 30, scale: 0.96 }}
         transition={{ type: 'spring', damping: 28, stiffness: 350 }}
-        className="relative z-10 bg-white w-full max-w-lg h-[88vh] h-[88dvh] sm:h-auto max-h-[88vh] max-h-[88dvh] sm:max-h-[85vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
+        className="modal-panel relative z-10 bg-white w-full max-w-lg h-[88vh] h-[88dvh] sm:h-auto max-h-[88vh] max-h-[88dvh] sm:max-h-[85vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
       >
         {/* Modal Header */}
         <div className="shrink-0 p-5 border-b border-gray-100 flex items-start justify-between bg-gradient-to-r from-gray-50 to-white">
           <div className="flex items-start gap-3.5">
-            <div className="w-13 h-13 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-xl font-bold shadow-md shadow-indigo-100">
+            <div className="w-13 h-13 shrink-0 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-xl font-bold shadow-md shadow-indigo-100">
               {teacher.name.charAt(0)}
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-xl font-bold text-gray-900">{teacher.name}</h3>
                 <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
                   {teacher.title}
@@ -130,6 +83,7 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
             id="close-teacher-detail-btn"
             whileTap={{ scale: 0.88 }}
             onClick={onClose}
+            data-modal-close aria-label="关闭窗口"
             className="p-2 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -176,7 +130,7 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
               activeTab === 'dimensions' ? 'text-indigo-600' : 'text-gray-500 hover:text-gray-800'
             }`}
           >
-            六维评价体系 (PRD标准)
+            六维评价
             {activeTab === 'dimensions' && (
               <motion.div 
                 layoutId="modalTabLine"
@@ -229,41 +183,7 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
                 ))}
               </div>
 
-              {/* 6 Dimension Details */}
-              <div className="pt-2">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-sm font-bold text-gray-900">维度打分细则</h4>
-                  <span className="text-xs text-gray-400">各维度独立可并存 (1-5分)</span>
-                </div>
-
-                <div className="space-y-3.5">
-                  {dimensionConfigs.map((dim, idx) => (
-                    <div key={dim.key} className="bg-gray-50/70 p-3 rounded-2xl border border-gray-100">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-gray-800">{dim.label}</span>
-                          <span className="text-[10px] text-gray-400">({dim.desc})</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-bold text-gray-900">{dim.value.toFixed(1)}分</span>
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white border border-gray-200 text-gray-700 shadow-2xs">
-                            {dim.tag}
-                          </span>
-                        </div>
-                      </div>
-                      {/* Animated Progress Bar */}
-                      <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
-                        <motion.div 
-                          initial={{ width: 0 }}
-                          animate={{ width: `${(dim.value / 5) * 100}%` }}
-                          transition={{ duration: 0.6, delay: idx * 0.06 + 0.1, ease: 'easeOut' }}
-                          className={`h-full ${dim.color} rounded-full`}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <RatingRadar dimensions={teacher.dimensions} />
 
               {/* Data migration footnote */}
               {teacher.hasHistoricalData && (
@@ -272,7 +192,7 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
                   <div>
                     <p className="font-semibold">历史数据迁移提示 (PRD 4.1)</p>
                     <p className="text-[11px] text-amber-700 mt-0.5">
-                      本教师包含原网站2024年前评价迁移。亲和力与课程质量继承历史分数；新拆分的「给分松紧度」和「是否看努力」正在持续积累最新学生评测。
+                      本教师包含原网站2024年前评价迁移。亲和力与课程质量继承历史分数；新拆分的「给分宽松度」和「努力回报」正在持续积累最新学生评测。
                     </p>
                   </div>
                 </div>
@@ -312,7 +232,11 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
                       <motion.button
                         whileTap={{ scale: 0.9 }}
                         onClick={() => onLikeReview(rev.id)}
-                        className="flex items-center gap-1 text-gray-500 hover:text-indigo-600 transition-colors"
+                        disabled={!rev.remote || likesLoading || pendingLikeIds.has(rev.id)}
+                        aria-pressed={likedReviewIds.has(rev.id)}
+                        aria-label={likedReviewIds.has(rev.id) ? "取消点赞" : "点赞"}
+                        title={!rev.remote ? "示例评价不支持云端点赞" : undefined}
+                        className={`min-h-11 px-2 flex items-center gap-1 rounded-lg transition-colors disabled:opacity-40 ${likedReviewIds.has(rev.id) ? "text-indigo-600 bg-indigo-50" : "text-gray-500 hover:text-indigo-600"}`}
                       >
                         <ThumbsUp className="w-3.5 h-3.5" />
                         <span>{rev.likes}</span>
@@ -342,6 +266,6 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
           </motion.button>
         </div>
       </motion.div>
-    </div>
+    </ModalFrame>
   );
 };

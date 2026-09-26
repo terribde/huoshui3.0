@@ -18,6 +18,7 @@ let supabaseInstance: SupabaseClient | null = null;
 
 if (isSupabaseConfigured) {
   supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { "x-rating-version": "2" } },
     auth: {
       persistSession: true,
       autoRefreshToken: true,

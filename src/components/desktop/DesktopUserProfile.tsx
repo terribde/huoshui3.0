@@ -523,7 +523,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                       <div className="flex items-center justify-between pt-1 text-[11px] text-gray-500">
                         <div className="flex items-center gap-3">
                           <span>给分：<strong className="text-emerald-600">{rev.dimensions?.gradingLeniency ?? 4}分</strong></span>
-                          <span>点名：<strong className="text-gray-700">{rev.dimensions?.attendanceStrictness ?? 3}分</strong></span>
+                          <span>考勤宽松度：<strong className="text-gray-700">{rev.dimensions?.attendanceStrictness ?? 3}分</strong></span>
                           <span>质量：<strong className="text-indigo-600">{rev.dimensions?.teachingQuality ?? 4}分</strong></span>
                         </div>
 

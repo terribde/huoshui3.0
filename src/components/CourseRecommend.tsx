@@ -81,9 +81,9 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
       const dim = teacher.dimensions;
       
       // Normalize dimensions based on user desire:
-      // 1. attendance: user wants low attendance (1 = never attendance, 5 = always attendance)
-      // score: (5 - attendanceStrictness) / 4 (range 0-1)
-      const attendScore = (5 - dim.attendanceStrictness) / 4;
+      // 1. attendance: higher means less attendance pressure
+      // score: (attendanceStrictness - 1) / 4 (range 0-1)
+      const attendScore = (dim.attendanceStrictness - 1) / 4;
 
       // 2. gradingLeniency: higher is better: (gradingLeniency - 1) / 4
       const leniencyScore = (dim.gradingLeniency - 1) / 4;
@@ -91,8 +91,8 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
       // 3. effortMatters: higher is better: (effortMatters - 1) / 4
       const effortScore = (dim.effortMatters - 1) / 4;
 
-      // 4. workloadDifficulty: user wants low workload: (5 - workloadDifficulty) / 4
-      const workloadScore = (5 - dim.workloadDifficulty) / 4;
+      // 4. workloadDifficulty: higher means lighter workload
+      const workloadScore = (dim.workloadDifficulty - 1) / 4;
 
       // 5. approachability: higher is better: (approachability - 1) / 4
       const approachScore = (dim.approachability - 1) / 4;
@@ -239,7 +239,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-          {/* 1. 点名严格度偏好 */}
+          {/* 1. 考勤宽松度偏好 */}
           <div className="p-3.5 bg-gray-50/70 rounded-2xl border border-gray-100 space-y-1.5">
             <div className="flex justify-between text-xs">
               <span className="font-semibold text-gray-800">不想被点名 (逃课友好)</span>
@@ -259,7 +259,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
             </div>
           </div>
 
-          {/* 2. 给分松紧度 */}
+          {/* 2. 给分宽松度 */}
           <div className="p-3.5 bg-gray-50/70 rounded-2xl border border-gray-100 space-y-1.5">
             <div className="flex justify-between text-xs">
               <span className="font-semibold text-gray-800">给分大方 (保高绩点)</span>
@@ -279,10 +279,10 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
             </div>
           </div>
 
-          {/* 3. 给分是否看努力 */}
+          {/* 3. 给分努力回报 */}
           <div className="p-3.5 bg-gray-50/70 rounded-2xl border border-gray-100 space-y-1.5">
             <div className="flex justify-between text-xs">
-              <span className="font-semibold text-gray-800">付出必有回报 (看努力程度)</span>
+              <span className="font-semibold text-gray-800">付出必有回报 (努力回报)</span>
               <span className="font-bold text-blue-600">{weights.effortMatters}%</span>
             </div>
             <input
@@ -294,7 +294,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
               className="w-full accent-blue-500 cursor-pointer"
             />
             <div className="flex justify-between text-[10px] text-gray-400">
-              <span>随缘躺平</span>
+              <span>不太在意</span>
               <span>越努力分越高</span>
             </div>
           </div>

@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "schema:build": "node scripts/build-schema.mjs",
+    "schema:build": "node scripts/build-schema.mjs && node scripts/build-community-schema.mjs",
     "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {

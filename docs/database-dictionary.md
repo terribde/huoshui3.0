@@ -1,6 +1,6 @@
 # Supabase 数据表与字段中文说明
 
-整理日期：2026-09-26。依据此前提供的线上结构、本地适配文件和 P1 迁移。本文解释数据库，不执行任何数据库修改。`document_chunks` 的完整字段和 Supabase 系统表清单尚未取得，下文明确标出范围。
+整理日期：2026-09-26。本文的评分说明已按 community v2 更新，线上需执行对应的新迁移后生效。依据此前提供的线上结构、本地适配文件和 P1 迁移。本文解释数据库，不执行任何数据库修改。`document_chunks` 的完整字段和 Supabase 系统表清单尚未取得，下文明确标出范围。
 
 ## 看表前先认几个词
 
@@ -70,10 +70,10 @@
 | `campus` | 教师所属或授课校区信息 |
 | `overall_score` | 综合评分，当前触发器会对已通过评价的各项有效评分求综合平均 |
 | `review_count` | 统计的已通过评价数量，不包含待审和被驳回评价 |
-| `attendance_strictness` | 点名/考勤严格度的汇总分 |
+| `attendance_strictness` | 考勤宽松度的汇总分 |
 | `grading_leniency` | 给分宽松程度的汇总分 |
 | `effort_matters` | 给分是否看努力的汇总分 |
-| `workload_difficulty` | 作业量/难度的汇总分 |
+| `workload_difficulty` | 作业轻松度的汇总分 |
 | `approachability` | 教师亲和力的汇总分 |
 | `teaching_quality` | 教学质量的汇总分 |
 | `has_historical_data` | 是否标记为有历史来源数据；该标记不是计数，评分触发器也不会自动维护它 |
@@ -84,18 +84,18 @@
 
 ### teachers 和 reviews 中共用的六个评分字段
 
-项目表单使用 1–5 分，其文字含义如下。它们不是统一的“越高越好”。
+项目表单使用 1–5 分，其文字含义如下。现在六项统一为“越高越好”。
 
 | 字段 | 中文 | 1 分方向 | 5 分方向 |
 | --- | --- | --- | --- |
-| `attendance_strictness` | 点名/考勤严格度 | 几乎不点名 | 每节课都点名 |
+| `attendance_strictness` | 考勤宽松度 | 每节课都点名 | 几乎不点名 |
 | `grading_leniency` | 给分宽松程度 | 给分严格 | 给分大方 |
-| `effort_matters` | 给分是否看努力 | 躺平也能拿分 | 越认真投入越有回报 |
-| `workload_difficulty` | 作业量/难度 | 作业少、压力小 | 作业多、难度高 |
+| `effort_matters` | 努力回报 | 努力回报少 | 越认真投入越有回报 |
+| `workload_difficulty` | 作业轻松度 | 作业多、难度高 | 作业少、压力小 |
 | `approachability` | 师生亲和力 | 严肃、难沟通 | 友善、好沟通 |
 | `teaching_quality` | 教学质量 | 讲解薄弱、照念课件 | 讲解清晰、内容扎实 |
 
-`attendance_strictness` 描述教师课堂考勤，不是本站用户每天领积分的签到。`effort_matters` 在不同页面存在“越努力分越高”和“必须认真投入”的措辞差异，这里按评价表单解释。当前综合分直接平均各维度，并没有先将考勤严格度、作业难度反向换算成满意度。
+`attendance_strictness` 描述教师课堂考勤，不是本站用户每天领积分的签到。`effort_matters` 统一表示“努力回报”，越高表示认真投入越有回报。执行 v2 迁移后，旧考勤和作业分数会反转；此后综合分平均方向一致的维度。
 
 ## 3. courses：课程表
 
@@ -139,10 +139,10 @@
 | `teacher_id` | 被评价的老师，对应 `teachers.id` |
 | `course_id` | 评价涉及的课程，对应 `courses.id` |
 | `year_term` | 作者填写/选择的授课学期文本；不是 `terms.id` |
-| `attendance_strictness` | 这一条评价对考勤严格度的打分 |
+| `attendance_strictness` | 这一条评价对考勤宽松度的打分 |
 | `grading_leniency` | 这一条评价对给分宽松度的打分 |
 | `effort_matters` | 这一条评价对努力与得分关系的打分 |
-| `workload_difficulty` | 这一条评价对作业量/难度的打分 |
+| `workload_difficulty` | 这一条评价对作业轻松度的打分 |
 | `approachability` | 这一条评价对亲和力的打分 |
 | `teaching_quality` | 这一条评价对教学质量的打分 |
 | `comment` | 文字评价正文 |
@@ -153,7 +153,7 @@
 | `reject_reason` | 驳回原因；正常提交或审核通过后为空 |
 | `reviewer_id` | 审核管理员记录的 ID，对应 `admin_users.id`，不是作者 ID，也不是直接引用 Auth 用户 ID |
 | `reviewed_at` | 最近一次审核的时间 |
-| `likes` | 点赞数量字段；当前前端点赞只更新页面状态，不能把该列的存在理解成已完成云端点赞功能 |
+| `likes` | 点赞数量字段；新版通过 review_likes 记录与 RPC 维护，含历史点赞基数 |
 | `created_at` | 评价记录的创建时间，不是审核时间 |
 
 此表保存最近的审核人和结果，不是完整的历次审核日志。修改被驳回评价重新提交时，前端清空原因并设为 pending，目前不会同时清空上次审核人和审核时间，因此不能只看 reviewed_at 判断当前是否已通过。
@@ -288,3 +288,11 @@ flowchart LR
 ```
 
 例如：“某用户写了张老师高等数学的评价，审核后奖励 20 分”，会涉及 auth.users 确认作者身份、teachers/courses 标识评价对象、reviews 保存内容及审核、admin_users 确认审核资格、point_rules 读取奖励、user_profiles 更新余额、point_transactions 记录变动、swjtu_review_rewards 防止重复奖励。
+
+## community v2 新增字段与表
+
+- `reviews.rating_version`、`teachers.rating_version`：2 表示全部高分为正向；旧分数为 1。
+- `reviews.legacy_likes`：没有用户明细的历史点赞基数。
+- `review_likes.review_id`：被点赞的评价；`user_id`：点赞者 Auth ID；`created_at`：点赞时间。
+- `private.swjtu_migrations`：`name` 为迁移标识，`applied_at` 为执行时间，用来防止重复转换。
+- `private.swjtu_rating_backup`：`table_name` 原表名，`record_id` 原记录编号，`payload` 转换前的记录快照。

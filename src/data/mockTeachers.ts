@@ -1,6 +1,7 @@
+import { normalizeRatingRecord } from '../lib/ratings';
 import { Teacher, Review } from '../types';
 
-export const INITIAL_TEACHERS: Teacher[] = [
+const LEGACY_TEACHERS: Teacher[] = [
   {
     id: 't_001',
     name: '张立新',
@@ -179,7 +180,7 @@ export const INITIAL_TEACHERS: Teacher[] = [
   }
 ];
 
-export const INITIAL_REVIEWS: Review[] = [
+const LEGACY_REVIEWS: Review[] = [
   {
     id: 'r_001',
     teacherId: 't_001',
@@ -358,3 +359,6 @@ export const POPULAR_COURSES = [
   '线性代数',
   '管理学原理'
 ];
+
+export const INITIAL_TEACHERS = LEGACY_TEACHERS.map(normalizeRatingRecord);
+export const INITIAL_REVIEWS = LEGACY_REVIEWS.map(normalizeRatingRecord);

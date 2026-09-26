@@ -1,3 +1,4 @@
+import { ModalFrame } from './ModalFrame';
 import React, { useState, useRef, useEffect } from 'react';
 import { Teacher, AiChatMessage } from '../types';
 import { Bot, Send, Sparkles, User, AlertCircle, X, HelpCircle, CornerDownRight, Coins } from 'lucide-react';
@@ -58,17 +59,17 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
     // Query analysis
     if (q.includes('不点名') || q.includes('很少点名') || q.includes('签到')) {
       const laxTeachers = teachers
-        .filter((t) => t.dimensions.attendanceStrictness <= 2.2)
-        .sort((a, b) => a.dimensions.attendanceStrictness - b.dimensions.attendanceStrictness);
+        .filter((t) => t.dimensions.attendanceStrictness >= 3.8)
+        .sort((a, b) => b.dimensions.attendanceStrictness - a.dimensions.attendanceStrictness);
 
       const topT = laxTeachers.slice(0, 3);
       return {
-        content: `根据全校真实评价库与打分统计，以下老师在【点名/签到严格度】维度上最友好（得分均 ≤ 2.2 分）：\n\n1. **${topT[0]?.name}**（${topT[0]?.college}）：点名严格度仅 ${topT[0]?.dimensions.attendanceStrictness} 分，${topT[0]?.tags.join('、')}，学生反映极少随机抽查。\n2. **${topT[1]?.name}**（${topT[1]?.college}）：点名严格度 ${topT[1]?.dimensions.attendanceStrictness} 分，平时多采用课堂互动代替冰冷签到。\n\n提示：即使老师不点名，期末考核重点通常会融入课堂板书中，建议关键复习周务必听讲！`,
+        content: `根据全校真实评价库与打分统计，以下老师在【考勤宽松度】维度上最友好（得分均 ≥ 3.8 分）：\n\n1. **${topT[0]?.name}**（${topT[0]?.college}）：考勤宽松度为 ${topT[0]?.dimensions.attendanceStrictness} 分，${topT[0]?.tags.join('、')}，学生反映极少随机抽查。\n2. **${topT[1]?.name}**（${topT[1]?.college}）：考勤宽松度 ${topT[1]?.dimensions.attendanceStrictness} 分，平时多采用课堂互动代替冰冷签到。\n\n提示：即使老师不点名，期末考核重点通常会融入课堂板书中，建议关键复习周务必听讲！`,
         citedTeachers: topT.map((t) => ({
           id: t.id,
           name: t.name,
           course: t.courses[0],
-          reason: `点名严格度 ${t.dimensions.attendanceStrictness} 分 · 给分松紧度 ${t.dimensions.gradingLeniency} 分`
+          reason: `考勤宽松度 ${t.dimensions.attendanceStrictness} 分 · 给分宽松度 ${t.dimensions.gradingLeniency} 分`
         }))
       };
     }
@@ -79,7 +80,7 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
       );
       const topMath = mathTeachers[0] || teachers[1];
       return {
-        content: `针对【高等数学/微积分】，根据评价数据库分析推荐 **${topMath.name}**（${topMath.title}）：\n\n- **教学质量**：${topMath.dimensions.teachingQuality} / 5.0（极高），学生公认黑板板书极强，逻辑推导清晰，非常适合想要扎实掌握定理、冲刺高分保研的同学。\n- **考核风格**：点名较严（${topMath.dimensions.attendanceStrictness}分），但“给分是否看努力”高达 ${topMath.dimensions.effortMatters} 分，只要平时作业认真上交，期末绝不为难，平时分给得很足。\n- **本学期开课班级**：${topMath.recentTermCourses?.[0] || '高等数学(I)'}`,
+        content: `针对【高等数学/微积分】，根据评价数据库分析推荐 **${topMath.name}**（${topMath.title}）：\n\n- **教学质量**：${topMath.dimensions.teachingQuality} / 5.0（极高），学生公认黑板板书极强，逻辑推导清晰，非常适合想要扎实掌握定理、冲刺高分保研的同学。\n- **考核风格**：考勤宽松度为 ${topMath.dimensions.attendanceStrictness} 分，但“努力回报”高达 ${topMath.dimensions.effortMatters} 分，只要平时作业认真上交，期末绝不为难，平时分给得很足。\n- **本学期开课班级**：${topMath.recentTermCourses?.[0] || '高等数学(I)'}`,
         citedTeachers: [{
           id: topMath.id,
           name: topMath.name,
@@ -92,7 +93,7 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
     if (q.includes('计算机') || q.includes('数据结构') || q.includes('算法')) {
       const csTeacher = teachers.find(t => t.college.includes('计算机')) || teachers[0];
       return {
-        content: `在计算机专业课方面，**${csTeacher.name}** 教授在数据库中处于前列：\n\n- **特点**：给分大方（${csTeacher.dimensions.gradingLeniency}分）、极少点名（${csTeacher.dimensions.attendanceStrictness}分），亲和力满分（${csTeacher.dimensions.approachability}分）。\n- **考核建议**：老师注重编程实践能力，代码大作业如果能够独立手写并写出思路分析，通常都能拿到满绩点评价。\n- 本学期在犀浦校区主讲《${csTeacher.recentTermCourses?.[0] || '数据结构与算法'}》。`,
+        content: `在计算机专业课方面，**${csTeacher.name}** 教授在数据库中处于前列：\n\n- **特点**：给分大方（${csTeacher.dimensions.gradingLeniency}分）、考勤宽松度 ${csTeacher.dimensions.attendanceStrictness} 分，亲和力满分（${csTeacher.dimensions.approachability}分）。\n- **考核建议**：老师注重编程实践能力，代码大作业如果能够独立手写并写出思路分析，通常都能拿到满绩点评价。\n- 本学期在犀浦校区主讲《${csTeacher.recentTermCourses?.[0] || '数据结构与算法'}》。`,
         citedTeachers: [{
           id: csTeacher.id,
           name: csTeacher.name,
@@ -105,7 +106,7 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
     if (q.includes('土木') || q.includes('力学') || q.includes('陈宇宏')) {
       const civilTeacher = teachers.find(t => t.college.includes('土木')) || teachers[3];
       return {
-        content: `关于土木力学与 **${civilTeacher.name}** 老师：\n\n- **风格定位**：陈老师属于标准的“治学严谨型”名师。点名极严格（${civilTeacher.dimensions.attendanceStrictness}分），给分松紧度仅 ${civilTeacher.dimensions.gradingLeniency} 分，不容许任何学术划水。\n- **考研适配**：由于课程质量高达 ${civilTeacher.dimensions.teachingQuality} 分，且“看努力程度”达到满分 5.0，想要考研深造土木力学的同学选他的课基础会极其过硬！如果是想轻松混学分的，慎选。`,
+        content: `关于土木力学与 **${civilTeacher.name}** 老师：\n\n- **风格定位**：陈老师属于标准的“治学严谨型”名师。考勤宽松度 ${civilTeacher.dimensions.attendanceStrictness} 分，给分宽松度仅 ${civilTeacher.dimensions.gradingLeniency} 分，不容许任何学术划水。\n- **考研适配**：由于课程质量高达 ${civilTeacher.dimensions.teachingQuality} 分，且“努力回报”达到满分 5.0，想要考研深造土木力学的同学选他的课基础会极其过硬！如果是想轻松混学分的，慎选。`,
         citedTeachers: [{
           id: civilTeacher.id,
           name: civilTeacher.name,
@@ -168,7 +169,7 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
   };
 
   return (
-    <div id="ai-assistant-modal" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
+    <ModalFrame id="ai-assistant-modal" label="智能助手" onClose={onClose}>
       {/* Backdrop */}
       <motion.div 
         initial={{ opacity: 0 }}
@@ -184,7 +185,7 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 30, scale: 0.96 }}
         transition={{ type: 'spring', damping: 28, stiffness: 350 }}
-        className="relative z-10 bg-white w-full max-w-xl h-[88vh] h-[88dvh] sm:h-[80vh] max-h-[88vh] max-h-[88dvh] sm:max-h-[80vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
+        className="modal-panel relative z-10 bg-white w-full max-w-xl h-[88vh] h-[88dvh] sm:h-[80vh] max-h-[88vh] max-h-[88dvh] sm:max-h-[80vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
       >
         {/* Header */}
         <div className="shrink-0 p-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-indigo-50/70 to-white">
@@ -212,6 +213,7 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
               id="close-ai-assistant-btn"
               whileTap={{ scale: 0.88 }}
               onClick={onClose}
+            data-modal-close aria-label="关闭窗口"
               className="p-1.5 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
             >
               <X className="w-5 h-5" />
@@ -350,6 +352,6 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
           </motion.button>
         </div>
       </motion.div>
-    </div>
+    </ModalFrame>
   );
 };

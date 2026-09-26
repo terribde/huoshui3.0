@@ -1,3 +1,5 @@
+import { ModalFrame } from './ModalFrame';
+import { RATING_DIMENSIONS } from '../lib/ratings';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Teacher, Review, Course } from '../types';
 import { X, CheckCircle, ShieldCheck, AlertTriangle } from 'lucide-react';
@@ -184,53 +186,10 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
     }
   };
 
-  const dimensionDefinitions = [
-    {
-      key: 'attendanceStrictness' as const,
-      label: '点名 / 签到严格度',
-      desc: '1 = 从不点名，5 = 每次必点',
-      lowDesc: '从不点名',
-      highDesc: '每节必点',
-    },
-    {
-      key: 'gradingLeniency' as const,
-      label: '给分松紧度',
-      desc: '1 = 极其严格，5 = 大方保高绩点',
-      lowDesc: '手紧给分低',
-      highDesc: '大方好拿A',
-    },
-    {
-      key: 'effortMatters' as const,
-      label: '给分是否看努力',
-      desc: '1 = 躺平拿分，5 = 认真必高分 (独立于松紧度)',
-      lowDesc: '躺平随缘',
-      highDesc: '越努力分越高',
-    },
-    {
-      key: 'workloadDifficulty' as const,
-      label: '作业量 / 难度',
-      desc: '1 = 作业少无压力，5 = 大作业量大烧脑',
-      lowDesc: '基本无作业',
-      highDesc: '连环硬核大作业',
-    },
-    {
-      key: 'approachability' as const,
-      label: '师生亲和力',
-      desc: '1 = 严肃难沟通，5 = 极易相处温柔',
-      lowDesc: '高冷严肃',
-      highDesc: '超好沟通',
-    },
-    {
-      key: 'teachingQuality' as const,
-      label: '课程教学质量',
-      desc: '1 = 照念课件，5 = 干货满满讲得透',
-      lowDesc: '划水照念',
-      highDesc: '干货封神',
-    },
-  ];
+  const dimensionDefinitions = RATING_DIMENSIONS;
 
   return (
-    <div id="review-modal" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
+    <ModalFrame id="review-modal" label="撰写评价" onClose={onClose}>
       {/* Backdrop */}
       <motion.div 
         initial={{ opacity: 0 }}
@@ -246,20 +205,21 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 30, scale: 0.96 }}
         transition={{ type: 'spring', damping: 28, stiffness: 350 }}
-        className="relative z-10 bg-white w-full max-w-xl h-[88vh] h-[88dvh] sm:h-auto max-h-[88vh] max-h-[88dvh] sm:max-h-[85vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
+        className="modal-panel relative z-10 bg-white w-full max-w-xl h-[88vh] h-[88dvh] sm:h-auto max-h-[88vh] max-h-[88dvh] sm:max-h-[85vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
       >
         {/* Header */}
         <div className="shrink-0 p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white">
           <div>
             <h3 className="text-lg font-bold text-gray-900">撰写教师评价 & 打分</h3>
             <p className="text-xs text-gray-500">
-              PRD标准六维打分 · 审核通过可获得 <strong className="text-amber-600">+20 积分</strong>
+              六维评分，越高越好 · 审核通过可获得 <strong className="text-amber-600">+20 积分</strong>
             </p>
           </div>
           <motion.button 
             id="close-review-modal-btn"
             whileTap={{ scale: 0.88 }}
             onClick={onClose}
+            data-modal-close aria-label="关闭窗口"
             className="p-2 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -389,8 +349,8 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                         </span>
                       </div>
                       <div className="flex items-center gap-3 pt-1">
-                        <span className="text-[11px] text-gray-400 w-18">{item.lowDesc}</span>
-                        <div className="flex-1 flex justify-between gap-1.5">
+                        <span className="text-[11px] text-gray-400 w-12 shrink-0">{item.lowDesc}</span>
+                        <div className="flex-1 min-w-0 flex justify-between gap-1">
                           {[1, 2, 3, 4, 5].map((score) => (
                             <motion.button
                               type="button"
@@ -408,7 +368,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                             </motion.button>
                           ))}
                         </div>
-                        <span className="text-[11px] text-gray-400 w-20 text-right">{item.highDesc}</span>
+                        <span className="text-[11px] text-gray-400 w-14 shrink-0 text-right">{item.highDesc}</span>
                       </div>
                     </div>
                   ))}
@@ -419,7 +379,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
               <div className="space-y-1.5 pt-1">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-gray-700">
-                    课程评价文字（选填，PRD：打分与文字不强绑）
+                    课程评价文字（选填，打分与文字独立）
                   </label>
                   <span className="text-[11px] text-emerald-600 font-medium">写文字上课体验更容易过审</span>
                 </div>
@@ -437,7 +397,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
               <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 flex items-start gap-2 text-[11px] text-blue-800">
                 <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                 <span>
-                  <strong>社区公约 (PRD 8)：</strong>严禁注水评价（如仅输入“很好”）及人身攻击、虚假编造事实。宽松审核，真实体验即可通过。
+                  <strong>社区公约：</strong>严禁注水评价（如仅输入“很好”）及人身攻击、虚假编造事实。宽松审核，真实体验即可通过。
                 </span>
               </div>
             </div>
@@ -519,6 +479,6 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </ModalFrame>
   );
 };

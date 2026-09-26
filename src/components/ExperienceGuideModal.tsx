@@ -1,3 +1,4 @@
+import { ModalFrame } from './ModalFrame';
 import React, { useState } from 'react';
 import { X, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -15,7 +16,7 @@ export const ExperienceGuideModal: React.FC<ExperienceGuideModalProps> = ({
   const [activeTab, setActiveTab] = useState<'guides' | 'notices' | 'history'>(defaultTab);
 
   return (
-    <div id="experience-guide-modal" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
+    <ModalFrame id="experience-guide-modal" label="经验攻略" onClose={onClose}>
       {/* Backdrop */}
       <motion.div 
         initial={{ opacity: 0 }}
@@ -31,7 +32,7 @@ export const ExperienceGuideModal: React.FC<ExperienceGuideModalProps> = ({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 30, scale: 0.96 }}
         transition={{ type: 'spring', damping: 28, stiffness: 350 }}
-        className="relative z-10 bg-white w-full max-w-lg h-[88vh] h-[88dvh] sm:h-auto max-h-[88vh] max-h-[88dvh] sm:max-h-[85vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
+        className="modal-panel relative z-10 bg-white w-full max-w-lg h-[88vh] h-[88dvh] sm:h-auto max-h-[88vh] max-h-[88dvh] sm:max-h-[85vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
       >
         {/* Header */}
         <div className="shrink-0 p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-indigo-50 to-white">
@@ -43,6 +44,7 @@ export const ExperienceGuideModal: React.FC<ExperienceGuideModalProps> = ({
             id="close-experience-guide-btn"
             whileTap={{ scale: 0.88 }}
             onClick={onClose}
+            data-modal-close aria-label="关闭窗口"
             className="p-2 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -203,13 +205,13 @@ export const ExperienceGuideModal: React.FC<ExperienceGuideModalProps> = ({
                 </p>
                 <div className="space-y-1 pt-1 text-blue-800">
                   <p>• <strong>能直接对应的维度</strong>（如亲和力、课程质量）：直接迁移历史分数。</p>
-                  <p>• <strong>新拆分出的维度</strong>（给分松紧度 / 是否看努力）：标注「新维度持续积累中」，由全校同学最新评测共同构建。</p>
+                  <p>• <strong>新拆分出的维度</strong>（给分宽松度 / 努力回报）：标注「新维度持续积累中」，由全校同学最新评测共同构建。</p>
                 </div>
               </div>
             </div>
           )}
         </div>
       </motion.div>
-    </div>
+    </ModalFrame>
   );
 };
