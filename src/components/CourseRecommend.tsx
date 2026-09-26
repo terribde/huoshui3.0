@@ -1,3 +1,4 @@
+import { formatRating, ratingMatchPercent } from '../lib/ratings';
 import React, { useState, useMemo } from 'react';
 import { Teacher, RecommendationWeights, College } from '../types';
 import { POPULAR_COURSES } from '../data/mockTeachers';
@@ -76,62 +77,12 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
       return matchCourse && t.isTeachingThisTerm && matchCollege;
     });
 
-    // Calculate weighted match score (0 - 100)
-    return candidates.map((teacher) => {
-      const dim = teacher.dimensions;
-      
-      // Normalize dimensions based on user desire:
-      // 1. attendance: higher means less attendance pressure
-      // score: (attendanceStrictness - 1) / 4 (range 0-1)
-      const attendScore = (dim.attendanceStrictness - 1) / 4;
-
-      // 2. gradingLeniency: higher is better: (gradingLeniency - 1) / 4
-      const leniencyScore = (dim.gradingLeniency - 1) / 4;
-
-      // 3. effortMatters: higher is better: (effortMatters - 1) / 4
-      const effortScore = (dim.effortMatters - 1) / 4;
-
-      // 4. workloadDifficulty: higher means lighter workload
-      const workloadScore = (dim.workloadDifficulty - 1) / 4;
-
-      // 5. approachability: higher is better: (approachability - 1) / 4
-      const approachScore = (dim.approachability - 1) / 4;
-
-      // 6. teachingQuality: higher is better: (teachingQuality - 1) / 4
-      const qualityScore = (dim.teachingQuality - 1) / 4;
-
-      const totalWeight =
-        weights.attendanceStrictness +
-        weights.gradingLeniency +
-        weights.effortMatters +
-        weights.workloadDifficulty +
-        weights.approachability +
-        weights.teachingQuality || 1;
-
-      const weightedSum =
-        attendScore * weights.attendanceStrictness +
-        leniencyScore * weights.gradingLeniency +
-        effortScore * weights.effortMatters +
-        workloadScore * weights.workloadDifficulty +
-        approachScore * weights.approachability +
-        qualityScore * weights.teachingQuality;
-
-      const matchPercent = Math.min(99, Math.max(50, Math.round((weightedSum / totalWeight) * 100)));
-
-      return {
-        teacher,
-        matchPercent,
-        scores: {
-          attendScore,
-          leniencyScore,
-          effortScore,
-          workloadScore,
-          approachScore,
-          qualityScore,
-        }
-      };
-    }).sort((a, b) => b.matchPercent - a.matchPercent);
-  }, [teachers, selectedCourse, searchKeyword, weights]);
+    // Missing selected dimensions cannot produce a reliable match percentage.
+    return candidates.map(teacher => ({
+      teacher,
+      matchPercent: ratingMatchPercent(teacher.dimensions, weights),
+    })).sort((a,b) => (b.matchPercent ?? -1) - (a.matchPercent ?? -1));
+  }, [teachers, selectedCourse, searchKeyword, selectedCollegeId, colleges, weights]);
 
   return (
     <div id="course-recommend-panel" className="max-w-5xl mx-auto space-y-4 sm:space-y-6 pb-20">
@@ -417,7 +368,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs text-gray-500">
-                      <span>综合评分: <strong className="text-amber-600">{teacher.overallScore}</strong></span>
+                      <span>综合评分: <strong className="text-amber-600">{formatRating(teacher.overallScore)}</strong></span>
                       <span>·</span>
                       <span>评价数: {teacher.reviewCount}条</span>
                       <span>·</span>
@@ -440,7 +391,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
                 <div className="flex flex-col items-end gap-1">
                   <div className="flex items-center gap-1 bg-indigo-50 border border-indigo-200 text-indigo-700 px-3 py-1.5 rounded-xl font-bold text-sm">
                     <Sparkles className="w-4 h-4 text-indigo-600" />
-                    <span>{matchPercent}% 契合</span>
+                    <span>{matchPercent === null ? '暂无数据' : `${matchPercent}% 契合`}</span>
                   </div>
                   <span className="text-[10px] text-gray-400 flex items-center gap-0.5 group-hover:text-indigo-600 transition-colors">
                     查看主页 <ChevronRight className="w-3 h-3" />

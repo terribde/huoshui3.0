@@ -1,3 +1,4 @@
+import { formatRating } from '../../lib/ratings';
 import React, { useState } from 'react';
 import { Teacher } from '../../types';
 import { 
@@ -406,9 +407,9 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
                     <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
                       <span className="text-gray-700 font-medium">{teacher.courses[0]}</span>
                       <span>·</span>
-                      <span className="text-emerald-600 font-medium">给分宽松 {teacher.dimensions.gradingLeniency}分</span>
+                      <span className="text-emerald-600 font-medium">给分宽松 {formatRating(teacher.dimensions.gradingLeniency, '分')}</span>
                       <span>·</span>
-                      <span>考勤宽松度 {teacher.dimensions.attendanceStrictness}分</span>
+                      <span>考勤宽松度 {formatRating(teacher.dimensions.attendanceStrictness, '分')}</span>
                     </div>
                   </div>
                 </div>
@@ -416,7 +417,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
                 <div className="flex flex-col items-end gap-1">
                   <div className="flex items-center gap-1 font-bold text-amber-600 text-base">
                     <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                    <span>{teacher.overallScore.toFixed(1)}</span>
+                    <span>{formatRating(teacher.overallScore)}</span>
                   </div>
                   <span className="text-[11px] text-gray-400">{teacher.reviewCount} 条评价</span>
                 </div>

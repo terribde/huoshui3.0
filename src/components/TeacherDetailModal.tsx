@@ -1,4 +1,5 @@
 import { ModalFrame } from './ModalFrame';
+import { formatRating, isRating } from '../lib/ratings';
 import { RatingRadar } from './RatingRadar';
 import React, { useState } from 'react';
 import { Teacher, Review } from '../types';
@@ -91,25 +92,25 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
         </div>
 
         {/* Quick Stats Bar */}
-        <div className="shrink-0 px-5 py-3 bg-gray-50/70 border-b border-gray-100 flex items-center justify-between text-xs">
+        <div className="shrink-0 px-5 py-3 bg-gray-50/70 border-b border-gray-100 flex flex-wrap gap-2 items-center justify-between text-xs">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1 font-bold text-amber-600">
-              <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-              <span className="text-base">{teacher.overallScore.toFixed(1)}</span>
-              <span className="text-gray-400 font-normal">/ 5.0</span>
+              <Star className={`w-4 h-4 ${isRating(teacher.overallScore) ? 'fill-amber-400 text-amber-400' : 'text-gray-400'}`} />
+              <span className={isRating(teacher.overallScore) ? 'text-base' : 'text-sm text-gray-500'}>{formatRating(teacher.overallScore)}</span>
+              {isRating(teacher.overallScore) && <span className="text-gray-400 font-normal">/ 5.0</span>}
             </div>
-            <div className="flex items-center gap-0.5">
+            {isRating(teacher.overallScore) && <div className="flex items-center gap-0.5">
               {[1, 2, 3, 4, 5].map((s) => (
                 <Star
                   key={s}
                   className={`w-3 h-3 ${
-                    s <= Math.round(teacher.overallScore)
+                    s <= Math.round(teacher.overallScore!)
                       ? 'fill-amber-400 text-amber-400'
                       : 'text-gray-200 fill-gray-200'
                   }`}
                 />
               ))}
-            </div>
+            </div>}
           </div>
           <div className="flex items-center gap-2">
             <span className="text-gray-500">评价数: {teacher.reviewCount}条</span>

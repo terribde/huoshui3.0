@@ -1,3 +1,4 @@
+import { formatRating, isRating, compareRatings, RATING_DIMENSIONS } from '../lib/ratings';
 import { ModalFrame } from './ModalFrame';
 import React, { useState, useRef, useEffect } from 'react';
 import { Teacher, AiChatMessage } from '../types';
@@ -55,21 +56,30 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
   // Simulated RAG Answer Generator using real local Teacher records
   const generateRAGResponse = (query: string): { content: string; citedTeachers?: any[] } => {
     const q = query.toLowerCase();
+    const missingRatingResponse = (teacher?: Teacher) => {
+      if (!teacher) return { content: '暂无数据，目前没有找到可展示评分的教师。', citedTeachers: [] };
+      if (isRating(teacher.overallScore) && RATING_DIMENSIONS.every(d => isRating(teacher.dimensions[d.key]))) return null;
+      return {
+        content: `**${teacher.name}** 的评分资料尚不完整：\n\n综合评分：${formatRating(teacher.overallScore, ' 分')}\n${RATING_DIMENSIONS.map(d => `${d.label}：${formatRating(teacher.dimensions[d.key], ' 分')}`).join('\n')}\n\n缺失维度显示“暂无数据”，暂不能据此判断教学表现。`,
+        citedTeachers: [{id:teacher.id,name:teacher.name,course:teacher.courses[0],reason:'查看已有评分与缺失维度'}],
+      };
+    };
 
     // Query analysis
     if (q.includes('不点名') || q.includes('很少点名') || q.includes('签到')) {
       const laxTeachers = teachers
-        .filter((t) => t.dimensions.attendanceStrictness >= 3.8)
-        .sort((a, b) => b.dimensions.attendanceStrictness - a.dimensions.attendanceStrictness);
+        .filter((t) => isRating(t.dimensions.attendanceStrictness) && t.dimensions.attendanceStrictness >= 3.8)
+        .sort((a, b) => compareRatings(a.dimensions.attendanceStrictness, b.dimensions.attendanceStrictness));
 
       const topT = laxTeachers.slice(0, 3);
+      if (!topT.length) return { content: '暂无数据，目前没有符合条件的考勤宽松度评分。', citedTeachers: [] };
       return {
-        content: `根据全校真实评价库与打分统计，以下老师在【考勤宽松度】维度上最友好（得分均 ≥ 3.8 分）：\n\n1. **${topT[0]?.name}**（${topT[0]?.college}）：考勤宽松度为 ${topT[0]?.dimensions.attendanceStrictness} 分，${topT[0]?.tags.join('、')}，学生反映极少随机抽查。\n2. **${topT[1]?.name}**（${topT[1]?.college}）：考勤宽松度 ${topT[1]?.dimensions.attendanceStrictness} 分，平时多采用课堂互动代替冰冷签到。\n\n提示：即使老师不点名，期末考核重点通常会融入课堂板书中，建议关键复习周务必听讲！`,
+        content: `以下教师的考勤宽松度评分 ≥ 3.8 分：\n\n${topT.map((t,i)=>`${i+1}. **${t.name}**（${t.college}）：考勤宽松度 ${formatRating(t.dimensions.attendanceStrictness,' 分')}，给分宽松度 ${formatRating(t.dimensions.gradingLeniency,' 分')}`).join('\n')}`,
         citedTeachers: topT.map((t) => ({
           id: t.id,
           name: t.name,
           course: t.courses[0],
-          reason: `考勤宽松度 ${t.dimensions.attendanceStrictness} 分 · 给分宽松度 ${t.dimensions.gradingLeniency} 分`
+          reason: `考勤宽松度 ${formatRating(t.dimensions.attendanceStrictness, ' 分')} · 给分宽松度 ${formatRating(t.dimensions.gradingLeniency, ' 分')}`
         }))
       };
     }
@@ -79,21 +89,25 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
         t.college.includes('数学') || t.courses.some(c => c.includes('数学') || c.includes('微积分'))
       );
       const topMath = mathTeachers[0] || teachers[1];
+      const incomplete = missingRatingResponse(topMath);
+      if (incomplete) return incomplete;
       return {
-        content: `针对【高等数学/微积分】，根据评价数据库分析推荐 **${topMath.name}**（${topMath.title}）：\n\n- **教学质量**：${topMath.dimensions.teachingQuality} / 5.0（极高），学生公认黑板板书极强，逻辑推导清晰，非常适合想要扎实掌握定理、冲刺高分保研的同学。\n- **考核风格**：考勤宽松度为 ${topMath.dimensions.attendanceStrictness} 分，但“努力回报”高达 ${topMath.dimensions.effortMatters} 分，只要平时作业认真上交，期末绝不为难，平时分给得很足。\n- **本学期开课班级**：${topMath.recentTermCourses?.[0] || '高等数学(I)'}`,
+        content: `针对【高等数学/微积分】，根据评价数据库分析推荐 **${topMath.name}**（${topMath.title}）：\n\n- **教学质量**：${formatRating(topMath.dimensions.teachingQuality, ' / 5.0')}（极高），学生公认黑板板书极强，逻辑推导清晰，非常适合想要扎实掌握定理、冲刺高分保研的同学。\n- **考核风格**：考勤宽松度为 ${formatRating(topMath.dimensions.attendanceStrictness, ' 分')}，但“努力回报”高达 ${formatRating(topMath.dimensions.effortMatters, ' 分')}，只要平时作业认真上交，期末绝不为难，平时分给得很足。\n- **本学期开课班级**：${topMath.recentTermCourses?.[0] || '高等数学(I)'}`,
         citedTeachers: [{
           id: topMath.id,
           name: topMath.name,
           course: topMath.courses[0],
-          reason: `板书一流 · 综合评分 ${topMath.overallScore} · 评价 ${topMath.reviewCount} 条`
+          reason: `板书一流 · 综合评分 ${formatRating(topMath.overallScore)} · 评价 ${topMath.reviewCount} 条`
         }]
       };
     }
 
     if (q.includes('计算机') || q.includes('数据结构') || q.includes('算法')) {
       const csTeacher = teachers.find(t => t.college.includes('计算机')) || teachers[0];
+      const incomplete = missingRatingResponse(csTeacher);
+      if (incomplete) return incomplete;
       return {
-        content: `在计算机专业课方面，**${csTeacher.name}** 教授在数据库中处于前列：\n\n- **特点**：给分大方（${csTeacher.dimensions.gradingLeniency}分）、考勤宽松度 ${csTeacher.dimensions.attendanceStrictness} 分，亲和力满分（${csTeacher.dimensions.approachability}分）。\n- **考核建议**：老师注重编程实践能力，代码大作业如果能够独立手写并写出思路分析，通常都能拿到满绩点评价。\n- 本学期在犀浦校区主讲《${csTeacher.recentTermCourses?.[0] || '数据结构与算法'}》。`,
+        content: `在计算机专业课方面，**${csTeacher.name}** 教授在数据库中处于前列：\n\n- **特点**：给分大方（${formatRating(csTeacher.dimensions.gradingLeniency, '分')}）、考勤宽松度 ${formatRating(csTeacher.dimensions.attendanceStrictness, ' 分')}，亲和力满分（${formatRating(csTeacher.dimensions.approachability, '分')}）。\n- **考核建议**：老师注重编程实践能力，代码大作业如果能够独立手写并写出思路分析，通常都能拿到满绩点评价。\n- 本学期在犀浦校区主讲《${csTeacher.recentTermCourses?.[0] || '数据结构与算法'}》。`,
         citedTeachers: [{
           id: csTeacher.id,
           name: csTeacher.name,
@@ -105,8 +119,10 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
 
     if (q.includes('土木') || q.includes('力学') || q.includes('陈宇宏')) {
       const civilTeacher = teachers.find(t => t.college.includes('土木')) || teachers[3];
+      const incomplete = missingRatingResponse(civilTeacher);
+      if (incomplete) return incomplete;
       return {
-        content: `关于土木力学与 **${civilTeacher.name}** 老师：\n\n- **风格定位**：陈老师属于标准的“治学严谨型”名师。考勤宽松度 ${civilTeacher.dimensions.attendanceStrictness} 分，给分宽松度仅 ${civilTeacher.dimensions.gradingLeniency} 分，不容许任何学术划水。\n- **考研适配**：由于课程质量高达 ${civilTeacher.dimensions.teachingQuality} 分，且“努力回报”达到满分 5.0，想要考研深造土木力学的同学选他的课基础会极其过硬！如果是想轻松混学分的，慎选。`,
+        content: `关于土木力学与 **${civilTeacher.name}** 老师：\n\n- **风格定位**：陈老师属于标准的“治学严谨型”名师。考勤宽松度 ${formatRating(civilTeacher.dimensions.attendanceStrictness, ' 分')}，给分宽松度仅 ${formatRating(civilTeacher.dimensions.gradingLeniency, ' 分')}，不容许任何学术划水。\n- **考研适配**：由于课程质量高达 ${formatRating(civilTeacher.dimensions.teachingQuality, ' 分')}，且“努力回报”达到满分 5.0，想要考研深造土木力学的同学选他的课基础会极其过硬！如果是想轻松混学分的，慎选。`,
         citedTeachers: [{
           id: civilTeacher.id,
           name: civilTeacher.name,
@@ -117,14 +133,15 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
     }
 
     // Default intelligent response matching general teachers
-    const bestOverall = [...teachers].sort((a, b) => b.overallScore - a.overallScore).slice(0, 2);
+    const bestOverall = teachers.filter(t => isRating(t.overallScore)).sort((a, b) => compareRatings(a.overallScore, b.overallScore)).slice(0, 2);
+    if (!bestOverall.length) return { content: '综合评分暂无数据，暂不能按评分推荐教师。', citedTeachers: [] };
     return {
-      content: `根据你提到的关键词，已检索校内评价库：\n\n综合评价高且给分友好的教师推荐：\n1. **${bestOverall[0]?.name}**（${bestOverall[0]?.college}）：综合 ${bestOverall[0]?.overallScore} 分，特点：${bestOverall[0]?.tags.join('、')}。\n2. **${bestOverall[1]?.name}**（${bestOverall[1]?.college}）：综合 ${bestOverall[1]?.overallScore} 分，开课科目包括 ${bestOverall[1]?.courses.join('、')}。\n\n你可以进一步追问具体课程或维度的详细情况！`,
+      content: `按已有综合评分排序：\n\n${bestOverall.map((t,i)=>`${i+1}. **${t.name}**（${t.college}）：综合 ${formatRating(t.overallScore,' 分')}，开课科目：${t.courses.join('、') || '暂无数据'}。`).join('\n')}\n\n你可以继续查看教师详情中的各维度评分。`,
       citedTeachers: bestOverall.map((t) => ({
         id: t.id,
         name: t.name,
         course: t.courses[0],
-        reason: `综合评分 ${t.overallScore} · ${t.tags[0]}`
+        reason: `综合评分 ${formatRating(t.overallScore)} · ${t.tags[0]}`
       }))
     };
   };

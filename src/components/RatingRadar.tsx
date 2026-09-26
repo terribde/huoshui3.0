@@ -1,8 +1,8 @@
 import React, { useId } from 'react';
 import { RATING_DIMENSIONS, isRating } from '../lib/ratings';
-import type { TeacherDimensions } from '../types';
+import type { TeacherRatingDimensions } from '../types';
 
-export function RatingRadar({ dimensions }: { dimensions: Partial<TeacherDimensions> }) {
+export function RatingRadar({ dimensions }: { dimensions: Partial<TeacherRatingDimensions> }) {
   const titleId = useId();
   const point = (index: number, radius: number) => {
     const angle = -Math.PI / 2 + index * Math.PI / 3;

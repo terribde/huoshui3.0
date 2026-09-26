@@ -1,4 +1,4 @@
-import type { TeacherDimensions } from '../types';
+import type { TeacherDimensions, TeacherRatingDimensions, RecommendationWeights } from '../types';
 
 export const RATING_VERSION = 2;
 export const RATING_DIMENSIONS: Array<{
@@ -14,8 +14,30 @@ export const RATING_DIMENSIONS: Array<{
 export const isRating = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value >= 1 && value <= 5;
 
+export function readRating(value: unknown): number | null {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  if (typeof value === 'string' && !value.trim()) return null;
+  const score = Number(value);
+  return isRating(score) ? score : null;
+}
+
+export const formatRating = (value: unknown, suffix = ''): string =>
+  isRating(value) ? `${value.toFixed(1)}${suffix}` : '暂无数据';
+
+// Descending scores, with missing data last (never coerced into a zero score).
+export const compareRatings = (a: unknown, b: unknown): number =>
+  isRating(a) ? (isRating(b) ? b - a : -1) : (isRating(b) ? 1 : 0);
+
+export function ratingMatchPercent(dimensions: TeacherRatingDimensions, weights: RecommendationWeights): number | null {
+  const active = RATING_DIMENSIONS.filter(d => weights[d.key] > 0);
+  if (!active.length || active.some(d => !isRating(dimensions[d.key]))) return null;
+  const total = active.reduce((sum,d) => sum + weights[d.key],0);
+  const weighted = active.reduce((sum,d) => sum + ((dimensions[d.key]! - 1) / 4) * weights[d.key],0);
+  return Math.min(99,Math.max(50,Math.round(weighted / total * 100)));
+}
+
 // Applied at boundaries only. Version 2 records must never be reversed again.
-export function normalizeRatingRecord<T extends { dimensions?: Partial<TeacherDimensions>; ratingVersion?: number; overallScore?: number }>(record: T): T {
+export function normalizeRatingRecord<T extends { dimensions?: Partial<TeacherRatingDimensions>; ratingVersion?: number; overallScore?: number | null }>(record: T): T {
   if (record.ratingVersion === RATING_VERSION) return record;
   const dimensions = { ...record.dimensions };
   for (const key of ['attendanceStrictness', 'workloadDifficulty'] as const) {
@@ -23,5 +45,5 @@ export function normalizeRatingRecord<T extends { dimensions?: Partial<TeacherDi
   }
   const valid = Object.values(dimensions).filter(isRating);
   return { ...record, dimensions, ratingVersion: RATING_VERSION,
-    ...('overallScore' in record && valid.length ? { overallScore: Math.round(valid.reduce((a,b)=>a+b,0)/valid.length*10)/10 } : {}) };
+    ...(isRating(record.overallScore) && valid.length ? { overallScore: Math.round(valid.reduce((a,b)=>a+b,0)/valid.length*10)/10 } : {}) };
 }

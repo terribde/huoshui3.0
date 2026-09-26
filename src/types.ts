@@ -7,6 +7,8 @@ export interface TeacherDimensions {
   teachingQuality: number;      // 1 = 照念PPT, 5 = 干货满满讲得透
 }
 
+export type TeacherRatingDimensions = { [K in keyof TeacherDimensions]: number | null };
+
 export interface Course {
   id: string;
   name: string;
@@ -78,9 +80,9 @@ export interface Teacher {
   courses: string[]; // 由 course_offerings 关联获得
   courseOfferings?: TeacherCourseOffering[];
   isTeachingThisTerm: boolean; // 由 course_offerings 关联 terms (is_current = true) 获得
-  overallScore: number;
+  overallScore: number | null;
   reviewCount: number;
-  dimensions: TeacherDimensions;
+  dimensions: TeacherRatingDimensions;
   hasHistoricalData: boolean; // 是否包含2024年前迁移数据
   tags: string[];
   recentTermCourses?: string[];
@@ -126,4 +128,3 @@ export interface UserProfile {
   campus?: string;
   points: number;
 }
-

@@ -1,3 +1,4 @@
+import { formatRating, compareRatings } from '../../lib/ratings';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Teacher, College } from '../../types';
 import { SWJTU_COLLEGES } from '../../data/mockTeachers';
@@ -108,10 +109,10 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
         return matchesCollege && matchesTerm && matchesQuery;
       })
       .sort((a, b) => {
-        if (sortBy === 'overall') return b.overallScore - a.overallScore;
-        if (sortBy === 'leniency') return b.dimensions.gradingLeniency - a.dimensions.gradingLeniency;
-        if (sortBy === 'quality') return b.dimensions.teachingQuality - a.dimensions.teachingQuality;
-        if (sortBy === 'attendance') return b.dimensions.attendanceStrictness - a.dimensions.attendanceStrictness;
+        if (sortBy === 'overall') return compareRatings(a.overallScore, b.overallScore);
+        if (sortBy === 'leniency') return compareRatings(a.dimensions.gradingLeniency, b.dimensions.gradingLeniency);
+        if (sortBy === 'quality') return compareRatings(a.dimensions.teachingQuality, b.dimensions.teachingQuality);
+        if (sortBy === 'attendance') return compareRatings(a.dimensions.attendanceStrictness, b.dimensions.attendanceStrictness);
         return 0;
       });
   }, [teachers, searchTerm, selectedCollege, onlyThisTerm, sortBy, colleges]);
@@ -190,7 +191,7 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
                       </div>
                       <div className="flex items-center gap-1 text-amber-500 text-xs font-bold shrink-0 ml-2">
                         <Star className="w-3 h-3 fill-amber-400 stroke-amber-400" />
-                        <span>{t.overallScore.toFixed(1)}</span>
+                        <span>{formatRating(t.overallScore)}</span>
                       </div>
                     </motion.div>
                   ))}
@@ -317,7 +318,7 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
                 <div className="flex flex-col items-end">
                   <div className="flex items-center gap-0.5 text-amber-600 font-bold text-sm">
                     <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                    <span>{teacher.overallScore.toFixed(1)}</span>
+                    <span>{formatRating(teacher.overallScore)}</span>
                   </div>
                   <span className="text-[10px] text-gray-400">{teacher.reviewCount} 条评价</span>
                 </div>
@@ -339,15 +340,15 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
               <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-gray-50 text-[10px]">
                 <div className="flex items-center justify-between px-2 py-1 bg-gray-50 rounded-lg">
                   <span className="text-gray-500">考勤宽松度</span>
-                  <span className="font-bold text-gray-800">{teacher.dimensions.attendanceStrictness}分</span>
+                  <span className="font-bold text-gray-800">{formatRating(teacher.dimensions.attendanceStrictness, '分')}</span>
                 </div>
                 <div className="flex items-center justify-between px-2 py-1 bg-gray-50 rounded-lg">
                   <span className="text-gray-500">给分大方</span>
-                  <span className="font-bold text-emerald-600">{teacher.dimensions.gradingLeniency}分</span>
+                  <span className="font-bold text-emerald-600">{formatRating(teacher.dimensions.gradingLeniency, '分')}</span>
                 </div>
                 <div className="flex items-center justify-between px-2 py-1 bg-gray-50 rounded-lg">
                   <span className="text-gray-500">教学质量</span>
-                  <span className="font-bold text-indigo-600">{teacher.dimensions.teachingQuality}分</span>
+                  <span className="font-bold text-indigo-600">{formatRating(teacher.dimensions.teachingQuality, '分')}</span>
                 </div>
               </div>
 

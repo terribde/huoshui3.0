@@ -10,7 +10,7 @@ const source = fs.readFileSync(new URL('../src/services/supabaseService.ts',impo
 const compiled = ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
 const ratingsSource=fs.readFileSync(new URL('../src/lib/ratings.ts',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'').replaceAll('export ','');
 const ratingsCompiled=ts.transpileModule(ratingsSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
-function setup({points=37,rpcData=null,rpcError=null,readError=null,configured=true,likedIds=[]}={}) {
+function setup({points=37,rpcData=null,rpcError=null,readError=null,configured=true,likedIds=[],teacherRows=[]}={}) {
   const storage=new Map(); const writes=[]; const calls=[];
   const supabase={
     auth:{getUser:async()=>({data:{user:{id:'student'}},error:null})},
@@ -21,7 +21,7 @@ function setup({points=37,rpcData=null,rpcError=null,readError=null,configured=t
       for(const key of ['select','eq','order','limit']) q[key]=()=>q;
       q.range=(from,to)=>{start=from;end=to;return q;};
       for(const key of ['insert','update','upsert','delete']) q[key]=(payload)=>{method=key;writes.push({table,method,payload});return q;};
-      const result=()=>({data:method==='select'?(table==='user_profiles'?{points,last_checkin_date:null}:table==='review_likes'?likedIds.slice(start,end+1).map(review_id=>({review_id})):[]):null,error:readError});
+      const result=()=>({data:method==='select'?(table==='user_profiles'?{points,last_checkin_date:null}:table==='review_likes'?likedIds.slice(start,end+1).map(review_id=>({review_id})):table==='teachers'?teacherRows:[]):null,error:readError});
       q.maybeSingle=async()=>result();q.then=(resolve,reject)=>Promise.resolve(result()).then(resolve,reject);return q;
     },
   };
@@ -130,4 +130,46 @@ test('new reviews send the explicit v2 score version and never send fake like co
   assert.equal(writes[0].payload.rating_version,2);
   assert.equal(writes[0].payload.attendance_strictness,5);
   assert.equal(writes[0].payload.likes,0);
+});
+
+test('teacher reads preserve missing dimensions and do not invent an overall rating',async()=>{
+  for (const rating_version of [1,2]) {
+    const {service}=setup({teacherRows:[{id:'partial',rating_version,review_count:2,overall_score:null,
+      attendance_strictness:null,grading_leniency:'4.5',effort_matters:'',
+      workload_difficulty:undefined,approachability:'invalid',teaching_quality:5}]});
+    const [teacher]=await service.getTeachers();
+    assert.equal(teacher.overallScore,null);
+    assert.equal(teacher.dimensions.attendanceStrictness,null);
+    assert.equal(teacher.dimensions.workloadDifficulty,null);
+    assert.equal(teacher.dimensions.effortMatters,null);
+    assert.equal(teacher.dimensions.approachability,null);
+    assert.equal(teacher.dimensions.gradingLeniency,4.5);
+    assert.equal(teacher.dimensions.teachingQuality,5);
+  }
+});
+
+test('unrated teacher database defaults are hidden while real and historical ratings remain',async()=>{
+  const defaults={rating_version:2,overall_score:4.5,attendance_strictness:3,grading_leniency:4,
+    effort_matters:4,workload_difficulty:3,approachability:4,teaching_quality:4.5};
+  const {service}=setup({teacherRows:[
+    {...defaults,id:'new',review_count:0,has_historical_data:false},
+    {...defaults,id:'rated',review_count:1,has_historical_data:false},
+    {...defaults,id:'history',review_count:0,has_historical_data:true},
+  ]});
+  const [fresh,rated,history]=await service.getTeachers();
+  assert.equal(fresh.overallScore,null);
+  assert.ok(Object.values(fresh.dimensions).every(value=>value===null));
+  assert.equal(rated.overallScore,4.5);
+  assert.equal(history.overallScore,4.5);
+  assert.equal(history.dimensions.teachingQuality,4.5);
+});
+
+test('missing ratings sort last and selected missing dimensions have no match percentage',()=>{
+  const context={}; vm.createContext(context);vm.runInContext(ratingsCompiled,context);
+  assert.equal(vm.runInContext('formatRating(null, "分")',context),'暂无数据');
+  assert.equal(vm.runInContext('formatRating(4.5, "分")',context),'4.5分');
+  assert.deepEqual(Array.from(vm.runInContext('[null,3,undefined,5,NaN].sort(compareRatings)',context)),[5,3,null,NaN,undefined]);
+  assert.equal(vm.runInContext('ratingMatchPercent({teachingQuality:5,gradingLeniency:null},{teachingQuality:80,gradingLeniency:20})',context),null);
+  assert.equal(vm.runInContext('ratingMatchPercent({teachingQuality:5,gradingLeniency:null},{teachingQuality:80,gradingLeniency:0})',context),99);
+  assert.equal(vm.runInContext('ratingMatchPercent({teachingQuality:5},{teachingQuality:0})',context),null);
 });

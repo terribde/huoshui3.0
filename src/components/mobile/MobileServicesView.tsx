@@ -1,3 +1,4 @@
+import { formatRating } from '../../lib/ratings';
 import React from 'react';
 import { Teacher } from '../../types';
 import { 
@@ -246,14 +247,14 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
                   <div className="flex items-center gap-1 text-[11px] text-gray-500 mt-0.5">
                     <span>{teacher.courses[0]}</span>
                     <span>·</span>
-                    <span className="text-emerald-600 font-medium">给分 {teacher.dimensions.gradingLeniency}分</span>
+                    <span className="text-emerald-600 font-medium">给分 {formatRating(teacher.dimensions.gradingLeniency, '分')}</span>
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center gap-1 font-bold text-amber-600 text-xs">
                 <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                <span>{teacher.overallScore.toFixed(1)}</span>
+                <span>{formatRating(teacher.overallScore)}</span>
               </div>
             </motion.div>
           ))}

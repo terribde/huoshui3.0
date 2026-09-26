@@ -1,7 +1,7 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { Teacher, Review, UserPointTransaction, Course, Term, PointRule, TeacherCourseOffering } from '../types';
 import { POPULAR_COURSES } from '../data/mockTeachers';
-import { normalizeRatingRecord, RATING_VERSION } from '../lib/ratings';
+import { normalizeRatingRecord, readRating, RATING_VERSION } from '../lib/ratings';
 
 /**
  * Supabase Data Service
@@ -225,6 +225,10 @@ export const supabaseService = {
           ? isTeachingCurrentTerm
           : Boolean(row.is_teaching_this_term ?? (finalCourses.length > 0));
 
+        // New teachers have numeric database defaults even before any rating exists.
+        // Only review statistics or explicitly imported history establish rating data.
+        const hasRatingData = Number(row.review_count) > 0 || row.has_historical_data === true;
+        const rating = (value: unknown) => hasRatingData ? readRating(value) : null;
         return normalizeRatingRecord({
           ratingVersion: row.rating_version ?? 1,
           id: row.id,
@@ -236,15 +240,15 @@ export const supabaseService = {
           courses: finalCourses,
           courseOfferings: offerings,
           isTeachingThisTerm,
-          overallScore: Number(row.overall_score) || 4.5,
+          overallScore: rating(row.overall_score),
           reviewCount: Number(row.review_count) || 0,
           dimensions: {
-            attendanceStrictness: Number(row.attendance_strictness ?? NaN),
-            gradingLeniency: Number(row.grading_leniency ?? NaN),
-            effortMatters: Number(row.effort_matters ?? NaN),
-            workloadDifficulty: Number(row.workload_difficulty ?? NaN),
-            approachability: Number(row.approachability ?? NaN),
-            teachingQuality: Number(row.teaching_quality ?? NaN),
+            attendanceStrictness: rating(row.attendance_strictness),
+            gradingLeniency: rating(row.grading_leniency),
+            effortMatters: rating(row.effort_matters),
+            workloadDifficulty: rating(row.workload_difficulty),
+            approachability: rating(row.approachability),
+            teachingQuality: rating(row.teaching_quality),
           },
           hasHistoricalData: Boolean(row.has_historical_data),
           tags: Array.isArray(row.tags) ? row.tags : (typeof row.tags === 'string' ? JSON.parse(row.tags) : []),
