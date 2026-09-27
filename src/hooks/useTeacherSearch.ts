@@ -18,7 +18,10 @@ export function useTeacherSearch(fallback: Teacher[], options: TeacherQuery, ena
         ? compareRatings(a.dimensions[dimensions[options.sortBy]], b.dimensions[dimensions[options.sortBy]]) : compareRatings(a.overallScore, b.overallScore));
   }, [fallback, key]);
   const size = options.pageSize || 20;
+  // Teacher rows change on review approval, not continuously: cache each page so
+  // leaving and re-entering the library repaints instantly instead of reloading.
+  // clearPagedQueryCache(key) is called wherever approvals land.
   return usePagedQuery<Teacher>(key, (page, signal) => isSupabaseConfigured
     ? supabaseService.getTeachersPage({ ...options, page, pageSize: size }, signal)
-    : Promise.resolve({ items: local.slice(page * size, (page + 1) * size), total: local.length }), enabled);
+    : Promise.resolve({ items: local.slice(page * size, (page + 1) * size), total: local.length }), enabled, 0, 5 * 60 * 1000);
 }

@@ -23,6 +23,7 @@ import { DesktopTeacherSearch } from './components/desktop/DesktopTeacherSearch'
 
 // Shared Functional Components
 import { CourseRecommend } from './components/CourseRecommend';
+import { clearPagedQueryCache } from './hooks/usePagedQuery';
 
 // Modals are only mounted when the user opens them, so load them on demand
 // instead of shipping every dialog in the entry bundle.
@@ -513,6 +514,8 @@ export default function App() {
     // 2. Refresh reviews and teachers from remote (DB trigger calculates scores and review counts)
     handleRefreshReviews();
     loadFeaturedTeachers();
+    // Approving changes teacher scores, so cached library pages must not be reused.
+    clearPagedQueryCache();
 
     // 3. If current user is author, reload user points (+20 awarded by approve_review function)
     if (currentUser) {
