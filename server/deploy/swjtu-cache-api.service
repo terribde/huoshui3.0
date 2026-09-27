@@ -1,0 +1,24 @@
+[Unit]
+Description=SWJTU teacher and review cache API
+After=network-online.target redis.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=swjtu-cache
+Group=swjtu-cache
+WorkingDirectory=/opt/swjtu-cache/current
+EnvironmentFile=/etc/swjtu-cache-api.env
+ExecStart=/usr/bin/node --max-old-space-size=192 /opt/swjtu-cache/current/index.mjs
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+MemoryMax=384M
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

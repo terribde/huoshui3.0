@@ -7,4 +7,8 @@ supabase/inspection/
 .DS_Store
 *.log
 .env*
-!.env.example
+!**/.env.example
+# Deployment artifacts and build outputs (dist/ is already ignored above).
+release/
+temp/
+docs.zip

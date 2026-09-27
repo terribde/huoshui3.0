@@ -2,6 +2,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { Teacher, Review, UserPointTransaction, Course, Term, PointRule, TeacherCourseOffering, TeacherQuery, ReviewQuery, DataPage } from '../types';
 import { POPULAR_COURSES } from '../data/mockTeachers';
 import { normalizeRatingRecord, readRating, RATING_VERSION } from '../lib/ratings';
+import { cacheApiEnabled, cacheQuery, cacheRequest } from '../lib/cacheApi';
 
 /**
  * Supabase Data Service
@@ -196,6 +197,10 @@ function mapReviewRow(row: any): Review {
 
 export const supabaseService = {
   async getTeachersPage(options: TeacherQuery = {}, signal?: AbortSignal): Promise<DataPage<Teacher>> {
+    if (cacheApiEnabled) {
+      const data = await cacheRequest<DataPage<any>>(`/teachers?${cacheQuery({ ...options })}`, { signal });
+      return { items: data.items.map(mapTeacherRow), total: data.total };
+    }
     if (!isSupabaseConfigured || !supabase) throw new Error('数据库尚未连接');
     const text = options.query?.trim() || '';
     const { from, to } = pageBounds(options.page, options.pageSize);
@@ -221,6 +226,10 @@ export const supabaseService = {
   },
 
   async getTeacherById(id: string): Promise<Teacher | null> {
+    if (cacheApiEnabled) {
+      const row = await cacheRequest<any>(`/teachers/${encodeURIComponent(id)}`);
+      return row ? mapTeacherRow(row) : null;
+    }
     if (!isSupabaseConfigured || !supabase) return null;
     const { data, error } = await supabase.from('teachers').select(TEACHER_SELECT).eq('id', id).maybeSingle();
     if (error) throw new Error(error.message);
@@ -242,6 +251,11 @@ export const supabaseService = {
   },
 
   async getReviewsPage(options: ReviewQuery, signal?: AbortSignal): Promise<DataPage<Review>> {
+    if (cacheApiEnabled && options.teacherId && options.status === 'approved' && !options.userId && !options.query) {
+      const query = cacheQuery({ page: options.page, pageSize: options.pageSize });
+      const data = await cacheRequest<DataPage<any>>(`/teachers/${encodeURIComponent(options.teacherId)}/reviews?${query}`, { signal });
+      return { items: data.items.map(mapReviewRow), total: data.total };
+    }
     if (!isSupabaseConfigured || !supabase) throw new Error('数据库尚未连接');
     const { from, to } = pageBounds(options.page, options.pageSize);
     const text = options.query?.trim();
@@ -621,7 +635,9 @@ export const supabaseService = {
     if (!isSupabaseConfigured || !supabase) return { success: false, message: '数据库未连接，无法审核' };
     try {
       // Authorization, status transition and reward are one database transaction.
-      const { data, error } = await supabase.rpc('approve_review', { p_review_id: reviewId });
+      const { data, error } = cacheApiEnabled
+        ? { data: await cacheRequest<any>(`/reviews/${encodeURIComponent(reviewId)}/approve`, { method: 'POST', authenticated: true }), error: null }
+        : await supabase.rpc('approve_review', { p_review_id: reviewId });
       if (error || data?.success !== true) {
         return { success: false, message: error?.message || data?.message || '审核未完成，请刷新后重试' };
       }
@@ -651,7 +667,9 @@ export const supabaseService = {
     if (!isSupabaseConfigured || !supabase) throw new Error('数据库未连接，点赞未保存');
     const { data: auth, error: authError } = await supabase.auth.getUser();
     if (authError || !auth.user) throw new Error('请先登录后点赞');
-    const { data, error } = await supabase.rpc('set_review_like', { p_review_id: reviewId, p_liked: liked });
+    const { data, error } = cacheApiEnabled
+      ? { data: await cacheRequest<any>(`/reviews/${encodeURIComponent(reviewId)}/like`, { method: 'POST', authenticated: true, body: { liked } }), error: null }
+      : await supabase.rpc('set_review_like', { p_review_id: reviewId, p_liked: liked });
     if (error) throw new Error(error.message);
     if (!data || !Number.isSafeInteger(data.likes) || data.likes < 0 || typeof data.liked !== 'boolean') {
       throw new Error('点赞结果无法确认，请刷新后重试');
@@ -666,9 +684,11 @@ export const supabaseService = {
   async rejectReview(reviewId: string, reason: string): Promise<{ success: boolean; message?: string }> {
     if (!isSupabaseConfigured || !supabase) return { success: false, message: '数据库未连接，无法审核' };
     try {
-      const { data, error } = await supabase.rpc('reject_review', {
-        p_review_id: reviewId, p_reason: reason || '内容不符合审核规范，请修改后重新提交',
-      });
+      const { data, error } = cacheApiEnabled
+        ? { data: await cacheRequest<any>(`/reviews/${encodeURIComponent(reviewId)}/reject`, {
+          method: 'POST', authenticated: true, body: { reason: reason || '内容不符合审核规范，请修改后重新提交' },
+        }), error: null }
+        : await supabase.rpc('reject_review', { p_review_id: reviewId, p_reason: reason || '内容不符合审核规范，请修改后重新提交' });
       if (error || data?.success !== true) {
         return { success: false, message: error?.message || data?.message || '驳回未完成，请刷新后重试' };
       }
@@ -717,15 +737,16 @@ export const supabaseService = {
           updatePayload.course_id = resolvedCourseId;
         }
 
-        const { error } = await supabase
-          .from('reviews')
-          .update(updatePayload)
-          .eq('id', review.id)
-          .eq('user_id', sessionUser.id);
-
-        if (error) {
-          console.error('[Supabase] updateMyReview error:', error);
-          return { success: false, message: error.message };
+        if (cacheApiEnabled) {
+          await cacheRequest(`/reviews/${encodeURIComponent(review.id)}`, {
+            method: 'PATCH', authenticated: true, body: updatePayload,
+          });
+        } else {
+          const { error } = await supabase.from('reviews').update(updatePayload).eq('id', review.id).eq('user_id', sessionUser.id);
+          if (error) {
+            console.error('[Supabase] updateMyReview error:', error);
+            return { success: false, message: error.message };
+          }
         }
         return { success: true };
       } catch (err: any) {
@@ -757,6 +778,19 @@ export const supabaseService = {
    * Delete a review (e.g., author deletes rejected review or admin removes)
    */
   async deleteReview(reviewId: string): Promise<boolean> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        if (cacheApiEnabled) {
+          await cacheRequest(`/reviews/${encodeURIComponent(reviewId)}`, { method: 'DELETE', authenticated: true });
+        } else {
+          const { data, error } = await supabase.from('reviews').delete().eq('id', reviewId).select('id');
+          if (error || data?.length !== 1) return false;
+        }
+      } catch (err) {
+        console.warn('[Supabase] Failed to delete review from remote:', err);
+        return false;
+      }
+    }
     // 1. Remove from local cache
     const local = this.getLocalReviews();
     const filtered = local.filter((r) => r.id !== reviewId);
@@ -765,15 +799,6 @@ export const supabaseService = {
       localStorage.removeItem('swjtu_local_reviews');
     } catch (e) {
       console.warn('Failed to delete review from local storage:', e);
-    }
-
-    // 2. Remove from Supabase
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from('reviews').delete().eq('id', reviewId);
-      } catch (err) {
-        console.warn('[Supabase] Failed to delete review from remote:', err);
-      }
     }
 
     return true;

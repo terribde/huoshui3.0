@@ -43,12 +43,12 @@ export const AGENT_NOTICE_CONFIG = {
   
   // 赞赏 / 捐助区域
   donationTitle: '请开发者喝杯咖啡 ☕',
-  donationSubtitle: '开源公益不易，您的赞助是服务器运维与功能迭代的最大动力！',
+  donationSubtitle: '您的赞助是服务器运维与功能迭代的最大动力！',
   
   // 捐助二维码图片路径：
   // 若您有微信或支付宝赞赏码图片，可把图片放到 public/donation-qrcode.png，并设置此处为 '/donation-qrcode.png'
   // 若为空字符串，则展示内置的赞赏码视觉图
-  qrCodeImageUrl: '',
+  qrCodeImageUrl: '/donation-qrcode.jpg',
 };
 
 interface AgentNoticeModalProps {

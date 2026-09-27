@@ -10,8 +10,9 @@ const source = fs.readFileSync(new URL('../src/services/supabaseService.ts',impo
 const compiled = ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
 const ratingsSource=fs.readFileSync(new URL('../src/lib/ratings.ts',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'').replaceAll('export ','');
 const ratingsCompiled=ts.transpileModule(ratingsSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
-function setup({points=37,rpcData=null,rpcError=null,readError=null,configured=true,likedIds=[],teacherRows=[],reviewRows=[],courseRows=[],pageLimit=1000,omitCounts=false,relationError=false,pageError=null}={}) {
+function setup({points=37,rpcData=null,rpcError=null,readError=null,configured=true,likedIds=[],teacherRows=[],reviewRows=[],courseRows=[],pageLimit=1000,omitCounts=false,relationError=false,pageError=null,cacheEnabled=false,apiResult=null,apiError=null}={}) {
   const storage=new Map(); const writes=[]; const calls=[]; const queries=[];
+  const apiCalls=[];
   const supabase={
     auth:{getUser:async()=>({data:{user:{id:'student'}},error:null})},
     rpc:async(name,args)=>{calls.push({name,args});return{data:rpcData,error:rpcError};},
@@ -56,12 +57,38 @@ function setup({points=37,rpcData=null,rpcError=null,readError=null,configured=t
       q.then=(resolve,reject)=>Promise.resolve(result()).then(resolve,reject);return q;
     },
   };
-  const context={supabase,isSupabaseConfigured:configured,POPULAR_COURSES:[],window:{},
+  const context={supabase,isSupabaseConfigured:configured,cacheApiEnabled:cacheEnabled,
+    cacheQuery:options=>new URLSearchParams(Object.entries(options).filter(([,value])=>value!==undefined)).toString(),
+    cacheRequest:async(path,options)=>{apiCalls.push({path,options});if(apiError)throw new Error(apiError);return apiResult;},
+    POPULAR_COURSES:[],window:{},
     localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},
     console:{warn(){},error(){}},setTimeout};
   vm.createContext(context);vm.runInContext(ratingsCompiled,context);vm.runInContext(compiled,context);
-  return {service:context.service,writes,calls,queries};
+  return {service:context.service,writes,calls,queries,apiCalls};
 }
+
+test('enabled cache API serves teacher and public review pages while personal and moderation queries stay private',async()=>{
+  const f=setup({cacheEnabled:true,apiResult:{items:[],total:0}});
+  await f.service.getTeachersPage({query:'course',page:2});
+  await f.service.getReviewsPage({teacherId:'teacher',status:'approved',page:1});
+  assert.equal(f.apiCalls.length,2);assert.equal(f.queries.length,0);
+  await f.service.getReviewsPage({teacherId:'teacher',status:'pending'});
+  await f.service.getReviewsPage({userId:'student',status:'approved'});
+  assert.equal(f.apiCalls.length,2);assert.equal(f.queries.length,2);
+});
+test('cached deployment routes mutations through authenticated API and never retries them directly',async()=>{
+  const f=setup({cacheEnabled:true,apiResult:{success:true,likes:8,liked:true}});
+  assert.equal((await f.service.approveReview('review')).success,true);
+  assert.equal((await f.service.rejectReview('review','reason')).success,true);
+  assert.equal((await f.service.setReviewLike('review',true)).likes,8);
+  assert.equal(await f.service.deleteReview('review'),true);
+  assert.equal(f.calls.length,0);assert.equal(f.writes.length,0);
+  assert.ok(f.apiCalls.every(c=>c.options.authenticated));
+  const failed=setup({cacheEnabled:true,apiError:'offline'});
+  assert.equal((await failed.service.approveReview('review')).success,false);
+  assert.equal(await failed.service.deleteReview('review'),false);
+  assert.equal(failed.writes.length,0);assert.equal(failed.calls.length,0);
+});
 
 test('remote balance including zero replaces a higher local cache and old ledger',async()=>{
   for(const points of [37,0]) {

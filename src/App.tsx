@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { Teacher, Review, UserPointTransaction } from './types';
 import { INITIAL_TEACHERS, INITIAL_REVIEWS } from './data/mockTeachers';
 import { supabaseService } from './services/supabaseService';
@@ -23,15 +23,21 @@ import { DesktopTeacherSearch } from './components/desktop/DesktopTeacherSearch'
 
 // Shared Functional Components
 import { CourseRecommend } from './components/CourseRecommend';
-import { TeacherDetailModal } from './components/TeacherDetailModal';
-import { AiAssistantModal } from './components/AiAssistantModal';
-import { AgentNoticeModal } from './components/AgentNoticeModal';
-import { ReviewModal } from './components/ReviewModal';
-import { UserPointsModal } from './components/UserPointsModal';
-import { CollegeListModal } from './components/CollegeListModal';
-import { ExperienceGuideModal } from './components/ExperienceGuideModal';
-import { AuthModal } from './components/AuthModal';
-import { AdminAuditModal } from './components/AdminAuditModal';
+
+// Modals are only mounted when the user opens them, so load them on demand
+// instead of shipping every dialog in the entry bundle.
+const TeacherDetailModal = lazy(() => import('./components/TeacherDetailModal').then(m => ({ default: m.TeacherDetailModal })));
+const AgentNoticeModal = lazy(() => import('./components/AgentNoticeModal').then(m => ({ default: m.AgentNoticeModal })));
+const ReviewModal = lazy(() => import('./components/ReviewModal').then(m => ({ default: m.ReviewModal })));
+const UserPointsModal = lazy(() => import('./components/UserPointsModal').then(m => ({ default: m.UserPointsModal })));
+const CollegeListModal = lazy(() => import('./components/CollegeListModal').then(m => ({ default: m.CollegeListModal })));
+const ExperienceGuideModal = lazy(() => import('./components/ExperienceGuideModal').then(m => ({ default: m.ExperienceGuideModal })));
+const AuthModal = lazy(() => import('./components/AuthModal').then(m => ({ default: m.AuthModal })));
+const AdminAuditModal = lazy(() => import('./components/AdminAuditModal').then(m => ({ default: m.AdminAuditModal })));
+
+// Modals are user-triggered, so the split chunk normally arrives immediately.
+// Rendering nothing avoids a flash of placeholder inside the open animation.
+const LazyFallback = () => null;
 
 import { 
   BookOpen, 
@@ -545,8 +551,12 @@ export default function App() {
 
   // Delete review handler
   const handleDeleteReview = async (reviewId: string) => {
+    const success = await supabaseService.deleteReview(reviewId);
+    if (!success) {
+      alert('删除失败，请刷新后重试');
+      return;
+    }
     setReviews((prev) => prev.filter((r) => r.id !== reviewId));
-    await supabaseService.deleteReview(reviewId);
     handleRefreshReviews();
   };
 
@@ -1055,6 +1065,7 @@ export default function App() {
       {/* 1. 教师主页 / 详细六维评测 Modal */}
       <AnimatePresence>
         {selectedTeacher && (
+          <Suspense fallback={<LazyFallback />}>
           <TeacherDetailModal
             teacher={teachers.find(t => t.id === selectedTeacher.id) || selectedTeacher}
             reviews={reviews}
@@ -1066,22 +1077,26 @@ export default function App() {
             refreshToken={reviewRevision}
             likesLoading={likesLoading}
           />
+          </Suspense>
         )}
       </AnimatePresence>
 
       {/* 2. Agent 维护公告 Modal (版本 pre1.0.1) */}
       <AnimatePresence>
         {isAiModalOpen && (
+          <Suspense fallback={<LazyFallback />}>
           <AgentNoticeModal
             isOpen={isAiModalOpen}
             onClose={() => setIsAiModalOpen(false)}
           />
+          </Suspense>
         )}
       </AnimatePresence>
 
       {/* 3. 评价打分 Modal */}
       <AnimatePresence>
         {isReviewModalOpen && (
+          <Suspense fallback={<LazyFallback />}>
           <ReviewModal
             isOpen={isReviewModalOpen}
             onClose={() => setIsReviewModalOpen(false)}
@@ -1089,12 +1104,14 @@ export default function App() {
             preselectedTeacher={reviewTargetTeacher}
             onSubmitReview={handleSubmitReview}
           />
+          </Suspense>
         )}
       </AnimatePresence>
 
       {/* 4. 积分中心 Modal */}
       <AnimatePresence>
         {isPointsModalOpen && (
+          <Suspense fallback={<LazyFallback />}>
           <UserPointsModal
             isOpen={isPointsModalOpen}
             onClose={() => setIsPointsModalOpen(false)}
@@ -1106,12 +1123,14 @@ export default function App() {
             onCheckIn={handleCheckIn}
             onOpenReview={() => handleOpenReview()}
           />
+          </Suspense>
         )}
       </AnimatePresence>
 
       {/* 5. 院系库 Modal */}
       <AnimatePresence>
         {isCollegesModalOpen && (
+          <Suspense fallback={<LazyFallback />}>
           <CollegeListModal
             isOpen={isCollegesModalOpen}
             onClose={() => setIsCollegesModalOpen(false)}
@@ -1121,23 +1140,27 @@ export default function App() {
               setCurrentTab('search');
             }}
           />
+          </Suspense>
         )}
       </AnimatePresence>
 
       {/* 6. 经验攻略 / 教务通知 / 历史迁移说明 Modal */}
       <AnimatePresence>
         {isExperienceModalOpen && (
+          <Suspense fallback={<LazyFallback />}>
           <ExperienceGuideModal
             isOpen={isExperienceModalOpen}
             onClose={() => setIsExperienceModalOpen(false)}
             defaultTab={experienceTab}
           />
+          </Suspense>
         )}
       </AnimatePresence>
 
       {/* 7. Supabase 用户认证 Modal (登录 / 注册) */}
       <AnimatePresence>
         {isAuthModalOpen && (
+          <Suspense fallback={<LazyFallback />}>
           <AuthModal
             isOpen={isAuthModalOpen}
             onClose={() => setIsAuthModalOpen(false)}
@@ -1148,12 +1171,14 @@ export default function App() {
               setIsAuthModalOpen(false);
             }}
           />
+          </Suspense>
         )}
       </AnimatePresence>
 
       {/* 8. 管理员审核后台工作台 Modal */}
       <AnimatePresence>
         {isAdminAuditModalOpen && isUserAdmin && (
+          <Suspense fallback={<LazyFallback />}>
           <AdminAuditModal
             isOpen={isAdminAuditModalOpen}
             onClose={() => setIsAdminAuditModalOpen(false)}
@@ -1166,6 +1191,7 @@ export default function App() {
             currentUserEmail={currentUser?.email}
             currentUserId={currentUser?.id}
           />
+          </Suspense>
         )}
       </AnimatePresence>
     </div>
