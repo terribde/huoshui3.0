@@ -5,6 +5,7 @@ import { usePagedQuery } from '../hooks/usePagedQuery';
 import { supabaseService } from '../services/supabaseService';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { Pagination, PageFeedback } from './Pagination';
+import { ReviewListSkeleton } from './Skeletons';
 import React, { useState, useEffect } from 'react';
 import { Teacher, Review } from '../types';
 import { X, Star, Heart, Award, Sparkles, AlertCircle, History, MessageSquarePlus, ThumbsUp, CheckCircle2 } from 'lucide-react';
@@ -211,8 +212,10 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
             </div>
           ) : (
             <div className="space-y-3">
-              <PageFeedback loading={page.loading} error={page.error} onRetry={page.reload} />
-              {page.loading || page.error ? null : teacherReviews.length === 0 ? (
+              <PageFeedback loading={false} error={page.error} onRetry={page.reload} />
+              {page.loading ? (
+                <ReviewListSkeleton count={3} />
+              ) : page.error ? null : teacherReviews.length === 0 ? (
                 <div className="text-center py-10 text-gray-400">
                   <p className="text-sm">暂无该老师的文字评价</p>
                   <p className="text-xs mt-1">成为第一个评价的人，审核通过可得 +20 积分！</p>

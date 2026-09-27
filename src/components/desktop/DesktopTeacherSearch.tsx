@@ -1,5 +1,6 @@
 import { useTeacherSearch } from '../../hooks/useTeacherSearch';
 import { Pagination, PageFeedback } from '../Pagination';
+import { TeacherListSkeleton } from '../Skeletons';
 import { formatRating, compareRatings } from '../../lib/ratings';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Teacher, College } from '../../types';
@@ -206,7 +207,7 @@ export const DesktopTeacherSearch: React.FC<DesktopTeacherSearchProps> = ({
         </div>
       </div>
 
-      <PageFeedback loading={result.loading} error={result.error} onRetry={result.reload} />
+      <PageFeedback loading={false} error={result.error} onRetry={result.reload} />
       {/* 2. Count Bar */}
       <div className="flex items-center justify-between px-1 text-xs text-gray-500">
         <span>共找到 <strong className="text-gray-900 font-bold">{result.total}</strong> 位教师</span>
@@ -214,7 +215,9 @@ export const DesktopTeacherSearch: React.FC<DesktopTeacherSearchProps> = ({
       </div>
 
       {/* 3. Teachers Grid (2-Column for Desktop) */}
-      {result.loading || result.error ? null : filteredTeachers.length === 0 ? (
+      {result.loading ? (
+        <TeacherListSkeleton layout="desktop" count={6} />
+      ) : result.error ? null : filteredTeachers.length === 0 ? (
         <div className="bg-white p-16 rounded-3xl border border-gray-100 text-center text-gray-400 space-y-2">
           <p className="text-base font-semibold text-gray-700">没有找到匹配的老师</p>
           <p className="text-xs">尝试更换关键词或在“全部学院”中搜索</p>

@@ -2,7 +2,7 @@ import { ModalFrame } from './ModalFrame';
 import { RATING_DIMENSIONS } from '../lib/ratings';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Teacher, Review, Course } from '../types';
-import { X, CheckCircle, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { X, CheckCircle, ShieldCheck, AlertTriangle, EyeOff, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AnimatedDropdown } from './AnimatedDropdown';
 import { checkSensitiveContent } from '../utils/sensitiveFilter';
@@ -11,11 +11,23 @@ import { useTeacherSearch } from '../hooks/useTeacherSearch';
 import { usePagedQuery } from '../hooks/usePagedQuery';
 import { PageFeedback } from './Pagination';
 
+export const SEMESTER_OPTIONS = [
+  { value: '2026-2027第一学期', label: '2026-2027第一学期 (当前学期)' },
+  { value: '2025-2026第二学期', label: '2025-2026第二学期' },
+  { value: '2025-2026第一学期', label: '2025-2026第一学期' },
+  { value: '2024-2025第二学期', label: '2024-2025第二学期' },
+  { value: '2024-2025第一学期', label: '2024-2025第一学期' },
+  { value: '2023-2024第二学期', label: '2023-2024第二学期' },
+  { value: '2023-2024第一学期', label: '2023-2024第一学期' },
+  { value: '2022-2023及更早', label: '2022-2023及更早' },
+];
+
 interface ReviewModalProps {
   isOpen: boolean;
   onClose: () => void;
   teachers: Teacher[];
   preselectedTeacher?: Teacher | null;
+  currentUser?: any | null;
   onSubmitReview: (review: Omit<Review, 'id' | 'createdAt' | 'likes'>) => Promise<{ success: boolean; message?: string }> | void;
 }
 
@@ -23,6 +35,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
   onClose,
   teachers,
   preselectedTeacher,
+  currentUser,
   onSubmitReview,
 }) => {
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(
@@ -38,9 +51,12 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
   const [selectedCourseName, setSelectedCourseName] = useState<string>(
     preselectedTeacher?.courses[0] || ''
   );
-  const [yearTerm, setYearTerm] = useState<string>('2024-2025第1学期');
+  const [yearTerm, setYearTerm] = useState<string>('2026-2027第一学期');
   const [comment, setComment] = useState<string>('');
-  const [nickname, setNickname] = useState<string>('犀浦小火车');
+  const [isAnonymous, setIsAnonymous] = useState<boolean>(true);
+  const [customNickname, setCustomNickname] = useState<string>(
+    currentUser?.user_metadata?.nickname || '交大学子'
+  );
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [successNotice, setSuccessNotice] = useState<boolean>(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -179,7 +195,9 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
         yearTerm,
         dimensions,
         comment: comment.trim() || undefined,
-        authorNickname: nickname || '交大学子',
+        authorNickname: isAnonymous
+          ? '匿名学子'
+          : (customNickname.trim() || currentUser?.user_metadata?.nickname || '交大学子'),
         isHistoricalMigrated: false,
         status: 'pending', // <--- Initial status: pending
       });
@@ -333,27 +351,66 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                 </div>
               </div>
 
-              {/* Term and Nickname */}
-              <div className="grid grid-cols-2 gap-3.5">
+              {/* Term and Anonymity Selection */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">修读学期</label>
-                  <input
-                    type="text"
+                  <AnimatedDropdown
+                    id="review-term-select"
+                    className="w-full"
                     value={yearTerm}
-                    onChange={(e) => setYearTerm(e.target.value)}
-                    placeholder="如：2024秋季"
-                    className="w-full px-3.5 py-2 bg-gray-50 rounded-xl border border-gray-200 text-xs focus:outline-hidden focus:border-indigo-500"
+                    selectedOption={SEMESTER_OPTIONS.find((o) => o.value === yearTerm)}
+                    onChange={setYearTerm}
+                    options={SEMESTER_OPTIONS}
+                    buttonClassName="w-full bg-gray-50 hover:bg-gray-100/90 text-gray-800 rounded-xl px-3.5 py-2.5 text-xs border border-gray-200"
+                    menuClassName="w-full max-h-56"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">发布者昵称</label>
-                  <input
-                    type="text"
-                    value={nickname}
-                    onChange={(e) => setNickname(e.target.value)}
-                    placeholder="匿名昵称"
-                    className="w-full px-3.5 py-2 bg-gray-50 rounded-xl border border-gray-200 text-xs focus:outline-hidden focus:border-indigo-500"
-                  />
+                  <label className="block text-xs font-bold text-gray-700 mb-1">发布身份</label>
+                  <div className="flex items-center gap-1.5 p-1 bg-gray-50 rounded-xl border border-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => setIsAnonymous(true)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        isAnonymous
+                          ? 'bg-white text-indigo-700 shadow-2xs border border-indigo-100 font-bold'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      <EyeOff className="w-3.5 h-3.5" />
+                      <span>匿名评价</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsAnonymous(false)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        !isAnonymous
+                          ? 'bg-white text-indigo-700 shadow-2xs border border-indigo-100 font-bold'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      <User className="w-3.5 h-3.5" />
+                      <span>公开昵称</span>
+                    </button>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between text-[11px] text-gray-400 px-0.5">
+                    {isAnonymous ? (
+                      <span>对外署名：<strong className="text-gray-600 font-medium">匿名学子</strong>（保护隐私）</span>
+                    ) : (
+                      <span className="flex items-center gap-1">
+                        <span>对外署名：</span>
+                        <input
+                          type="text"
+                          value={customNickname}
+                          onChange={(e) => setCustomNickname(e.target.value)}
+                          placeholder="公开昵称"
+                          maxLength={12}
+                          className="px-2 py-0.5 bg-white border border-gray-200 rounded text-gray-800 text-[11px] font-medium w-28 focus:outline-hidden focus:border-indigo-500"
+                        />
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 

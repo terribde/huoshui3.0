@@ -51,12 +51,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                 {tab.id === 'services' && !isActive && (
                   <span className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse" />
                 )}
-
-                {tab.id === 'profile' && (
-                  <span className="absolute -top-1 -right-3 px-1 py-0.2 bg-amber-500 text-white rounded-full text-[9px] font-bold leading-none scale-90">
-                    {userPoints}
-                  </span>
-                )}
               </div>
 
               <span className={`text-[10px] transition-colors ${isActive ? 'text-gray-900 font-semibold' : 'text-gray-400'}`}>

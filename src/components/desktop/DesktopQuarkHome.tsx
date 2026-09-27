@@ -53,7 +53,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
   onSelectTeacher,
 }) => {
   const [query, setQuery] = useState('');
-  const [searchMode, setSearchMode] = useState<'ai' | 'search'>('ai');
+  const [searchMode, setSearchMode] = useState<'ai' | 'search'>('search');
   const isLoggedIn = Boolean(currentUser);
 
   const handleInputSubmit = (e: React.FormEvent) => {
@@ -114,25 +114,17 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="把问题和任务告诉我（如：高数哪个老师给分松？求不点名且干货多的老师）"
+              placeholder={
+                searchMode === 'search'
+                  ? '输入教师姓名、学院或课程名称搜索老师（如：高数、李老师）'
+                  : '把问题和任务告诉我（如：高数哪个老师给分松？求不点名且干货多的老师）'
+              }
               className="w-full px-2 py-1.5 text-base text-gray-900 placeholder:text-gray-400 focus:outline-hidden bg-transparent"
             />
           </div>
 
           <div className="flex items-center justify-between pt-2 border-t border-gray-100/80">
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setSearchMode('ai')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                  searchMode === 'ai'
-                    ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                AI 问答
-              </button>
               <button
                 type="button"
                 onClick={() => setSearchMode('search')}
@@ -144,6 +136,18 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
               >
                 <Search className="w-3.5 h-3.5" />
                 搜老师 (免费)
+              </button>
+              <button
+                type="button"
+                onClick={() => setSearchMode('ai')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  searchMode === 'ai'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                AI 问答
               </button>
             </div>
 

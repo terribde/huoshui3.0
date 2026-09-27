@@ -1,5 +1,6 @@
 import { useTeacherSearch } from '../../hooks/useTeacherSearch';
 import { Pagination, PageFeedback } from '../Pagination';
+import { TeacherListSkeleton } from '../Skeletons';
 import { formatRating, compareRatings } from '../../lib/ratings';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Teacher, College } from '../../types';
@@ -251,7 +252,7 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
       </div>
 
       {/* 2. Teachers Count Header */}
-      <PageFeedback loading={result.loading} error={result.error} onRetry={result.reload} />
+      <PageFeedback loading={false} error={result.error} onRetry={result.reload} />
       <div className="flex items-center justify-between px-1 text-[11px] text-gray-500">
         <span>共找到 <strong className="text-gray-900">{result.total}</strong> 位教师</span>
         <span className="text-gray-400">永久免费查询</span>
@@ -259,7 +260,9 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
 
       {/* 3. Teachers List (Single Column Compact Mobile Cards) */}
       <div className="space-y-2.5">
-        {result.loading || result.error ? null : filteredTeachers.length === 0 ? (
+        {result.loading ? (
+          <TeacherListSkeleton layout="mobile" count={5} />
+        ) : result.error ? null : filteredTeachers.length === 0 ? (
           <div className="bg-white p-8 rounded-2xl border border-gray-100 text-center text-gray-400 space-y-1.5">
             <p className="text-xs font-medium text-gray-600">没有找到匹配的老师</p>
             <p className="text-[11px]">尝试缩短关键词或在“全部”中搜索</p>

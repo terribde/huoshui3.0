@@ -31,7 +31,7 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
   onOpenReview,
 }) => {
   const [query, setQuery] = useState('');
-  const [searchMode, setSearchMode] = useState<'ai' | 'search'>('ai');
+  const [searchMode, setSearchMode] = useState<'ai' | 'search'>('search');
   const isLoggedIn = Boolean(currentUser);
 
   const handleInputSubmit = (e: React.FormEvent) => {
@@ -113,7 +113,11 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="把问题和任务告诉我（如：高数老师选谁？）"
+                placeholder={
+                  searchMode === 'search'
+                    ? '输入教师姓名、学院或课程搜索老师…'
+                    : '把问题和任务告诉我（如：高数老师选谁？）'
+                }
                 className="w-full px-2 py-1 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-hidden bg-transparent"
               />
             </div>
@@ -124,14 +128,14 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
               <div className="flex items-center bg-gray-100/80 p-0.5 rounded-xl relative">
                 <button
                   type="button"
-                  onClick={() => setSearchMode('ai')}
+                  onClick={() => setSearchMode('search')}
                   className={`relative z-10 px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${
-                    searchMode === 'ai' ? 'text-white' : 'text-gray-600 hover:text-gray-900'
+                    searchMode === 'search' ? 'text-white' : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
-                  <Sparkles className="w-3 h-3" />
-                  <span>AI 问答</span>
-                  {searchMode === 'ai' && (
+                  <Search className="w-3 h-3" />
+                  <span>搜老师</span>
+                  {searchMode === 'search' && (
                     <motion.div
                       layoutId="searchModePill"
                       className="absolute inset-0 bg-indigo-600 rounded-lg -z-10 shadow-xs"
@@ -142,14 +146,14 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => setSearchMode('search')}
+                  onClick={() => setSearchMode('ai')}
                   className={`relative z-10 px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${
-                    searchMode === 'search' ? 'text-white' : 'text-gray-600 hover:text-gray-900'
+                    searchMode === 'ai' ? 'text-white' : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
-                  <Search className="w-3 h-3" />
-                  <span>搜老师</span>
-                  {searchMode === 'search' && (
+                  <Sparkles className="w-3 h-3" />
+                  <span>AI 问答</span>
+                  {searchMode === 'ai' && (
                     <motion.div
                       layoutId="searchModePill"
                       className="absolute inset-0 bg-indigo-600 rounded-lg -z-10 shadow-xs"

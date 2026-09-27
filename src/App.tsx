@@ -862,11 +862,6 @@ export default function App() {
                 >
                   <User className="w-4 h-4" />
                   <span>个人中心</span>
-                  {currentUser && (
-                    <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-amber-500 text-white font-extrabold ml-0.5">
-                      {userPoints}
-                    </span>
-                  )}
                 </motion.button>
               </nav>
 
@@ -1102,6 +1097,7 @@ export default function App() {
             onClose={() => setIsReviewModalOpen(false)}
             teachers={teachers}
             preselectedTeacher={reviewTargetTeacher}
+            currentUser={currentUser}
             onSubmitReview={handleSubmitReview}
           />
           </Suspense>
