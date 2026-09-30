@@ -12,3 +12,8 @@ supabase/inspection/
 release/
 temp/
 docs.zip
+# Timetable source and generated import packages stay local; regenerate them with
+# `node scripts/import-timetable.mjs` from the term CSV.
+schule2026-2027-1/*.csv
+schule2026-2027-1/import-output/
+schule2026-2027-1/supabase-web-import/
