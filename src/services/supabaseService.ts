@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { Teacher, Review, UserPointTransaction, Course, Term, PointRule, TeacherCourseOffering, TeacherQuery, ReviewQuery, DataPage } from '../types';
+import { Teacher, Review, UserPointTransaction, Course, Term, PointRule, TeacherCourseOffering, TeacherQuery, ReviewQuery, DataPage, TeacherWithSections, CourseSection } from '../types';
 import { POPULAR_COURSES } from '../data/mockTeachers';
 import { normalizeRatingRecord, readRating, RATING_VERSION } from '../lib/ratings';
 import { cacheApiEnabled, cacheQuery, cacheRequest } from '../lib/cacheApi';
@@ -248,6 +248,180 @@ export const supabaseService = {
       items.push(...next.items);
     }
     return items;
+  },
+
+  async getTimetableCourseRecommendations(
+    courseQuery: string,
+    campus?: string,
+    collegeId?: string,
+    weekday?: number | string,
+    preferred?: string,
+    signal?: AbortSignal
+  ): Promise<TeacherWithSections[]> {
+    if (!courseQuery.trim()) return [];
+    if (!isSupabaseConfigured || !supabase) return [];
+
+    // Clean course name (e.g. "高等数学 (I)" -> "高等数学")
+    const cleanName = courseQuery.replace(/\s*[\(（][^()（）]+[\)）]/g, '').trim() || courseQuery.trim();
+    const pattern = `%${cleanName}%`;
+
+    let query = supabase
+      .from('timetable_schedule')
+      .select('*')
+      .ilike('course_name', pattern);
+
+    if (campus && campus !== 'all') {
+      if (campus === '西部校区') {
+        query = query.or('section_campus.eq.犀浦校区,section_campus.eq.西部校区,classroom_campus.eq.犀浦校区,classroom_campus.eq.西部校区');
+      } else {
+        query = query.or(`section_campus.eq.${campus},classroom_campus.eq.${campus}`);
+      }
+    }
+
+    if (weekday && weekday !== 'all') {
+      query = query.eq('weekday', Number(weekday));
+    }
+
+    if (preferred && preferred.trim()) {
+      query = query.ilike('preferred', `%${preferred.trim()}%`);
+    }
+
+    if (signal) query = query.abortSignal(signal);
+
+    const { data, error } = await query;
+    if (error) {
+      console.warn('[TimetableSchedule] Query error:', error.message);
+      return [];
+    }
+
+    const rows = (data || []) as any[];
+    if (!rows.length) return [];
+
+    // Group rows by teacher key (prefer teacher_id, fallback to teacher_name)
+    const teacherMap = new Map<string, {
+      teacherId: string | null;
+      teacherName: string;
+      sourceDepartment?: string;
+      sectionCampus?: string;
+      sectionsMap: Map<string, CourseSection>;
+    }>();
+
+    for (const r of rows) {
+      const teacherKey = r.teacher_id || r.teacher_name || r.primary_teacher_name || '未知教师';
+      let entry = teacherMap.get(teacherKey);
+      if (!entry) {
+        entry = {
+          teacherId: r.teacher_id || null,
+          teacherName: r.teacher_name || r.primary_teacher_name || '未知教师',
+          sourceDepartment: r.source_department,
+          sectionCampus: r.section_campus || r.classroom_campus,
+          sectionsMap: new Map(),
+        };
+        teacherMap.set(teacherKey, entry);
+      }
+
+      // Add section
+      const secCode = r.selection_code || r.section_id;
+      let sec = entry.sectionsMap.get(secCode);
+      if (!sec) {
+        sec = {
+          sectionId: r.section_id,
+          selectionCode: r.selection_code,
+          courseCode: r.course_code || undefined,
+          credits: r.credits != null ? Number(r.credits) : null,
+          nature: r.nature || null,
+          campus: r.section_campus || r.classroom_campus || null,
+          capacity: r.capacity != null ? Number(r.capacity) : null,
+          preferred: r.preferred || null,
+          meetings: [],
+        };
+        entry.sectionsMap.set(secCode, sec);
+      }
+
+      // Add meeting if present
+      if (r.raw_schedule || r.raw_location || r.classroom || r.weekday) {
+        const meetingKey = `${r.meeting_id || ''}_${r.raw_schedule || ''}_${r.classroom || ''}`;
+        const exists = sec.meetings.some(m => `${m.id || ''}_${m.rawSchedule || ''}_${m.classroom || ''}` === meetingKey);
+        if (!exists) {
+          sec.meetings.push({
+            id: r.meeting_id || undefined,
+            weeks: r.weeks || undefined,
+            weekday: r.weekday,
+            periodStart: r.period_start,
+            periodEnd: r.period_end,
+            classroomCampus: r.classroom_campus,
+            classroom: r.classroom,
+            rawSchedule: r.raw_schedule,
+            rawLocation: r.raw_location,
+          });
+        }
+      }
+    }
+
+    // Collect valid DB teacher IDs to fetch full profiles (scores, ratings, tags)
+    const validIds = Array.from(teacherMap.values())
+      .map(e => e.teacherId)
+      .filter((id): id is string => Boolean(id));
+
+    const dbTeachersMap = new Map<string, Teacher>();
+    if (validIds.length > 0) {
+      const { data: dbTeacherRows } = await supabase
+        .from('teachers')
+        .select(TEACHER_SELECT)
+        .in('id', validIds);
+
+      if (dbTeacherRows) {
+        for (const tRow of dbTeacherRows) {
+          const t = mapTeacherRow(tRow);
+          dbTeachersMap.set(t.id, t);
+        }
+      }
+    }
+
+    // Assemble TeacherWithSections
+    const results: TeacherWithSections[] = [];
+
+    for (const entry of teacherMap.values()) {
+      let teacher: Teacher;
+      if (entry.teacherId && dbTeachersMap.has(entry.teacherId)) {
+        teacher = dbTeachersMap.get(entry.teacherId)!;
+      } else {
+        teacher = {
+          id: entry.teacherId || `tt_${entry.teacherName}`,
+          name: entry.teacherName,
+          title: '授课教师',
+          college: entry.sourceDepartment || '开课学院',
+          campus: entry.sectionCampus || '犀浦校区',
+          courses: [cleanName],
+          isTeachingThisTerm: true,
+          overallScore: null,
+          reviewCount: 0,
+          dimensions: {
+            attendanceStrictness: null,
+            gradingLeniency: null,
+            effortMatters: null,
+            workloadDifficulty: null,
+            approachability: null,
+            teachingQuality: null,
+          },
+          hasHistoricalData: false,
+          tags: [],
+        };
+      }
+
+      // Filter by college if requested
+      if (collegeId && collegeId !== 'all') {
+        const matchCol = teacher.collegeId === collegeId || teacher.college === collegeId;
+        if (!matchCol) continue;
+      }
+
+      results.push({
+        teacher,
+        sections: Array.from(entry.sectionsMap.values()),
+      });
+    }
+
+    return results;
   },
 
   async getReviewsPage(options: ReviewQuery, signal?: AbortSignal): Promise<DataPage<Review>> {

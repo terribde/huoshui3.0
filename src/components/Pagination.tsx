@@ -43,10 +43,25 @@ export function Pagination({
   onPageChange: (page: number) => void;
 }) {
   const pages = Math.max(1, Math.ceil(total / pageSize));
+  const [jumpPage, setJumpPage] = React.useState('');
+
   if (pages === 1 && page === 0) return null;
 
+  const handleJump = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (loading) return;
+    const parsed = parseInt(jumpPage.trim(), 10);
+    if (isNaN(parsed)) return;
+    const clampedPage = Math.max(1, Math.min(pages, parsed));
+    const targetIndex = clampedPage - 1;
+    if (targetIndex !== page) {
+      onPageChange(targetIndex);
+    }
+    setJumpPage('');
+  };
+
   return (
-    <nav aria-label="分页导航" className="flex items-center justify-center gap-3 py-4 text-xs sm:text-sm select-none">
+    <nav aria-label="分页导航" className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 py-4 text-xs sm:text-sm select-none">
       {/* 上一页按钮 */}
       <motion.button
         type="button"
@@ -55,7 +70,7 @@ export function Pagination({
         whileHover={!loading && page > 0 ? { y: -1, scale: 1.02 } : {}}
         whileTap={!loading && page > 0 ? { scale: 0.94 } : {}}
         transition={{ type: 'spring', stiffness: 450, damping: 25 }}
-        className="group flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-gray-700 font-medium shadow-2xs transition-colors hover:border-indigo-300 hover:bg-indigo-50/40 hover:text-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:bg-white disabled:hover:text-gray-700"
+        className="group flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-3 py-1.5 sm:px-3.5 sm:py-2 text-gray-700 font-medium shadow-2xs transition-colors hover:border-indigo-300 hover:bg-indigo-50/40 hover:text-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:bg-white disabled:hover:text-gray-700"
       >
         <ChevronLeft className="w-4 h-4 transition-transform duration-200 group-hover:-translate-x-0.5" />
         <span>上一页</span>
@@ -81,7 +96,7 @@ export function Pagination({
         whileHover={!loading && page + 1 < pages ? { y: -1, scale: 1.02 } : {}}
         whileTap={!loading && page + 1 < pages ? { scale: 0.94 } : {}}
         transition={{ type: 'spring', stiffness: 450, damping: 25 }}
-        className="group flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-gray-700 font-medium shadow-2xs transition-colors hover:border-indigo-300 hover:bg-indigo-50/40 hover:text-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:bg-white disabled:hover:text-gray-700"
+        className="group flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-3 py-1.5 sm:px-3.5 sm:py-2 text-gray-700 font-medium shadow-2xs transition-colors hover:border-indigo-300 hover:bg-indigo-50/40 hover:text-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:bg-white disabled:hover:text-gray-700"
       >
         <span>下一页</span>
         {loading ? (
@@ -90,6 +105,38 @@ export function Pagination({
           <ChevronRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
         )}
       </motion.button>
+
+      {/* 跳转到指定页 */}
+      {pages > 1 && (
+        <form
+          onSubmit={handleJump}
+          className="flex items-center gap-1.5 text-xs text-gray-500 pl-1.5 sm:pl-2.5 sm:border-l sm:border-gray-200"
+        >
+          <span className="text-gray-500">跳至</span>
+          <input
+            type="number"
+            min={1}
+            max={pages}
+            value={jumpPage}
+            onChange={(e) => setJumpPage(e.target.value)}
+            disabled={loading}
+            placeholder={String(page + 1)}
+            aria-label="输入跳转目标页码"
+            className="w-12 h-7 sm:h-8 px-1 text-center font-mono text-xs rounded-lg border border-gray-200 bg-white text-gray-900 shadow-2xs focus:border-indigo-500 focus:outline-hidden focus:ring-2 focus:ring-indigo-100 disabled:bg-gray-100 disabled:opacity-50 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+          <span className="text-gray-500">页</span>
+          <motion.button
+            type="submit"
+            disabled={loading || !jumpPage.trim()}
+            whileHover={!loading && jumpPage.trim() ? { scale: 1.05 } : {}}
+            whileTap={!loading && jumpPage.trim() ? { scale: 0.94 } : {}}
+            transition={{ type: 'spring', stiffness: 450, damping: 25 }}
+            className="px-2.5 py-1 sm:py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-indigo-50/50 hover:border-indigo-300 hover:text-indigo-600 text-gray-700 font-medium text-xs shadow-2xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:bg-white disabled:hover:text-gray-700"
+          >
+            前往
+          </motion.button>
+        </form>
+      )}
     </nav>
   );
 }

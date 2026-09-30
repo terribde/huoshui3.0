@@ -150,3 +150,33 @@ export interface UserProfile {
   campus?: string;
   points: number;
 }
+
+export interface CourseSectionMeeting {
+  id?: string;
+  weeks?: number[];
+  weekday?: number | null;
+  periodStart?: number | null;
+  periodEnd?: number | null;
+  classroomCampus?: string | null;
+  classroom?: string | null;
+  rawSchedule?: string | null;
+  rawLocation?: string | null;
+}
+
+export interface CourseSection {
+  sectionId: string;
+  selectionCode: string;
+  courseCode?: string;
+  credits?: number | null;
+  nature?: string | null;
+  campus?: string | null;
+  capacity?: number | null;
+  preferred?: string | null;
+  meetings: CourseSectionMeeting[];
+}
+
+export interface TeacherWithSections {
+  teacher: Teacher;
+  sections: CourseSection[];
+}
+

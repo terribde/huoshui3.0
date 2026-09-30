@@ -3,9 +3,28 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { supabaseService } from '../services/supabaseService';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { Pagination, PageFeedback } from './Pagination';
-import { Teacher, RecommendationWeights, College } from '../types';
+import { Teacher, RecommendationWeights, College, TeacherWithSections, CourseSection } from '../types';
 import { POPULAR_COURSES } from '../data/mockTeachers';
-import { Sliders, Sparkles, CheckCircle2, ChevronRight, HelpCircle, Star, Award, RotateCcw, Building2 } from 'lucide-react';
+import { Sliders, Sparkles, CheckCircle2, ChevronRight, HelpCircle, Star, Award, RotateCcw, Building2, MapPin, Copy, Check, Clock, BookOpen, Calendar, Users, X } from 'lucide-react';
+
+const CAMPUS_OPTIONS = [
+  { id: 'all', name: '全部校区' },
+  { id: '西部校区', name: '西部校区' },
+  { id: '九里校区', name: '九里校区' },
+  { id: '峨眉校区', name: '峨眉校区' },
+  { id: '东部校区', name: '东部校区' },
+];
+
+const WEEKDAY_OPTIONS = [
+  { id: 'all', name: '全部日期 (不限)' },
+  { id: '1', name: '周一' },
+  { id: '2', name: '周二' },
+  { id: '3', name: '周三' },
+  { id: '4', name: '周四' },
+  { id: '5', name: '周五' },
+  { id: '6', name: '周六' },
+  { id: '7', name: '周日' },
+];
 
 interface CourseRecommendProps {
   teachers: Teacher[];
@@ -22,29 +41,51 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
   onSelectTeacher,
   onDeductPoints,
 }) => {
-  const [selectedCourse, setSelectedCourse] = useState<string>('高等数学 (I)');
+  const [selectedCourse, setSelectedCourse] = useState<string>('高等数学');
   const [selectedCollegeId, setSelectedCollegeId] = useState<string>('all');
+  const [selectedCampus, setSelectedCampus] = useState<string>('all');
+  const [selectedWeekday, setSelectedWeekday] = useState<string>('all');
+  const [preferredClass, setPreferredClass] = useState<string>('');
   const [searchKeyword, setSearchKeyword] = useState<string>('');
   const [hasCalculated, setHasCalculated] = useState<boolean>(true);
-  const [candidates, setCandidates] = useState<Teacher[]>([]);
+  const [timetableResults, setTimetableResults] = useState<TeacherWithSections[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
   const [page, setPage] = useState(0);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  const copyCode = (code: string) => {
+    if (!code) return;
+    navigator.clipboard.writeText(code).then(() => {
+      setCopiedCode(code);
+      setTimeout(() => {
+        setCopiedCode((curr) => (curr === code ? null : curr));
+      }, 1500);
+    }).catch(() => {});
+  };
+
   const courseToMatch = searchKeyword.trim() || selectedCourse;
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     let active = true;
     const controller = new AbortController();
-    setLoading(true); setError(null); setCandidates([]); setPage(0);
+    setLoading(true); setError(null); setTimetableResults([]); setPage(0);
     const timer = setTimeout(() => {
-      supabaseService.getTeachersForCourse(courseToMatch, selectedCollegeId, controller.signal)
-        .then(items => { if (active) setCandidates(items); })
+      supabaseService.getTimetableCourseRecommendations(
+        courseToMatch,
+        selectedCampus,
+        selectedCollegeId,
+        selectedWeekday,
+        preferredClass,
+        controller.signal
+      )
+        .then(items => { if (active) setTimetableResults(items); })
         .catch(error => { if (active) setError(error.message); })
         .finally(() => { if (active) setLoading(false); });
     }, 250);
     return () => { active = false; clearTimeout(timer); controller.abort(); };
-  }, [courseToMatch, selectedCollegeId, retry]);
+  }, [courseToMatch, selectedCampus, selectedCollegeId, selectedWeekday, preferredClass, retry]);
 
   // Weights (0 to 100) for user preferences
   const [weights, setWeights] = useState<RecommendationWeights>({
@@ -68,35 +109,90 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
   };
 
   // Filter candidates:
-  // 候选池为本学期开课的授课老师（不含以往教过但本学期未开课的老师）
-  // Database Schema Requirement: 支持通过 college_id 筛选学院
+  // 候选池为本学期开课的授课老师（结合 2026-2027-1 学期课表明细）
   const rankedTeachers = useMemo(() => {
     const courseToMatch = searchKeyword.trim() || selectedCourse;
     if (!courseToMatch) return [];
 
     const selectedCollegeName = colleges?.find((c) => c.id === selectedCollegeId)?.name;
 
-    // Filter teachers who teach this course AND are teaching this semester AND match college
-    const matchingTeachers = (isSupabaseConfigured ? candidates : teachers).filter((t) => {
-      const matchCourse = t.courses.some((c) => 
-        c.toLowerCase().includes(courseToMatch.toLowerCase())
-      );
-      const matchCollege =
-        selectedCollegeId === 'all' ||
-        t.collegeId === selectedCollegeId ||
-        (selectedCollegeName && t.college === selectedCollegeName);
+    let list: Array<{ teacher: Teacher; sections: CourseSection[] }> = [];
 
-      // isTeachingThisTerm must be true
-      return matchCourse && t.isTeachingThisTerm && matchCollege;
-    });
+    if (isSupabaseConfigured && timetableResults.length > 0) {
+      list = timetableResults;
+    } else {
+      // 本地 Mock 回退模式
+      const cleanCourse = courseToMatch.replace(/\s*[\(（][^()（）]+[\)）]/g, '').trim().toLowerCase();
+      const filtered = teachers.filter((t) => {
+        const matchCourse = t.courses.some((c) =>
+          c.toLowerCase().includes(cleanCourse)
+        );
+        const matchCollege =
+          selectedCollegeId === 'all' ||
+          t.collegeId === selectedCollegeId ||
+          (selectedCollegeName && t.college === selectedCollegeName);
 
-    // Missing selected dimensions cannot produce a reliable match percentage.
-    return matchingTeachers.map(teacher => ({
+        const matchCampus =
+          selectedCampus === 'all' ||
+          (selectedCampus === '西部校区'
+            ? (t.campus === '犀浦校区' || t.campus === '西部校区')
+            : t.campus === selectedCampus);
+
+        return matchCourse && t.isTeachingThisTerm && matchCollege && matchCampus;
+      });
+
+      list = filtered.map((t, idx) => {
+        const mockWeekday = ((idx * 2) % 5) + 1;
+        const mockPreferred = idx % 2 === 0 ? '计算机2024-01班, 软件2024-01班' : '茅以升2024-01班';
+        return {
+          teacher: t,
+          sections: [
+            {
+              sectionId: `mock_sec_${t.id}_1`,
+              selectionCode: `B${(1000 + idx * 37) % 9000}`,
+              courseCode: `SWJTU00${100 + idx}`,
+              credits: 4,
+              nature: '必修',
+              campus: t.campus || '西部校区',
+              capacity: 60,
+              preferred: mockPreferred,
+              meetings: [
+                {
+                  weekday: mockWeekday,
+                  periodStart: ((idx % 3) * 2) + 1,
+                  periodEnd: ((idx % 3) * 2) + 2,
+                  rawSchedule: `1-16周 星期${['一','二','三','四','五'][mockWeekday - 1]} ${((idx % 3) * 2) + 1}-${((idx % 3) * 2) + 2}节`,
+                  rawLocation: `${t.campus || '西部校区'} X${2100 + (idx * 17) % 800}`,
+                  classroom: `X${2100 + (idx * 17) % 800}`,
+                  classroomCampus: t.campus || '西部校区'
+                }
+              ]
+            }
+          ]
+        };
+      }).filter(({ sections }) => {
+        if (selectedWeekday !== 'all' && !sections.some(s => s.meetings.some(m => m.weekday === Number(selectedWeekday)))) {
+          return false;
+        }
+        if (preferredClass.trim() && !sections.some(s => s.preferred && s.preferred.includes(preferredClass.trim()))) {
+          return false;
+        }
+        return true;
+      });
+    }
+
+    return list.map(({ teacher, sections }) => ({
       teacher,
+      sections,
       matchPercent: ratingMatchPercent(teacher.dimensions, weights),
-    })).sort((a,b) => (b.matchPercent ?? -1) - (a.matchPercent ?? -1));
-  }, [teachers, candidates, selectedCourse, searchKeyword, selectedCollegeId, colleges, weights]);
-  useEffect(() => { setPage(0); }, [weights, selectedCourse, searchKeyword, selectedCollegeId]);
+    })).sort((a, b) => {
+      const aVal = a.matchPercent ?? -1;
+      const bVal = b.matchPercent ?? -1;
+      if (bVal !== aVal) return bVal - aVal;
+      return (b.teacher.reviewCount || 0) - (a.teacher.reviewCount || 0);
+    });
+  }, [teachers, timetableResults, selectedCourse, searchKeyword, selectedCollegeId, selectedCampus, selectedWeekday, preferredClass, colleges, weights]);
+  useEffect(() => { setPage(0); }, [weights, selectedCourse, searchKeyword, selectedCollegeId, selectedCampus, selectedWeekday, preferredClass]);
 
   return (
     <div id="course-recommend-panel" className="max-w-5xl mx-auto space-y-4 sm:space-y-6 pb-20">
@@ -159,36 +255,113 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
           ))}
         </div>
 
-        {/* College Filter using college_id foreign key */}
-        {colleges && colleges.length > 0 && (
-          <div className="pt-3 border-t border-gray-100 flex flex-wrap items-center gap-2">
+        {/* Campus, College, Weekday & Preferred Class Filter */}
+        <div className="pt-3 border-t border-gray-100 flex flex-wrap items-center gap-3">
+          {/* Campus Filter */}
+          <div className="flex items-center gap-1.5">
             <span className="text-xs text-gray-500 font-medium flex items-center gap-1">
-              <Building2 className="w-3.5 h-3.5 text-indigo-500" />
-              开课学院筛选:
+              <MapPin className="w-3.5 h-3.5 text-indigo-500" />
+              校区:
             </span>
             <select
-              id="course-recommend-college-select"
-              value={selectedCollegeId}
-              onChange={(e) => setSelectedCollegeId(e.target.value)}
-              className="text-xs px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-500 text-gray-700 cursor-pointer"
+              id="course-recommend-campus-select"
+              value={selectedCampus}
+              onChange={(e) => setSelectedCampus(e.target.value)}
+              className="text-xs px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-500 text-gray-700 cursor-pointer font-medium"
             >
-              <option value="all">全部学院 (不限)</option>
-              {colleges.map((col) => (
-                <option key={col.id} value={col.id}>
-                  {col.name}
+              {CAMPUS_OPTIONS.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
                 </option>
               ))}
             </select>
-            {selectedCollegeId !== 'all' && (
-              <button
-                onClick={() => setSelectedCollegeId('all')}
-                className="text-[11px] text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
-              >
-                清除学院筛选
-              </button>
-            )}
           </div>
-        )}
+
+          {/* College Filter using college_id foreign key */}
+          {colleges && colleges.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-500 font-medium flex items-center gap-1">
+                <Building2 className="w-3.5 h-3.5 text-indigo-500" />
+                开课学院:
+              </span>
+              <select
+                id="course-recommend-college-select"
+                value={selectedCollegeId}
+                onChange={(e) => setSelectedCollegeId(e.target.value)}
+                className="text-xs px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-500 text-gray-700 cursor-pointer"
+              >
+                <option value="all">全部学院 (不限)</option>
+                {colleges.map((col) => (
+                  <option key={col.id} value={col.id}>
+                    {col.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Weekday Filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-500 font-medium flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+              上课日期:
+            </span>
+            <select
+              id="course-recommend-weekday-select"
+              value={selectedWeekday}
+              onChange={(e) => setSelectedWeekday(e.target.value)}
+              className="text-xs px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-500 text-gray-700 cursor-pointer font-medium"
+            >
+              {WEEKDAY_OPTIONS.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Preferred Class Filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-500 font-medium flex items-center gap-1">
+              <Users className="w-3.5 h-3.5 text-indigo-500" />
+              优选班:
+            </span>
+            <div className="relative flex items-center">
+              <input
+                id="course-recommend-preferred-input"
+                type="text"
+                placeholder="班级关键字，如: 计算机..."
+                value={preferredClass}
+                onChange={(e) => setPreferredClass(e.target.value)}
+                className="text-xs px-2.5 py-1.5 pr-6 bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-500 text-gray-700 w-36 sm:w-44 transition-all"
+              />
+              {preferredClass && (
+                <button
+                  type="button"
+                  onClick={() => setPreferredClass('')}
+                  className="absolute right-2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                  title="清空优选班筛选"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {(selectedCollegeId !== 'all' || selectedCampus !== 'all' || selectedWeekday !== 'all' || Boolean(preferredClass.trim())) && (
+            <button
+              onClick={() => {
+                setSelectedCollegeId('all');
+                setSelectedCampus('all');
+                setSelectedWeekday('all');
+                setPreferredClass('');
+              }}
+              className="text-[11px] text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+            >
+              重置筛选
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 6 Dimensions Weight Sliders */}
@@ -351,67 +524,207 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
           </div>
         ) : (
           <div className="space-y-3">
-            {rankedTeachers.slice(page * 20, (page + 1) * 20).map(({ teacher, matchPercent }, index) => (
+            {rankedTeachers.slice(page * 20, (page + 1) * 20).map(({ teacher, sections, matchPercent }, index) => (
               <div
                 key={teacher.id}
                 onClick={() => onSelectTeacher(teacher)}
-                className="p-4 rounded-2xl border border-gray-100 hover:border-indigo-200 bg-gray-50/50 hover:bg-white transition-all cursor-pointer group flex items-center justify-between shadow-2xs hover:shadow-md"
+                className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-gray-150 hover:border-indigo-300 bg-white hover:bg-indigo-50/20 transition-all cursor-pointer group shadow-2xs hover:shadow-md space-y-3"
               >
-                <div className="flex items-center gap-3.5">
-                  {/* Rank Badge */}
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm ${
-                    page === 0 && index === 0
-                      ? 'bg-amber-500 text-white shadow-xs' 
-                      : page === 0 && index === 1
-                      ? 'bg-slate-400 text-white' 
-                      : page === 0 && index === 2
-                      ? 'bg-amber-700/60 text-white'
-                      : 'bg-gray-100 text-gray-500'
-                  }`}>
-                    {page * 20 + index + 1}
+                {/* Top teacher summary */}
+                <div className="flex items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    {/* Rank Badge */}
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${
+                      page === 0 && index === 0
+                        ? 'bg-amber-500 text-white shadow-xs' 
+                        : page === 0 && index === 1
+                        ? 'bg-slate-400 text-white' 
+                        : page === 0 && index === 2
+                        ? 'bg-amber-700/60 text-white'
+                        : 'bg-gray-100 text-gray-500'
+                    }`}>
+                      {page * 20 + index + 1}
+                    </div>
+
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-bold text-gray-900 text-base group-hover:text-indigo-600 transition-colors">
+                          {teacher.name}
+                        </span>
+                        <span className="text-xs text-gray-500 font-medium">{teacher.title}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                          {teacher.college}
+                        </span>
+                        {teacher.campus && (
+                          <span className="text-[11px] px-1.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-600">
+                            {teacher.campus}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-gray-500">
+                        <span>综合评分: <strong className="text-amber-600">{formatRating(teacher.overallScore)}</strong></span>
+                        <span>·</span>
+                        <span>评价数: {teacher.reviewCount}条</span>
+                      </div>
+                    </div>
                   </div>
 
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-gray-900 text-base group-hover:text-indigo-600 transition-colors">
-                        {teacher.name}
+                  {/* Match percentage pill */}
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <div className={`flex items-center gap-1 px-3 py-1.5 rounded-xl font-bold text-xs sm:text-sm ${
+                      matchPercent !== null
+                        ? 'bg-indigo-50 border border-indigo-200 text-indigo-700'
+                        : 'bg-gray-50 border border-gray-200 text-gray-500 font-medium'
+                    }`}>
+                      <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-500" />
+                      <span>{matchPercent === null ? '新开课 · 尚无评分' : `${matchPercent}% 契合`}</span>
+                    </div>
+                    <span className="text-[10px] text-gray-400 flex items-center gap-0.5 group-hover:text-indigo-600 transition-colors font-medium">
+                      教师主页 <ChevronRight className="w-3 h-3" />
+                    </span>
+                  </div>
+                </div>
+
+                {/* Tags if present */}
+                {teacher.tags && teacher.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {teacher.tags.slice(0, 4).map((tag, tIdx) => (
+                      <span key={tIdx} className="text-[10px] px-2 py-0.5 rounded-md bg-indigo-50/60 text-indigo-700 font-medium">
+                        #{tag}
                       </span>
-                      <span className="text-xs text-gray-500 font-medium">{teacher.title}</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                        {teacher.college}
-                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Teaching Sections from 2026-2027-1 timetable */}
+                {sections && sections.length > 0 && (
+                  <div className="pt-2.5 border-t border-gray-100 space-y-2">
+                    <div className="text-[11px] font-semibold text-gray-500 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>本学期教学班排课明细 ({sections.length}个班/时段):</span>
+                      </div>
+                      <span className="text-[10px] text-gray-400 font-normal">点击选课号可一键复制</span>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs text-gray-500">
-                      <span>综合评分: <strong className="text-amber-600">{formatRating(teacher.overallScore)}</strong></span>
-                      <span>·</span>
-                      <span>评价数: {teacher.reviewCount}条</span>
-                      <span>·</span>
-                      <span className="text-indigo-600 font-medium">
-                        本学期班级：{teacher.recentTermCourses?.[0] || teacher.courses[0]}
-                      </span>
-                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {sections.map((sec, sIdx) => (
+                        <div
+                          key={sec.sectionId || sec.selectionCode || sIdx}
+                          className="p-2.5 rounded-xl bg-gray-50/80 hover:bg-white border border-gray-200/80 hover:border-indigo-200 transition-all shadow-2xs space-y-1.5 text-xs"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-1.5">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="font-mono font-bold text-gray-800 bg-white border border-gray-200 px-1.5 py-0.5 rounded text-[11px]">
+                                选课号: {sec.selectionCode}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyCode(sec.selectionCode);
+                                }}
+                                className="inline-flex items-center gap-0.5 text-[11px] font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-1.5 py-0.5 rounded transition-colors cursor-pointer"
+                                title="复制选课号"
+                              >
+                                {copiedCode === sec.selectionCode ? (
+                                  <>
+                                    <Check className="w-3 h-3 text-emerald-600" />
+                                    <span className="text-emerald-600 font-semibold">已复制</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="w-3 h-3" />
+                                    <span>复制</span>
+                                  </>
+                                )}
+                              </button>
 
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {teacher.tags.slice(0, 3).map((tag, tIdx) => (
-                        <span key={tIdx} className="text-[11px] px-2 py-0.5 rounded-md bg-white border border-gray-200 text-gray-600">
-                          {tag}
-                        </span>
+                              {/* Course Code */}
+                              {sec.courseCode && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    copyCode(sec.courseCode!);
+                                  }}
+                                  className="font-mono text-gray-600 bg-white border border-gray-200 hover:border-indigo-300 hover:text-indigo-600 px-1.5 py-0.5 rounded text-[11px] inline-flex items-center gap-1 transition-colors cursor-pointer"
+                                  title="点击复制课程代码"
+                                >
+                                  <span>代码: {sec.courseCode}</span>
+                                  {copiedCode === sec.courseCode ? (
+                                    <Check className="w-2.5 h-2.5 text-emerald-600" />
+                                  ) : (
+                                    <Copy className="w-2.5 h-2.5 text-gray-400" />
+                                  )}
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Class Capacity */}
+                            {sec.capacity != null ? (
+                              <span className="text-[10px] text-gray-600 font-medium px-2 py-0.5 rounded-md bg-white border border-gray-200 shrink-0">
+                                容量: {sec.capacity}人
+                              </span>
+                            ) : null}
+                          </div>
+
+                          {/* Preferred Class Display */}
+                          {sec.preferred && (
+                            <div className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-slate-100/90 border border-slate-200/90 text-slate-700">
+                              <Users className="w-3 h-3 text-indigo-500 shrink-0" />
+                              <span className="font-semibold text-gray-700 shrink-0">优选班:</span>
+                              <span
+                                className={`truncate ${
+                                  preferredClass.trim() && sec.preferred.toLowerCase().includes(preferredClass.trim().toLowerCase())
+                                    ? 'font-bold text-indigo-700 bg-amber-100/80 px-1 rounded'
+                                    : 'text-gray-600'
+                                }`}
+                                title={sec.preferred}
+                              >
+                                {sec.preferred}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Meeting schedules */}
+                          {sec.meetings && sec.meetings.length > 0 ? (
+                            <div className="space-y-1 text-[11px] text-gray-600">
+                              {sec.meetings.map((m, mIdx) => {
+                                const isSelectedDay = selectedWeekday !== 'all' && m.weekday === Number(selectedWeekday);
+                                return (
+                                  <div
+                                    key={mIdx}
+                                    className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 transition-colors ${
+                                      isSelectedDay
+                                        ? 'bg-amber-50/90 border border-amber-200 text-amber-900 rounded-md px-1.5 py-0.5 font-medium'
+                                        : ''
+                                    }`}
+                                  >
+                                    <span className="flex items-center gap-1 text-gray-800">
+                                      <Clock className={`w-3 h-3 shrink-0 ${isSelectedDay ? 'text-amber-600' : 'text-indigo-500'}`} />
+                                      {m.rawSchedule || (m.weekday ? `周${['一','二','三','四','五','六','日'][m.weekday - 1]} ${m.periodStart}-${m.periodEnd}节` : '时间待定')}
+                                    </span>
+                                    <span className="flex items-center gap-1 text-gray-500">
+                                      <MapPin className={`w-3 h-3 shrink-0 ${isSelectedDay ? 'text-amber-600' : 'text-rose-500'}`} />
+                                      {m.rawLocation || m.classroom || (sec.campus ? `${sec.campus} 教室待定` : '地点待定')}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="text-[11px] text-gray-400 flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              <span>{sec.campus || '校区'} · 具体上课时间以教务系统为准</span>
+                            </div>
+                          )}
+                        </div>
                       ))}
                     </div>
                   </div>
-                </div>
-
-                {/* Match percentage pill */}
-                <div className="flex flex-col items-end gap-1">
-                  <div className="flex items-center gap-1 bg-indigo-50 border border-indigo-200 text-indigo-700 px-3 py-1.5 rounded-xl font-bold text-sm">
-                    <Sparkles className="w-4 h-4 text-indigo-600" />
-                    <span>{matchPercent === null ? '暂无数据' : `${matchPercent}% 契合`}</span>
-                  </div>
-                  <span className="text-[10px] text-gray-400 flex items-center gap-0.5 group-hover:text-indigo-600 transition-colors">
-                    查看主页 <ChevronRight className="w-3 h-3" />
-                  </span>
-                </div>
+                )}
               </div>
             ))}
           </div>
