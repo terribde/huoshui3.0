@@ -167,6 +167,7 @@ export interface CourseSection {
   sectionId: string;
   selectionCode: string;
   courseCode?: string;
+  courseName?: string;
   credits?: number | null;
   nature?: string | null;
   campus?: string | null;

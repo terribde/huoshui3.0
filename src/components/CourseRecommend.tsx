@@ -41,7 +41,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
   onSelectTeacher,
   onDeductPoints,
 }) => {
-  const [selectedCourse, setSelectedCourse] = useState<string>('高等数学');
+  const [selectedCourse, setSelectedCourse] = useState<string>('');
   const [selectedCollegeId, setSelectedCollegeId] = useState<string>('all');
   const [selectedCampus, setSelectedCampus] = useState<string>('all');
   const [selectedWeekday, setSelectedWeekday] = useState<string>('all');
@@ -112,7 +112,6 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
   // 候选池为本学期开课的授课老师（结合 2026-2027-1 学期课表明细）
   const rankedTeachers = useMemo(() => {
     const courseToMatch = searchKeyword.trim() || selectedCourse;
-    if (!courseToMatch) return [];
 
     const selectedCollegeName = colleges?.find((c) => c.id === selectedCollegeId)?.name;
 
@@ -124,7 +123,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
       // 本地 Mock 回退模式
       const cleanCourse = courseToMatch.replace(/\s*[\(（][^()（）]+[\)）]/g, '').trim().toLowerCase();
       const filtered = teachers.filter((t) => {
-        const matchCourse = t.courses.some((c) =>
+        const matchCourse = !cleanCourse || t.courses.some((c) =>
           c.toLowerCase().includes(cleanCourse)
         );
         const matchCollege =
@@ -151,6 +150,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
               sectionId: `mock_sec_${t.id}_1`,
               selectionCode: `B${(1000 + idx * 37) % 9000}`,
               courseCode: `SWJTU00${100 + idx}`,
+              courseName: t.courses[0] || '高等数学',
               credits: 4,
               nature: '必修',
               campus: t.campus || '西部校区',
@@ -186,6 +186,13 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
       sections,
       matchPercent: ratingMatchPercent(teacher.dimensions, weights),
     })).sort((a, b) => {
+      // 若没有输入或选择特定课程，严格按教师综合评分从高到低排序，同分按评价数从多到少
+      if (!courseToMatch) {
+        const aScore = a.teacher.overallScore ?? -1;
+        const bScore = b.teacher.overallScore ?? -1;
+        if (bScore !== aScore) return bScore - aScore;
+        return (b.teacher.reviewCount || 0) - (a.teacher.reviewCount || 0);
+      }
       const aVal = a.matchPercent ?? -1;
       const bVal = b.matchPercent ?? -1;
       if (bVal !== aVal) return bVal - aVal;
@@ -220,39 +227,74 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
 
       {/* Target Course Selector */}
       <div className="bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-gray-100 shadow-2xs space-y-3">
-        <label className="text-xs font-bold text-gray-800 uppercase tracking-wider block">
-          第一步：选择或输入想要选的课程名
-        </label>
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-bold text-gray-800 uppercase tracking-wider block">
+            第一步：选择或输入想要选的课程名
+          </label>
+          {!courseToMatch && (
+            <span className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
+              当前展示全校口碑最高教师
+            </span>
+          )}
+        </div>
         
-        <div className="flex gap-2">
-          <input
-            id="course-recommend-input"
-            type="text"
-            placeholder="输入课程名称，如：高等数学、微积分、数据结构..."
-            value={searchKeyword}
-            onChange={(e) => setSearchKeyword(e.target.value)}
-            className="flex-1 px-4 py-2.5 bg-gray-50 rounded-2xl border border-gray-200 text-sm focus:outline-hidden focus:border-indigo-500 focus:bg-white transition-all"
-          />
+        <div className="relative flex gap-2">
+          <div className="relative flex-1">
+            <input
+              id="course-recommend-input"
+              type="text"
+              placeholder="输入课程名称，如：高等数学、微积分、数据结构... (留空展示口碑最高教师)"
+              value={searchKeyword}
+              onChange={(e) => {
+                setSearchKeyword(e.target.value);
+                if (e.target.value) setSelectedCourse('');
+              }}
+              className="w-full px-4 py-2.5 pr-8 bg-gray-50 rounded-2xl border border-gray-200 text-sm focus:outline-hidden focus:border-indigo-500 focus:bg-white transition-all"
+            />
+            {searchKeyword && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchKeyword('');
+                  setSelectedCourse('');
+                }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                title="清空课程搜索"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Hot Course Tags */}
-        <div className="flex flex-wrap gap-2 pt-1">
-          {POPULAR_COURSES.map((course) => (
-            <button
-              key={course}
-              onClick={() => {
-                setSelectedCourse(course);
-                setSearchKeyword('');
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
-                (!searchKeyword && selectedCourse === course) || searchKeyword === course
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-              }`}
-            >
-              {course}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <span className="text-xs text-gray-400 font-medium">热门课程快捷选:</span>
+          {POPULAR_COURSES.map((course) => {
+            const isSelected = (!searchKeyword && selectedCourse === course) || searchKeyword === course;
+            return (
+              <button
+                key={course}
+                type="button"
+                onClick={() => {
+                  if (isSelected) {
+                    setSelectedCourse('');
+                    setSearchKeyword('');
+                  } else {
+                    setSelectedCourse(course);
+                    setSearchKeyword(course);
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+                  isSelected
+                    ? 'bg-indigo-600 text-white shadow-xs font-semibold'
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                }`}
+              >
+                {course}
+              </button>
+            );
+          })}
         </div>
 
         {/* Campus, College, Weekday & Preferred Class Filter */}
@@ -503,11 +545,22 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
       <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-base font-bold text-gray-900">
-              本学期开课教师推荐排序
+            <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+              {!courseToMatch ? (
+                <>
+                  <span>🏆 本学期高分口碑教师推荐</span>
+                  <span className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                    评分最高
+                  </span>
+                </>
+              ) : (
+                <span>本学期【{courseToMatch}】开课教师推荐排序</span>
+              )}
             </h3>
             <p className="text-xs text-gray-400 mt-0.5">
-              已自动剔除本学期未开课教师，按偏好加权总分自高向低排列
+              {!courseToMatch
+                ? '当前按教师综合评分自高向低排列，输入课程名称可进一步精准筛选特定课程'
+                : '已自动匹配本学期在教教师，按偏好加权总分自高向低排列'}
             </p>
           </div>
           <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
@@ -519,7 +572,9 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
         <PageFeedback loading={loading} error={error} onRetry={() => setRetry(value => value + 1)} />
         {loading || error ? null : rankedTeachers.length === 0 ? (
           <div className="py-12 text-center text-gray-400 space-y-2">
-            <p className="text-sm font-medium">本学期暂无开设该课程的教师数据</p>
+            <p className="text-sm font-medium">
+              {!courseToMatch ? '当前筛选条件下暂无在教教师数据' : '本学期暂无开设该课程的教师数据'}
+            </p>
             <p className="text-xs text-gray-400">试试热门课程：高等数学、微积分、数据结构、大学物理</p>
           </div>
         ) : (
@@ -570,15 +625,21 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
                     </div>
                   </div>
 
-                  {/* Match percentage pill */}
+                  {/* Match percentage / rating score pill */}
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     <div className={`flex items-center gap-1 px-3 py-1.5 rounded-xl font-bold text-xs sm:text-sm ${
-                      matchPercent !== null
+                      teacher.overallScore !== null
+                        ? 'bg-amber-50/80 border border-amber-200 text-amber-800'
+                        : matchPercent !== null
                         ? 'bg-indigo-50 border border-indigo-200 text-indigo-700'
                         : 'bg-gray-50 border border-gray-200 text-gray-500 font-medium'
                     }`}>
-                      <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-500" />
-                      <span>{matchPercent === null ? '新开课 · 尚无评分' : `${matchPercent}% 契合`}</span>
+                      <Sparkles className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${teacher.overallScore !== null ? 'text-amber-600' : 'text-indigo-500'}`} />
+                      <span>
+                        {!courseToMatch
+                          ? (teacher.overallScore !== null ? `${formatRating(teacher.overallScore)} 分 · 口碑最高` : '新开课 · 尚无评分')
+                          : (matchPercent !== null ? `${matchPercent}% 契合` : (teacher.overallScore !== null ? `${formatRating(teacher.overallScore)} 分` : '新开课 · 尚无评分'))}
+                      </span>
                     </div>
                     <span className="text-[10px] text-gray-400 flex items-center gap-0.5 group-hover:text-indigo-600 transition-colors font-medium">
                       教师主页 <ChevronRight className="w-3 h-3" />
@@ -641,23 +702,22 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
                                 )}
                               </button>
 
-                              {/* Course Code */}
-                              {sec.courseCode && (
+                              {/* Course Name */}
+                              {(sec.courseName || sec.courseCode) && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    copyCode(sec.courseCode!);
+                                    copyCode(sec.courseName || sec.courseCode!);
                                   }}
-                                  className="font-mono text-gray-600 bg-white border border-gray-200 hover:border-indigo-300 hover:text-indigo-600 px-1.5 py-0.5 rounded text-[11px] inline-flex items-center gap-1 transition-colors cursor-pointer"
-                                  title="点击复制课程代码"
+                                  className="font-medium text-indigo-700 bg-indigo-50/80 border border-indigo-200/80 hover:border-indigo-300 hover:bg-indigo-100/70 px-2 py-0.5 rounded text-[11px] inline-flex items-center gap-1 transition-colors cursor-pointer"
+                                  title={sec.courseCode ? `点击复制课程名称 (代码: ${sec.courseCode})` : '点击复制课程名称'}
                                 >
-                                  <span>代码: {sec.courseCode}</span>
-                                  {copiedCode === sec.courseCode ? (
+                                  <BookOpen className="w-3 h-3 text-indigo-500 shrink-0" />
+                                  <span>{sec.courseName || sec.courseCode}</span>
+                                  {copiedCode === (sec.courseName || sec.courseCode) ? (
                                     <Check className="w-2.5 h-2.5 text-emerald-600" />
-                                  ) : (
-                                    <Copy className="w-2.5 h-2.5 text-gray-400" />
-                                  )}
+                                  ) : null}
                                 </button>
                               )}
                             </div>
