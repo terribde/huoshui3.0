@@ -2,7 +2,7 @@
 const prompt = process.argv.slice(2).join(' ').trim();
 if (!prompt) throw new Error('请在命令后提供问题');
 if (!process.env.AI_DEBUG_TOKEN) throw new Error('AI_DEBUG_TOKEN is required');
-const response = await fetch('http://127.0.0.1:3002/api/ai/chat', {
+const response = await fetch(`http://127.0.0.1:3002/${process.env.AI_WEB_ENABLED === 'true' ? 'internal' : 'api'}/ai/chat`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', 'x-debug-token': process.env.AI_DEBUG_TOKEN },
   body: JSON.stringify({ prompt }),

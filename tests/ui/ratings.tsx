@@ -30,7 +30,7 @@ function Harness(){
     {view==='mobile'&&<MobileTeacherSearch teachers={teachers} onSelectTeacher={setSelected}/>}
     {view==='desktop'&&<DesktopTeacherSearch teachers={teachers} onSelectTeacher={setSelected}/>}
     {view==='recommend'&&<CourseRecommend teachers={teachers} userPoints={100} onSelectTeacher={setSelected} onDeductPoints={()=>true}/>}
-    {selected&&<TeacherDetailModal teacher={selected} reviews={[]} onClose={()=>setSelected(null)} onOpenReview={()=>{}} onLikeReview={()=>{}}/>}
+    {selected&&<TeacherDetailModal teacher={selected} reviews={[]} onClose={()=>setSelected(null)} onOpenReview={()=>{}} onLikeReview={()=>{}} likedReviewIds={new Set()} pendingLikeIds={new Set()} likesLoading={false}/>}
   </main>;
 }
 createRoot(document.getElementById('root')!).render(<Harness/>);

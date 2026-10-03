@@ -156,7 +156,7 @@ export const UserPointsModal: React.FC<UserPointsModalProps> = ({
                 <span className="font-semibold text-gray-800 text-2xs block text-amber-600">
                   - 消耗规则
                 </span>
-                <p className="text-gray-600 text-2xs">🤖 AI 自然语言提问：<strong>2 分/次</strong></p>
+                <p className="text-gray-600 text-2xs">🤖 AI 自然语言提问：<strong>以聊天框当前积分规则为准</strong></p>
                 <p className="text-gray-600 text-2xs">🎯 偏好加权智能推荐：<strong>3 分/次</strong></p>
                 <p className="text-gray-600 text-2xs">📖 经验攻略内容：<strong>5 分/篇</strong></p>
                 <p className="text-gray-600 text-2xs">📢 教务网通知/查老师：<strong>永久免费</strong></p>

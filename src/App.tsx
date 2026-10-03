@@ -28,7 +28,7 @@ import { clearPagedQueryCache } from './hooks/usePagedQuery';
 // Modals are only mounted when the user opens them, so load them on demand
 // instead of shipping every dialog in the entry bundle.
 const TeacherDetailModal = lazy(() => import('./components/TeacherDetailModal').then(m => ({ default: m.TeacherDetailModal })));
-const AgentNoticeModal = lazy(() => import('./components/AgentNoticeModal').then(m => ({ default: m.AgentNoticeModal })));
+const AiAssistantModal = lazy(() => import('./components/AiAssistantModal').then(m => ({ default: m.AiAssistantModal })));
 const ReviewModal = lazy(() => import('./components/ReviewModal').then(m => ({ default: m.ReviewModal })));
 const UserPointsModal = lazy(() => import('./components/UserPointsModal').then(m => ({ default: m.UserPointsModal })));
 const CollegeListModal = lazy(() => import('./components/CollegeListModal').then(m => ({ default: m.CollegeListModal })));
@@ -101,6 +101,8 @@ export default function App() {
   // Modals state
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
   const [isAiModalOpen, setIsAiModalOpen] = useState<boolean>(false);
+  const [hasOpenedAi, setHasOpenedAi] = useState(false);
+  useEffect(() => { if (isAiModalOpen) setHasOpenedAi(true); }, [isAiModalOpen]);
   const [aiInitialPrompt, setAiInitialPrompt] = useState<string>('');
   const [isReviewModalOpen, setIsReviewModalOpen] = useState<boolean>(false);
   const [reviewTargetTeacher, setReviewTargetTeacher] = useState<Teacher | null>(null);
@@ -1079,17 +1081,27 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* 2. Agent 维护公告 Modal (版本 pre1.0.1) */}
-      <AnimatePresence>
-        {isAiModalOpen && (
+      {/* Keep page-local chat state while closed; reset on account change. */}
+        {(hasOpenedAi || isAiModalOpen) && (
           <Suspense fallback={<LazyFallback />}>
-          <AgentNoticeModal
+          <AiAssistantModal
+            key={currentUser?.id || 'guest'}
+            userId={currentUser?.id || null}
+            userPoints={userPoints}
+            initialPrompt={aiInitialPrompt}
             isOpen={isAiModalOpen}
             onClose={() => setIsAiModalOpen(false)}
+            onLogin={() => { setIsAiModalOpen(false); handleOpenAuth('login'); }}
+            onBalance={balance => {
+              if (currentUserIdRef.current !== currentUser?.id) return;
+              pointsRequestRef.current++;
+              setUserPoints(balance);
+              setIsCheckinStatusLoading(false);
+              if (currentUser?.id) void loadUserPointsData(currentUser.id);
+            }}
           />
           </Suspense>
         )}
-      </AnimatePresence>
 
       {/* 3. 评价打分 Modal */}
       <AnimatePresence>

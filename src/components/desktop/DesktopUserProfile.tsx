@@ -606,7 +606,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
               </div>
               <div className="p-2.5 bg-white rounded-xl border border-gray-100 space-y-1">
                 <span className="font-bold text-rose-700 block">积分消耗渠道：</span>
-                <p>• AI 智能问答助理：2 积分/次</p>
+                <p>• AI 智能问答助理：消耗以聊天框当前积分规则为准</p>
                 <p>• 教师库结构化检索：永久免费</p>
                 <p>• 六维雷达图查看：永久免费</p>
               </div>

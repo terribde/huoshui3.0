@@ -116,7 +116,7 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
                 placeholder={
                   searchMode === 'search'
                     ? '输入教师姓名、学院或课程搜索老师…'
-                    : '把问题和任务告诉我（如：高数老师选谁？）'
+                    : '问问学习与选课思路（暂未接教师库）'
                 }
                 className="w-full px-2 py-1 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-hidden bg-transparent"
               />
@@ -177,7 +177,7 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
                 <motion.button
                   type="button"
                   whileTap={{ scale: 0.88 }}
-                  onClick={() => onOpenAiChat('有哪些平时很少点名、给分还好的神仙老师？')}
+                  onClick={() => onOpenAiChat('选课时应该考虑哪些因素？')}
                   title="快捷提问"
                   className="p-1.5 rounded-full hover:bg-gray-100 hover:text-gray-700 transition-colors"
                 >
@@ -199,10 +199,10 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
           <div className="flex flex-wrap gap-1.5 pt-2.5 mt-2 border-t border-gray-50">
             <motion.button
               whileTap={{ scale: 0.93 }}
-              onClick={() => handleQuickPromptClick('高等数学哪位老师给分松？', 'ai')}
+              onClick={() => handleQuickPromptClick('如何制定高数复习计划？', 'ai')}
               className="text-2xs px-2.5 py-1 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-600 text-gray-600 rounded-full transition-colors"
             >
-              高数哪位老师给分松？
+              高数复习怎么安排？
             </motion.button>
             <motion.button
               whileTap={{ scale: 0.93 }}

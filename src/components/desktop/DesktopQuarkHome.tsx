@@ -117,7 +117,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
               placeholder={
                 searchMode === 'search'
                   ? '输入教师姓名、学院或课程名称搜索老师（如：高数、李老师）'
-                  : '把问题和任务告诉我（如：高数哪个老师给分松？求不点名且干货多的老师）'
+                  : '和我讨论学习与选课思路（教师数据查询尚未接入）'
               }
               className="w-full px-2 py-1.5 text-base text-gray-900 placeholder:text-gray-400 focus:outline-hidden bg-transparent"
             />
@@ -162,7 +162,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => onOpenAiChat('有哪些平时很少点名、给分还好的神仙老师？')}
+                onClick={() => onOpenAiChat('选课时应该考虑哪些因素？')}
                 title="快捷提问"
                 className="p-2 rounded-xl hover:bg-gray-100 hover:text-gray-700 transition-colors"
               >
@@ -182,10 +182,10 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
         <div className="flex flex-wrap gap-2 pt-3 mt-2 border-t border-gray-50">
           <span className="text-2xs text-gray-400 flex items-center py-1">热门热搜：</span>
           <button
-            onClick={() => handleQuickPromptClick('高等数学哪位老师给分松？', 'ai')}
+            onClick={() => handleQuickPromptClick('如何制定高数复习计划？', 'ai')}
             className="text-xs px-3 py-1 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-600 text-gray-600 rounded-full transition-colors"
           >
-            高数哪位老师给分松？
+            高数复习怎么安排？
           </button>
           <button
             onClick={() => handleQuickPromptClick('高等数学 (I)', 'recommend')}
@@ -200,10 +200,10 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
             从不点名神仙老师
           </button>
           <button
-            onClick={() => handleQuickPromptClick('计算机学院讲课最好的老师是谁？', 'ai')}
+            onClick={() => handleQuickPromptClick('如何提高编程课程的学习效率？', 'ai')}
             className="text-xs px-3 py-1 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-600 text-gray-600 rounded-full transition-colors"
           >
-            计算机院讲课口碑
+            编程课学习方法
           </button>
         </div>
       </div>
@@ -248,7 +248,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
           </div>
           <div>
             <span className="text-sm font-bold text-gray-800 group-hover:text-indigo-600 block">AI 问答</span>
-            <span className="text-2xs text-gray-400 mt-0.5 block">RAG 校园大模型</span>
+            <span className="text-2xs text-gray-400 mt-0.5 block">学习与选课思路问答</span>
           </div>
         </button>
 
@@ -444,15 +444,15 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
                 <h4 className="text-sm font-bold text-gray-900">AI 选课顾问速问</h4>
               </div>
               <span className="text-3xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-semibold">
-                2积分 / 次
+                积分规则见聊天框
               </span>
             </div>
             <div className="space-y-2">
               {[
-                '哪位高等数学老师从不随机点名？',
-                '大一想保研刷90+绩点，物理课怎么选？',
-                '计算机学院数据结构哪位老师讲得最好？',
-                '土木力学课陈宇宏老师给分风格怎么样？'
+                '怎样规划一周的高数学习？',
+                '选课时如何平衡兴趣与学习负担？',
+                '数据结构应该如何复习？',
+                '怎么整理力学课程的错题？'
               ].map((q, idx) => (
                 <div
                   key={idx}
