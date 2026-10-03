@@ -1,0 +1,24 @@
+[Unit]
+Description=SWJTU internal AI assistant
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=swjtu-ai
+Group=swjtu-ai
+WorkingDirectory=/opt/swjtu-ai
+EnvironmentFile=/etc/swjtu-ai.env
+ExecStart=/usr/bin/node --max-old-space-size=192 /opt/swjtu-ai/index.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+MemoryMax=384M
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
