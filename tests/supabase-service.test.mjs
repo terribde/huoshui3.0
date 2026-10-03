@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import { SCHEDULE_SELECT, buildTimetableSections, normalizeCampus, timetableOptions, timetableRecommendations } from '../server/timetable.mjs';
 
 // Compile the real service while substituting only its network/storage boundary.
 const source = fs.readFileSync(new URL('../src/services/supabaseService.ts',import.meta.url),'utf8')
@@ -10,7 +11,7 @@ const source = fs.readFileSync(new URL('../src/services/supabaseService.ts',impo
 const compiled = ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
 const ratingsSource=fs.readFileSync(new URL('../src/lib/ratings.ts',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'').replaceAll('export ','');
 const ratingsCompiled=ts.transpileModule(ratingsSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
-function setup({points=37,rpcData=null,rpcError=null,readError=null,configured=true,likedIds=[],teacherRows=[],reviewRows=[],courseRows=[],pageLimit=1000,omitCounts=false,relationError=false,pageError=null,cacheEnabled=false,apiResult=null,apiError=null}={}) {
+function setup({points=37,rpcData=null,rpcError=null,readError=null,configured=true,likedIds=[],teacherRows=[],reviewRows=[],courseRows=[],termRows=[],timetableRows=[],pageLimit=1000,omitCounts=false,relationError=false,pageError=null,cacheEnabled=false,apiResult=null,apiError=null}={}) {
   const storage=new Map(); const writes=[]; const calls=[]; const queries=[];
   const apiCalls=[];
   const supabase={
@@ -23,6 +24,7 @@ function setup({points=37,rpcData=null,rpcError=null,readError=null,configured=t
       const q={};
       q.select=(value,options={})=>{columns=value;selectOptions=options;return q;};
       q.eq=(column,value)=>{filters.push([column,value]);return q;};
+      q.in=(column,values)=>{filters.push([column,values]);return q;};
       q.ilike=(column,value)=>{patterns.push([column,value]);return q;};
       q.or=value=>{ors.push(value);return q;};
       q.not=(...args)=>{notFilters.push(args);return q;};
@@ -34,10 +36,10 @@ function setup({points=37,rpcData=null,rpcError=null,readError=null,configured=t
       const result=()=>{
         queries.push({table,start,end,columns,filters:[...filters],orders:[...orders],patterns:[...patterns],ors:[...ors],notFilters:[...notFilters],signal,selectOptions});
         const error=readError || (relationError && columns.includes('(') ? {message:'relationship missing'} : null) || pageError?.({table,start,columns});
-        let data=method==='select'?(table==='user_profiles'?{points,last_checkin_date:null}:table==='review_likes'?likedIds.map(review_id=>({review_id,user_id:'student'})):table==='teachers'?teacherRows:table==='reviews'?reviewRows:table==='courses'?courseRows:[]):null;
+        let data=method==='select'?(table==='user_profiles'?{points,last_checkin_date:null}:table==='review_likes'?likedIds.map(review_id=>({review_id,user_id:'student'})):table==='teachers'?teacherRows:table==='reviews'?reviewRows:table==='courses'?courseRows:table==='terms'?termRows:table==='timetable_schedule'?timetableRows:[]):null;
         let count=null;
         if(Array.isArray(data)) {
-          data=data.filter(row=>filters.every(([key,value])=>row[key]===value));
+          data=data.filter(row=>filters.every(([key,value])=>Array.isArray(value)?value.includes(row[key]):row[key]===value));
           data.sort((a,b)=>{
             for(const [key,{ascending=true,nullsFirst=!ascending}] of orders) {
               const av=a[key],bv=b[key];
@@ -58,6 +60,7 @@ function setup({points=37,rpcData=null,rpcError=null,readError=null,configured=t
     },
   };
   const context={supabase,isSupabaseConfigured:configured,cacheApiEnabled:cacheEnabled,
+    SCHEDULE_SELECT,buildTimetableSections,normalizeCampus,timetableOptions,timetableRecommendations,
     cacheQuery:options=>new URLSearchParams(Object.entries(options).filter(([,value])=>value!==undefined)).toString(),
     cacheRequest:async(path,options)=>{apiCalls.push({path,options});if(apiError)throw new Error(apiError);return apiResult;},
     POPULAR_COURSES:[],window:{},
@@ -75,6 +78,32 @@ test('enabled cache API serves teacher and public review pages while personal an
   await f.service.getReviewsPage({teacherId:'teacher',status:'pending'});
   await f.service.getReviewsPage({userId:'student',status:'approved'});
   assert.equal(f.apiCalls.length,2);assert.equal(f.queries.length,2);
+});
+
+test('smart course recommendations use the cache API and preserve genuine empty or failed results',async()=>{
+  const f=setup({cacheEnabled:true,apiResult:[]});
+  assert.equal((await f.service.getTimetableCourseRecommendations('数学','西部校区')).length,0);
+  assert.ok(f.apiCalls[0].path.startsWith('/timetable/recommendations?'));
+  assert.equal(new URLSearchParams(f.apiCalls[0].path.split('?')[1]).get('campus'),'犀浦校区');
+  assert.equal(f.queries.length,0);
+  const failed=setup({cacheEnabled:true,apiError:'offline'});
+  await assert.rejects(failed.service.getTimetableCourseRecommendations('数学'),/offline/);
+  assert.equal(failed.queries.length,0);
+});
+
+test('direct timetable reads isolate the current term and load all capped pages and teacher batches',async()=>{
+  const rows=Array.from({length:1105},(_,i)=>({section_id:`s${i}`,meeting_id:`m${i}`,term_id:'current',
+    course_name:'数学',teacher_id:'t',teacher_name:'老师',section_campus:'西部校区',weekday:1,schedule_status:'scheduled'}));
+  rows.push({...rows[0],section_id:'old',term_id:'previous'});
+  const f=setup({termRows:[{id:'current',is_current:true},{id:'previous',is_current:false}],timetableRows:rows,
+    teacherRows:[{id:'t',name:'老师',campus:'西部校区',rating_version:2}],pageLimit:100});
+  const results=await f.service.getTimetableCourseRecommendations('数学');
+  assert.equal(results.length,1);
+  assert.equal(results[0].sections.length,1105);
+  assert.equal(results[0].teacher.campus,'犀浦校区');
+  assert.ok(f.queries.filter(q=>q.table==='timetable_schedule').every(q=>q.filters.some(([key,value])=>key==='term_id'&&value==='current')));
+  const missing=setup();
+  await assert.rejects(missing.service.getTimetableCourseRecommendations('数学'),/当前学期/);
 });
 test('cached deployment routes mutations through authenticated API and never retries them directly',async()=>{
   const f=setup({cacheEnabled:true,apiResult:{success:true,likes:8,liked:true}});
