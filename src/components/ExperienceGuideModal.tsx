@@ -114,7 +114,7 @@ export const ExperienceGuideModal: React.FC<ExperienceGuideModalProps> = ({
                 className="p-4 bg-gray-50/80 hover:bg-gray-100/80 rounded-2xl border border-gray-100 space-y-2 transition-all cursor-pointer"
               >
                 <div className="flex items-center justify-between">
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">
+                  <span className="px-2 py-0.5 rounded-full text-3xs font-bold bg-blue-100 text-blue-700">
                     保研综测
                   </span>
                   <span className="text-xs text-gray-400">阅读 1.2k</span>
@@ -139,7 +139,7 @@ export const ExperienceGuideModal: React.FC<ExperienceGuideModalProps> = ({
                 className="p-4 bg-gray-50/80 hover:bg-gray-100/80 rounded-2xl border border-gray-100 space-y-2 transition-all cursor-pointer"
               >
                 <div className="flex items-center justify-between">
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                  <span className="px-2 py-0.5 rounded-full text-3xs font-bold bg-emerald-100 text-emerald-700">
                     转专业指南
                   </span>
                   <span className="text-xs text-gray-400">阅读 890</span>
@@ -173,7 +173,7 @@ export const ExperienceGuideModal: React.FC<ExperienceGuideModalProps> = ({
               >
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-bold text-gray-800">2024-2025学年第二学期学生正选与退选通知</span>
-                  <span className="text-[10px] text-gray-400">今天</span>
+                  <span className="text-3xs text-gray-400">今天</span>
                 </div>
                 <p className="text-xs text-gray-600">
                   正选时间：周三 10:00 至 周五 17:00，请同学们合理参考教师评价与开课时间安排。
@@ -187,7 +187,7 @@ export const ExperienceGuideModal: React.FC<ExperienceGuideModalProps> = ({
               >
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-bold text-gray-800">公共基础课（高等数学/大学物理）免修免试申请公告</span>
-                  <span className="text-[10px] text-gray-400">3天前</span>
+                  <span className="text-3xs text-gray-400">3天前</span>
                 </div>
                 <p className="text-xs text-gray-600">
                   满足全国数理竞赛省一及以上获奖同学，可于教务处主页提交免修免试申请。

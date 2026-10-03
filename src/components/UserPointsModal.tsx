@@ -144,22 +144,22 @@ export const UserPointsModal: React.FC<UserPointsModalProps> = ({
             
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="p-2.5 bg-white rounded-xl border border-gray-200/80 space-y-1">
-                <span className="font-semibold text-gray-800 text-[11px] block text-emerald-600">
+                <span className="font-semibold text-gray-800 text-2xs block text-emerald-600">
                   + 获取途径
                 </span>
-                <p className="text-gray-600 text-[11px]">✍️ 写评价审核通过：<strong>+20 分</strong> (主渠道)</p>
-                <p className="text-gray-600 text-[11px]">📅 每日登录/签到：<strong>+5 分</strong></p>
-                <p className="text-gray-600 text-[11px]">🤝 邀请校友注册：<strong>+10 分</strong></p>
+                <p className="text-gray-600 text-2xs">✍️ 写评价审核通过：<strong>+20 分</strong> (主渠道)</p>
+                <p className="text-gray-600 text-2xs">📅 每日登录/签到：<strong>+5 分</strong></p>
+                <p className="text-gray-600 text-2xs">🤝 邀请校友注册：<strong>+10 分</strong></p>
               </div>
 
               <div className="p-2.5 bg-white rounded-xl border border-gray-200/80 space-y-1">
-                <span className="font-semibold text-gray-800 text-[11px] block text-amber-600">
+                <span className="font-semibold text-gray-800 text-2xs block text-amber-600">
                   - 消耗规则
                 </span>
-                <p className="text-gray-600 text-[11px]">🤖 AI 自然语言提问：<strong>2 分/次</strong></p>
-                <p className="text-gray-600 text-[11px]">🎯 偏好加权智能推荐：<strong>3 分/次</strong></p>
-                <p className="text-gray-600 text-[11px]">📖 经验攻略内容：<strong>5 分/篇</strong></p>
-                <p className="text-gray-600 text-[11px]">📢 教务网通知/查老师：<strong>永久免费</strong></p>
+                <p className="text-gray-600 text-2xs">🤖 AI 自然语言提问：<strong>2 分/次</strong></p>
+                <p className="text-gray-600 text-2xs">🎯 偏好加权智能推荐：<strong>3 分/次</strong></p>
+                <p className="text-gray-600 text-2xs">📖 经验攻略内容：<strong>5 分/篇</strong></p>
+                <p className="text-gray-600 text-2xs">📢 教务网通知/查老师：<strong>永久免费</strong></p>
               </div>
             </div>
           </div>
@@ -178,7 +178,7 @@ export const UserPointsModal: React.FC<UserPointsModalProps> = ({
                 >
                   <div className="space-y-0.5">
                     <span className="font-medium text-gray-800 block">{tx.action}</span>
-                    <span className="text-[10px] text-gray-400">{tx.timestamp}</span>
+                    <span className="text-3xs text-gray-400">{tx.timestamp}</span>
                   </div>
 
                   <div className="text-right">
@@ -187,7 +187,7 @@ export const UserPointsModal: React.FC<UserPointsModalProps> = ({
                     }`}>
                       {tx.amount > 0 ? `+${tx.amount}` : tx.amount} 分
                     </span>
-                    <span className="block text-[10px] text-gray-400">
+                    <span className="block text-3xs text-gray-400">
                       结余: {tx.balanceAfter}分
                     </span>
                   </div>

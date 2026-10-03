@@ -55,7 +55,7 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-base font-bold">交大服务 · 功能中心</span>
-            <span className="px-2 py-0.5 rounded-full bg-white/20 text-[10px] font-semibold">
+            <span className="px-2 py-0.5 rounded-full bg-white/20 text-3xs font-semibold">
               百宝箱
             </span>
           </div>
@@ -66,17 +66,17 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
           >
             <Coins className="w-3.5 h-3.5 text-amber-300" />
             <span className="font-bold">{userPoints}</span>
-            <span className="text-[10px]">分</span>
+            <span className="text-3xs">分</span>
           </motion.div>
         </div>
-        <p className="text-[11px] text-indigo-100">
+        <p className="text-2xs text-indigo-100">
           全校教师库检索 · 智能推荐偏好 · 经验攻略与教务通知
         </p>
       </div>
 
       {/* 2. Core 5 Function Buttons (Clean 5-Column layout) */}
       <div className="bg-white p-3.5 rounded-3xl border border-gray-100 shadow-2xs space-y-2">
-        <span className="text-[11px] font-bold text-gray-400 px-1 uppercase tracking-wider block">
+        <span className="text-2xs font-bold text-gray-400 px-1 uppercase tracking-wider block">
           核心功能
         </span>
         <div className="grid grid-cols-5 gap-1">
@@ -90,7 +90,7 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
             <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white group-hover:shadow-md group-hover:shadow-indigo-200 transition-all">
               <Search className="w-5 h-5 stroke-[1.8]" />
             </div>
-            <span className="text-[11px] font-medium text-gray-700">找老师</span>
+            <span className="text-2xs font-medium text-gray-700">找老师</span>
           </motion.button>
 
           {/* 2. 智能选课 */}
@@ -103,7 +103,7 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
             <div className="w-11 h-11 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center group-hover:bg-amber-600 group-hover:text-white group-hover:shadow-md group-hover:shadow-amber-200 transition-all">
               <Sliders className="w-5 h-5 stroke-[1.8]" />
             </div>
-            <span className="text-[11px] font-medium text-gray-700">智能选课</span>
+            <span className="text-2xs font-medium text-gray-700">智能选课</span>
           </motion.button>
 
           {/* 3. AI 问答 */}
@@ -116,7 +116,7 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
             <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white group-hover:shadow-md group-hover:shadow-indigo-200 transition-all">
               <Bot className="w-5 h-5 stroke-[1.8]" />
             </div>
-            <span className="text-[11px] font-medium text-gray-700">AI 问答</span>
+            <span className="text-2xs font-medium text-gray-700">AI 问答</span>
           </motion.button>
 
           {/* 4. 写评价 */}
@@ -129,7 +129,7 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
             <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white group-hover:shadow-md group-hover:shadow-emerald-200 transition-all">
               <PenLine className="w-5 h-5 stroke-[1.8]" />
             </div>
-            <span className="text-[11px] font-medium text-gray-700">写评价</span>
+            <span className="text-2xs font-medium text-gray-700">写评价</span>
           </motion.button>
 
           {/* 5. 院系库 */}
@@ -142,14 +142,14 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
             <div className="w-11 h-11 rounded-2xl bg-purple-50 text-purple-700 flex items-center justify-center group-hover:bg-purple-600 group-hover:text-white group-hover:shadow-md group-hover:shadow-purple-200 transition-all">
               <LayoutGrid className="w-5 h-5 stroke-[1.8]" />
             </div>
-            <span className="text-[11px] font-medium text-gray-700">院系库</span>
+            <span className="text-2xs font-medium text-gray-700">院系库</span>
           </motion.button>
         </div>
       </div>
 
       {/* 3. Colorful App-Style Badges (Row of 4) */}
       <div className="bg-white p-3.5 rounded-3xl border border-gray-100 shadow-2xs space-y-2.5">
-        <span className="text-[11px] font-bold text-gray-400 px-1 uppercase tracking-wider block">
+        <span className="text-2xs font-bold text-gray-400 px-1 uppercase tracking-wider block">
           校园专区
         </span>
         <div className="grid grid-cols-4 gap-2">
@@ -163,7 +163,7 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-b from-blue-500 to-indigo-600 text-white shadow-md shadow-blue-500/25 group-hover:shadow-lg group-hover:shadow-blue-500/40 flex items-center justify-center transition-all">
               <History className="w-6 h-6 stroke-[2]" />
             </div>
-            <span className="text-[11px] font-medium text-gray-700 group-hover:text-indigo-600 transition-colors">历史库</span>
+            <span className="text-2xs font-medium text-gray-700 group-hover:text-indigo-600 transition-colors">历史库</span>
           </motion.button>
 
           {/* 2. 积分中心 */}
@@ -176,7 +176,7 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-b from-rose-500 to-red-600 text-white shadow-md shadow-rose-500/25 group-hover:shadow-lg group-hover:shadow-rose-500/40 flex items-center justify-center transition-all">
               <Coins className="w-6 h-6 stroke-[2]" />
             </div>
-            <span className="text-[11px] font-medium text-gray-700 group-hover:text-rose-600 transition-colors">积分中心</span>
+            <span className="text-2xs font-medium text-gray-700 group-hover:text-rose-600 transition-colors">积分中心</span>
           </motion.button>
 
           {/* 3. 经验攻略 */}
@@ -189,7 +189,7 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-b from-amber-500 to-orange-500 text-white shadow-md shadow-amber-500/25 group-hover:shadow-lg group-hover:shadow-amber-500/40 flex items-center justify-center transition-all">
               <GraduationCap className="w-6 h-6 stroke-[2]" />
             </div>
-            <span className="text-[11px] font-medium text-gray-700 group-hover:text-amber-600 transition-colors">经验攻略</span>
+            <span className="text-2xs font-medium text-gray-700 group-hover:text-amber-600 transition-colors">经验攻略</span>
           </motion.button>
 
           {/* 4. 教务通知 */}
@@ -202,7 +202,7 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-b from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/25 group-hover:shadow-lg group-hover:shadow-emerald-500/40 flex items-center justify-center transition-all">
               <FileText className="w-6 h-6 stroke-[2]" />
             </div>
-            <span className="text-[11px] font-medium text-gray-700 group-hover:text-emerald-600 transition-colors">教务通知</span>
+            <span className="text-2xs font-medium text-gray-700 group-hover:text-emerald-600 transition-colors">教务通知</span>
           </motion.button>
         </div>
       </div>
@@ -216,7 +216,7 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
           </div>
           <button
             onClick={() => onOpenSearch()}
-            className="text-[11px] text-gray-400 hover:text-indigo-600 flex items-center gap-0.5 transition-colors font-medium"
+            className="text-2xs text-gray-400 hover:text-indigo-600 flex items-center gap-0.5 transition-colors font-medium"
           >
             查看全部 <ChevronRight className="w-3 h-3" />
           </button>
@@ -239,12 +239,12 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
                     <span className="font-bold text-gray-900 text-xs group-hover:text-indigo-600 transition-colors">
                       {teacher.name}
                     </span>
-                    <span className="text-[10px] text-gray-500">{teacher.title}</span>
-                    <span className="text-[9px] px-1 py-0.2 bg-gray-200 text-gray-600 rounded">
+                    <span className="text-3xs text-gray-500">{teacher.title}</span>
+                    <span className="text-4xs px-1 py-0.2 bg-gray-200 text-gray-600 rounded">
                       {teacher.college.replace('学院', '')}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1 text-[11px] text-gray-500 mt-0.5">
+                  <div className="flex items-center gap-1 text-2xs text-gray-500 mt-0.5">
                     <span>{teacher.courses[0]}</span>
                     <span>·</span>
                     <span className="text-emerald-600 font-medium">给分 {formatRating(teacher.dimensions.gradingLeniency, '分')}</span>
@@ -267,7 +267,7 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
           <span>交大公益社区公约</span>
         </div>
-        <p className="text-[11px] leading-relaxed text-gray-500">
+        <p className="text-2xs leading-relaxed text-gray-500">
           写评价获赠 +20 积分奖励，结构化查老师永久免费。共建交大真实口碑选课社区！
         </p>
       </div>

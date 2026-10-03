@@ -39,6 +39,32 @@ function setup() {
   const cache = new CatalogCache(redis, source, { logger: { warn() {}, info() {} } });
   return { cache, redis, source, setTeachers: rows => { teachers = rows; }, setReviews: rows => { reviews = rows; }, counts: () => ({ fullTeacherReads, reviewReads }) };
 }
+
+test('term snapshots refresh after a term switch and cold timetable loads coalesce or bypass Redis', async () => {
+  const s = setup();
+  let termId = 'first';
+  let reads = 0;
+  s.source.terms = async () => [{ id: termId, is_current: true, year_term: termId }];
+  s.source.timetable = async id => { reads++; return [{ id: `section-${id}`, termId: id, meetings: [{ id: 'm' }] }]; };
+  await s.cache.synchronize();
+  assert.equal((await s.cache.terms()).rows[0].id, 'first');
+  const meta = JSON.parse(s.redis.data.get(s.cache.timetableKey('first')).__meta);
+  assert.equal(meta.sectionCount, 1);
+  assert.equal(meta.meetingCount, 1);
+  termId = 'second';
+  await s.cache.synchronize();
+  assert.equal((await s.cache.terms()).rows[0].id, 'second');
+  assert.equal((await s.cache.timetable('second')).rows[0].termId, 'second');
+  reads = 0;
+  await s.redis.del(s.cache.timetableKey('second'));
+  await Promise.all([s.cache.timetable('second'), s.cache.timetable('second')]);
+  assert.equal(reads, 1);
+  s.redis.offline = true;
+  assert.equal((await s.cache.timetable('second')).cache, 'BYPASS');
+  s.redis.offline = false;
+  await s.cache.synchronize();
+  assert.equal((await s.cache.timetable('second')).cache, 'HIT');
+});
 test('cache coalesces cold loads and patches one review without a full download', async () => {
   const s = setup();
   await Promise.all([s.cache.teachers(), s.cache.teachers()]);

@@ -1,5 +1,41 @@
 @import "tailwindcss";
 
+/*
+ * Micro-typography for the phone layouts.
+ *
+ * The mobile views used hard-coded pixel sizes (text-[9px] / text-[10px] / text-[11px]),
+ * which cannot respond to the viewport width and ignore the reader's own font-size
+ * preference. Those sizes are now three named tiers expressed in rem, so they follow
+ * the reader's default font size instead of being pinned to a pixel value.
+ *
+ * The base values below are exactly the sizes the old utilities produced. The phone
+ * fluid range in the media query is capped at those same values, so the 430px-wide
+ * phone shell and the entire desktop layout keep the size they have today.
+ */
+@theme {
+  /* replaces text-[9px]  */ --text-4xs: 0.5625rem;
+  /* replaces text-[10px] */ --text-3xs: 0.625rem;
+  /* replaces text-[11px] */ --text-2xs: 0.6875rem;
+}
+
+/*
+ * Phone range only. Each tier scales with the viewport between a 320px phone and the
+ * 430px shell the mobile layout is capped at, then flattens at the base value above
+ * that. The preferred term mixes rem with vw on purpose: the vw part makes the size
+ * fluid, the rem part keeps it tracking the reader's own font size.
+ */
+@media (max-width: 767px) {
+  :root {
+    --text-4xs: clamp(0.4375rem, 0.3426rem + 0.818vw, 0.5625rem); /* 320px: 8.1px -> 430px: 9px  */
+    --text-3xs: clamp(0.5rem, 0.3807rem + 0.909vw, 0.625rem);     /* 320px: 9.0px -> 430px: 10px */
+    --text-2xs: clamp(0.5625rem, 0.41875rem + 1vw, 0.6875rem);    /* 320px: 9.9px -> 430px: 11px */
+    /* The home brand title is the only text-4xl in the app and only renders in the
+       phone layout, so its fluid override is scoped here too. Desktop headings keep
+       the default scale (DesktopQuarkHome uses text-5xl). */
+    --text-4xl: clamp(2rem, 1.2725rem + 3.636vw, 2.25rem);        /* 320px: 32px  -> 430px: 36px */
+  }
+}
+
 /* Prevent scrollbar layout shift and sudden scrollbar flash during transitions */
 html {
   scrollbar-gutter: stable;

@@ -126,7 +126,7 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
           <div className="flex items-center gap-2">
             <span className="text-gray-500">评价数: {teacher.reviewCount}条</span>
             {teacher.hasHistoricalData && (
-              <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[11px] font-medium border border-blue-100 flex items-center gap-1">
+              <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-2xs font-medium border border-blue-100 flex items-center gap-1">
                 <History className="w-3 h-3" /> 含旧站评价
               </span>
             )}
@@ -203,7 +203,7 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
                   <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <div>
                     <p className="font-semibold">历史数据迁移说明</p>
-                    <p className="text-[11px] text-amber-700 mt-0.5">
+                    <p className="text-2xs text-amber-700 mt-0.5">
                       旧站评价保留教学质量、给分宽松度和作业轻松度评分。考勤宽松度、努力回报和师生亲和力由新评价逐步补齐，暂无评分时显示“暂无数据”。
                     </p>
                   </div>
@@ -236,11 +236,11 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-semibold text-gray-800">{rev.authorNickname}</span>
-                          <span className="text-[11px] text-gray-400">{rev.yearTerm}</span>
+                          <span className="text-2xs text-gray-400">{rev.yearTerm}</span>
                           {reviewDate && (
                             <>
-                              <span className="text-gray-300 text-[10px]">·</span>
-                              <span className="text-[11px] text-gray-400">{reviewDate}</span>
+                              <span className="text-gray-300 text-3xs">·</span>
+                              <span className="text-2xs text-gray-400">{reviewDate}</span>
                             </>
                           )}
                         </div>
@@ -252,7 +252,7 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
                             </span>
                           )}
                           {rev.isHistoricalMigrated && (
-                            <span className="text-[10px] px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full border border-blue-100">
+                            <span className="text-3xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full border border-blue-100">
                               老站迁移
                             </span>
                           )}
@@ -265,7 +265,7 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
                           {ratedDims.map(d => (
                             <span
                               key={d.key}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50/70 border border-indigo-100/80 text-[11px] text-slate-700"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50/70 border border-indigo-100/80 text-2xs text-slate-700"
                             >
                               <span className="text-slate-500">{d.label}</span>
                               <span className="font-bold font-mono text-indigo-600">
@@ -282,7 +282,7 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
                         </p>
                       )}
                       <div className="flex items-center justify-between pt-1 border-t border-gray-100/60 text-xs">
-                        <span className="text-[11px] text-gray-400">课程：{rev.courseName}</span>
+                        <span className="text-2xs text-gray-400">课程：{rev.courseName}</span>
                         <motion.button
                           whileTap={{ scale: 0.9 }}
                           onClick={async () => { await onLikeReview(rev.id); page.reload(); }}

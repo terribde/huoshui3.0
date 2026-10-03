@@ -53,7 +53,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                 )}
               </div>
 
-              <span className={`text-[10px] transition-colors ${isActive ? 'text-gray-900 font-semibold' : 'text-gray-400'}`}>
+              <span className={`text-3xs transition-colors ${isActive ? 'text-gray-900 font-semibold' : 'text-gray-400'}`}>
                 {tab.label}
               </span>
 

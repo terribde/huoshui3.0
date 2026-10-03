@@ -228,7 +228,7 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-gray-900 text-base">交大教师评价 AI Agent</h3>
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-medium">
+                <span className="text-2xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-medium">
                   RAG 检索库
                 </span>
               </div>
@@ -281,7 +281,7 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
                 {/* Cited teacher cards */}
                 {msg.citedTeachers && msg.citedTeachers.length > 0 && (
                   <div className="pt-2 border-t border-gray-200/60 space-y-1.5">
-                    <span className="text-[11px] font-semibold text-gray-500 block">
+                    <span className="text-2xs font-semibold text-gray-500 block">
                       引用数据源教师：
                     </span>
                     <div className="space-y-1.5">
@@ -306,9 +306,9 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
                               <span className="text-gray-400">·</span>
                               <span className="text-gray-500">{ct.course}</span>
                               <span className="text-gray-400">·</span>
-                              <span className="text-gray-500 text-[11px]">{ct.reason}</span>
+                              <span className="text-gray-500 text-2xs">{ct.reason}</span>
                             </div>
-                            <span className="text-indigo-600 font-medium text-[11px] flex items-center gap-0.5">
+                            <span className="text-indigo-600 font-medium text-2xs flex items-center gap-0.5">
                               看评价 <CornerDownRight className="w-3 h-3" />
                             </span>
                           </motion.div>

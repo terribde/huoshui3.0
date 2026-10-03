@@ -803,11 +803,11 @@ export default function App() {
                     <span className="font-extrabold text-base tracking-tight text-gray-950 font-sans">
                       交大活水
                     </span>
-                    <span className="px-1.5 py-0.2 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-100">
+                    <span className="px-1.5 py-0.2 rounded-md text-3xs font-bold bg-indigo-50 text-indigo-600 border border-indigo-100">
                       Agent
                     </span>
                   </div>
-                  <p className="text-[10px] text-gray-400 -mt-0.5">
+                  <p className="text-3xs text-gray-400 -mt-0.5">
                     西南交通大学专属教师评价 · 校园智能助手
                   </p>
                 </div>
@@ -879,7 +879,7 @@ export default function App() {
                     >
                       <Coins className="w-3.5 h-3.5 text-amber-500" />
                       <span className="font-bold text-xs">{userPoints}</span>
-                      <span className="text-[10px] text-amber-700">分</span>
+                      <span className="text-3xs text-amber-700">分</span>
                     </motion.div>
 
                     <div className="flex items-center gap-2 pl-1 border-l border-gray-200">
@@ -943,7 +943,7 @@ export default function App() {
                     <ShieldCheck className="w-3.5 h-3.5 text-indigo-400 group-hover:scale-110 transition-transform" />
                     <span>管理审核</span>
                     {pendingReviewCount > 0 && (
-                      <span className="px-1.5 py-0.2 bg-amber-500 text-slate-950 rounded-full text-[9px] font-black animate-pulse">
+                      <span className="px-1.5 py-0.2 bg-amber-500 text-slate-950 rounded-full text-4xs font-black animate-pulse">
                         {pendingReviewCount}
                       </span>
                     )}

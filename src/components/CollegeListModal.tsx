@@ -119,7 +119,7 @@ export const CollegeListModal: React.FC<CollegeListModalProps> = ({
                     {item.name}
                   </span>
                   {item.code && (
-                    <span className="text-[10px] text-gray-400 px-1.5 py-0.5 rounded bg-gray-100">
+                    <span className="text-3xs text-gray-400 px-1.5 py-0.5 rounded bg-gray-100">
                       {item.code}
                     </span>
                   )}

@@ -9,7 +9,7 @@ import { Sliders, Sparkles, CheckCircle2, ChevronRight, HelpCircle, Star, Award,
 
 const CAMPUS_OPTIONS = [
   { id: 'all', name: '全部校区' },
-  { id: '西部校区', name: '西部校区' },
+  { id: '犀浦校区', name: '犀浦校区' },
   { id: '九里校区', name: '九里校区' },
   { id: '峨眉校区', name: '峨眉校区' },
   { id: '东部校区', name: '东部校区' },
@@ -109,7 +109,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
   };
 
   // Filter candidates:
-  // 候选池为本学期开课的授课老师（结合 2026-2027-1 学期课表明细）
+  // 候选池跟随数据库标记的当前学期课表。
   const rankedTeachers = useMemo(() => {
     const courseToMatch = searchKeyword.trim() || selectedCourse;
 
@@ -117,7 +117,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
 
     let list: Array<{ teacher: Teacher; sections: CourseSection[] }> = [];
 
-    if (isSupabaseConfigured && timetableResults.length > 0) {
+    if (isSupabaseConfigured) {
       list = timetableResults;
     } else {
       // 本地 Mock 回退模式
@@ -133,7 +133,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
 
         const matchCampus =
           selectedCampus === 'all' ||
-          (selectedCampus === '西部校区'
+          (selectedCampus === '犀浦校区'
             ? (t.campus === '犀浦校区' || t.campus === '西部校区')
             : t.campus === selectedCampus);
 
@@ -153,7 +153,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
               courseName: t.courses[0] || '高等数学',
               credits: 4,
               nature: '必修',
-              campus: t.campus || '西部校区',
+              campus: t.campus === '西部校区' ? '犀浦校区' : t.campus || '犀浦校区',
               capacity: 60,
               preferred: mockPreferred,
               meetings: [
@@ -162,9 +162,9 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
                   periodStart: ((idx % 3) * 2) + 1,
                   periodEnd: ((idx % 3) * 2) + 2,
                   rawSchedule: `1-16周 星期${['一','二','三','四','五'][mockWeekday - 1]} ${((idx % 3) * 2) + 1}-${((idx % 3) * 2) + 2}节`,
-                  rawLocation: `${t.campus || '西部校区'} X${2100 + (idx * 17) % 800}`,
+                  rawLocation: `${t.campus === '西部校区' ? '犀浦校区' : t.campus || '犀浦校区'} X${2100 + (idx * 17) % 800}`,
                   classroom: `X${2100 + (idx * 17) % 800}`,
-                  classroomCampus: t.campus || '西部校区'
+                  classroomCampus: t.campus === '西部校区' ? '犀浦校区' : t.campus || '犀浦校区'
                 }
               ]
             }
@@ -212,12 +212,12 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-bold text-gray-900">智能选课偏好推荐</h2>
-              <p className="text-[11px] sm:text-xs text-gray-500">依据本学期开课教师与加权算法动态匹配</p>
+              <p className="text-2xs sm:text-xs text-gray-500">依据本学期开课教师与加权算法动态匹配</p>
             </div>
           </div>
           <button
             onClick={handleResetWeights}
-            className="flex items-center gap-1 text-[11px] sm:text-xs text-gray-500 hover:text-indigo-600 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg border border-gray-200 hover:border-indigo-200 transition-colors shrink-0"
+            className="flex items-center gap-1 text-2xs sm:text-xs text-gray-500 hover:text-indigo-600 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg border border-gray-200 hover:border-indigo-200 transition-colors shrink-0"
           >
             <RotateCcw className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
             <span>重置偏好</span>
@@ -232,7 +232,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
             第一步：选择或输入想要选的课程名
           </label>
           {!courseToMatch && (
-            <span className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
+            <span className="text-2xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
               当前展示全校口碑最高教师
             </span>
           )}
@@ -398,7 +398,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
                 setSelectedWeekday('all');
                 setPreferredClass('');
               }}
-              className="text-[11px] text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+              className="text-2xs text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
             >
               重置筛选
             </button>
@@ -413,7 +413,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
             <h3 className="text-sm font-bold text-gray-900">第二步：调节你的个性化选课权重</h3>
             <p className="text-xs text-gray-400">滑动增加你在意的维度权重，系统将即时重新计算排序</p>
           </div>
-          <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
+          <span className="text-2xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
             加权匹配算分
           </span>
         </div>
@@ -433,7 +433,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
               onChange={(e) => setWeights({ ...weights, attendanceStrictness: Number(e.target.value) })}
               className="w-full accent-amber-500 cursor-pointer"
             />
-            <div className="flex justify-between text-[10px] text-gray-400">
+            <div className="flex justify-between text-3xs text-gray-400">
               <span>无所谓点名</span>
               <span>坚决不点名</span>
             </div>
@@ -453,7 +453,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
               onChange={(e) => setWeights({ ...weights, gradingLeniency: Number(e.target.value) })}
               className="w-full accent-emerald-500 cursor-pointer"
             />
-            <div className="flex justify-between text-[10px] text-gray-400">
+            <div className="flex justify-between text-3xs text-gray-400">
               <span>正常均分</span>
               <span>超大方给A</span>
             </div>
@@ -473,7 +473,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
               onChange={(e) => setWeights({ ...weights, effortMatters: Number(e.target.value) })}
               className="w-full accent-blue-500 cursor-pointer"
             />
-            <div className="flex justify-between text-[10px] text-gray-400">
+            <div className="flex justify-between text-3xs text-gray-400">
               <span>不太在意</span>
               <span>越努力分越高</span>
             </div>
@@ -493,7 +493,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
               onChange={(e) => setWeights({ ...weights, workloadDifficulty: Number(e.target.value) })}
               className="w-full accent-purple-500 cursor-pointer"
             />
-            <div className="flex justify-between text-[10px] text-gray-400">
+            <div className="flex justify-between text-3xs text-gray-400">
               <span>能写大作业</span>
               <span>少布置作业</span>
             </div>
@@ -513,7 +513,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
               onChange={(e) => setWeights({ ...weights, approachability: Number(e.target.value) })}
               className="w-full accent-pink-500 cursor-pointer"
             />
-            <div className="flex justify-between text-[10px] text-gray-400">
+            <div className="flex justify-between text-3xs text-gray-400">
               <span>不限性格</span>
               <span>温柔和蔼</span>
             </div>
@@ -533,7 +533,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
               onChange={(e) => setWeights({ ...weights, teachingQuality: Number(e.target.value) })}
               className="w-full accent-indigo-500 cursor-pointer"
             />
-            <div className="flex justify-between text-[10px] text-gray-400">
+            <div className="flex justify-between text-3xs text-gray-400">
               <span>过考就行</span>
               <span>讲课封神透彻</span>
             </div>
@@ -549,7 +549,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
               {!courseToMatch ? (
                 <>
                   <span>🏆 本学期高分口碑教师推荐</span>
-                  <span className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                  <span className="text-2xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
                     评分最高
                   </span>
                 </>
@@ -611,7 +611,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
                           {teacher.college}
                         </span>
                         {teacher.campus && (
-                          <span className="text-[11px] px-1.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-600">
+                          <span className="text-2xs px-1.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-600">
                             {teacher.campus}
                           </span>
                         )}
@@ -641,7 +641,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
                           : (matchPercent !== null ? `${matchPercent}% 契合` : (teacher.overallScore !== null ? `${formatRating(teacher.overallScore)} 分` : '新开课 · 尚无评分'))}
                       </span>
                     </div>
-                    <span className="text-[10px] text-gray-400 flex items-center gap-0.5 group-hover:text-indigo-600 transition-colors font-medium">
+                    <span className="text-3xs text-gray-400 flex items-center gap-0.5 group-hover:text-indigo-600 transition-colors font-medium">
                       教师主页 <ChevronRight className="w-3 h-3" />
                     </span>
                   </div>
@@ -651,22 +651,22 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
                 {teacher.tags && teacher.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
                     {teacher.tags.slice(0, 4).map((tag, tIdx) => (
-                      <span key={tIdx} className="text-[10px] px-2 py-0.5 rounded-md bg-indigo-50/60 text-indigo-700 font-medium">
+                      <span key={tIdx} className="text-3xs px-2 py-0.5 rounded-md bg-indigo-50/60 text-indigo-700 font-medium">
                         #{tag}
                       </span>
                     ))}
                   </div>
                 )}
 
-                {/* Teaching Sections from 2026-2027-1 timetable */}
+                {/* Teaching sections from the current term */}
                 {sections && sections.length > 0 && (
                   <div className="pt-2.5 border-t border-gray-100 space-y-2">
-                    <div className="text-[11px] font-semibold text-gray-500 flex items-center justify-between">
+                    <div className="text-2xs font-semibold text-gray-500 flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
                         <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
                         <span>本学期教学班排课明细 ({sections.length}个班/时段):</span>
                       </div>
-                      <span className="text-[10px] text-gray-400 font-normal">点击选课号可一键复制</span>
+                      <span className="text-3xs text-gray-400 font-normal">点击选课号可一键复制</span>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -677,7 +677,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
                         >
                           <div className="flex flex-wrap items-center justify-between gap-1.5">
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="font-mono font-bold text-gray-800 bg-white border border-gray-200 px-1.5 py-0.5 rounded text-[11px]">
+                              <span className="font-mono font-bold text-gray-800 bg-white border border-gray-200 px-1.5 py-0.5 rounded text-2xs">
                                 选课号: {sec.selectionCode}
                               </span>
                               <button
@@ -686,7 +686,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
                                   e.stopPropagation();
                                   copyCode(sec.selectionCode);
                                 }}
-                                className="inline-flex items-center gap-0.5 text-[11px] font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-1.5 py-0.5 rounded transition-colors cursor-pointer"
+                                className="inline-flex items-center gap-0.5 text-2xs font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-1.5 py-0.5 rounded transition-colors cursor-pointer"
                                 title="复制选课号"
                               >
                                 {copiedCode === sec.selectionCode ? (
@@ -710,7 +710,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
                                     e.stopPropagation();
                                     copyCode(sec.courseName || sec.courseCode!);
                                   }}
-                                  className="font-medium text-indigo-700 bg-indigo-50/80 border border-indigo-200/80 hover:border-indigo-300 hover:bg-indigo-100/70 px-2 py-0.5 rounded text-[11px] inline-flex items-center gap-1 transition-colors cursor-pointer"
+                                  className="font-medium text-indigo-700 bg-indigo-50/80 border border-indigo-200/80 hover:border-indigo-300 hover:bg-indigo-100/70 px-2 py-0.5 rounded text-2xs inline-flex items-center gap-1 transition-colors cursor-pointer"
                                   title={sec.courseCode ? `点击复制课程名称 (代码: ${sec.courseCode})` : '点击复制课程名称'}
                                 >
                                   <BookOpen className="w-3 h-3 text-indigo-500 shrink-0" />
@@ -724,15 +724,15 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
 
                             {/* Class Capacity */}
                             {sec.capacity != null ? (
-                              <span className="text-[10px] text-gray-600 font-medium px-2 py-0.5 rounded-md bg-white border border-gray-200 shrink-0">
-                                容量: {sec.capacity}人
+                              <span className="text-3xs text-gray-600 font-medium px-2 py-0.5 rounded-md bg-white border border-gray-200 shrink-0">
+                                总容量: {sec.capacity}人
                               </span>
                             ) : null}
                           </div>
 
                           {/* Preferred Class Display */}
                           {sec.preferred && (
-                            <div className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-slate-100/90 border border-slate-200/90 text-slate-700">
+                            <div className="flex items-center gap-1 text-2xs px-2 py-1 rounded-md bg-slate-100/90 border border-slate-200/90 text-slate-700">
                               <Users className="w-3 h-3 text-indigo-500 shrink-0" />
                               <span className="font-semibold text-gray-700 shrink-0">优选班:</span>
                               <span
@@ -750,7 +750,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
 
                           {/* Meeting schedules */}
                           {sec.meetings && sec.meetings.length > 0 ? (
-                            <div className="space-y-1 text-[11px] text-gray-600">
+                            <div className="space-y-1 text-2xs text-gray-600">
                               {sec.meetings.map((m, mIdx) => {
                                 const isSelectedDay = selectedWeekday !== 'all' && m.weekday === Number(selectedWeekday);
                                 return (
@@ -775,7 +775,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
                               })}
                             </div>
                           ) : (
-                            <div className="text-[11px] text-gray-400 flex items-center gap-1">
+                            <div className="text-2xs text-gray-400 flex items-center gap-1">
                               <Clock className="w-3 h-3" />
                               <span>{sec.campus || '校区'} · 具体上课时间以教务系统为准</span>
                             </div>

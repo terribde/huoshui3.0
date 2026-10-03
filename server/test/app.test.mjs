@@ -6,6 +6,10 @@ import { createApp } from '../app.mjs';
 async function fixture(t) {
   const calls = [];
   const cache = { available: true, lastSync: 1,
+    terms: async () => ({ cache: 'HIT', rows: [{ id: 'current', is_current: true }] }),
+    timetable: async termId => { calls.push(['timetable', termId]); return { cache: 'MISS', rows: [{
+      id: 's', courseName: 'Calculus', campus: '犀浦校区', meetings: [{ id: 'm', teacherId: 't', weekday: 1 }],
+    }] }; },
     teachers: async () => ({ cache: 'HIT', rows: [{ id: 't', name: 'Teacher', overall_score: 4 }] }),
     reviews: async () => ({ cache: 'HIT', rows: [{ id: 'r', teacher_id: 't', status: 'approved', created_at: '2026-01-01' }] }),
     mutate: operation => operation(), changedReview: async (...args) => { calls.push(['refresh', ...args]); },
@@ -37,6 +41,17 @@ async function fixture(t) {
     body: body ? JSON.stringify(body) : undefined,
   }) };
 }
+
+test('recommendation API selects current term and validates filters before loading snapshots', async t => {
+  const f = await fixture(t);
+  const response = await f.request('/api/timetable/recommendations?query=Calculus&weekday=1');
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('x-cache'), 'MISS');
+  assert.equal((await response.json()).data[0].teacher.id, 't');
+  assert.deepEqual(f.calls, [['timetable', 'current']]);
+  assert.equal((await f.request('/api/timetable/recommendations?weekday=8')).status, 400);
+  assert.equal(f.calls.length, 1);
+});
 test('public reads use cache while privileged routes reject absent or invalid sessions', async t => {
   const f = await fixture(t);
   const response = await f.request('/api/teachers');

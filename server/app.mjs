@@ -1,5 +1,6 @@
 import express from 'express';
 import { pagination, teacherOptions, teacherPage, reviewPage } from './data.mjs';
+import { timetableOptions, timetableRecommendations } from './timetable.mjs';
 
 const asyncRoute = fn => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
 const httpError = (status, message) => Object.assign(new Error(message), { status });
@@ -24,6 +25,19 @@ export function createApp({ cache, authClient, userClient, logger = console }) {
     next();
   });
   app.get('/health', (_req, res) => res.json({ ok: true, cache: cache.available ? 'ready' : 'bypass', lastSync: cache.lastSync }));
+  app.get('/api/timetable/recommendations', asyncRoute(async (req, res) => {
+    let options;
+    try { options = timetableOptions(req.query); }
+    catch (error) { throw httpError(400, error.message); }
+    const terms = await cache.terms();
+    const current = terms.rows.filter(term => term.is_current);
+    if (current.length !== 1) throw httpError(503, 'Current term is not configured uniquely');
+    const timetable = await cache.timetable(current[0].id);
+    const teachers = await cache.teachers();
+    const states = [terms.cache, timetable.cache, teachers.cache];
+    res.set('X-Cache', states.includes('BYPASS') ? 'BYPASS' : states.includes('MISS') ? 'MISS' : 'HIT')
+      .json({ data: timetableRecommendations(timetable.rows, teachers.rows, options) });
+  }));
   app.get('/api/teachers', asyncRoute(async (req, res) => {
     let options;
     try { options = teacherOptions(req.query); }

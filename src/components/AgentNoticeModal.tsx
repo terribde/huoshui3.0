@@ -107,7 +107,7 @@ export const AgentNoticeModal: React.FC<AgentNoticeModalProps> = ({
                   <h3 className="text-base sm:text-lg font-bold text-gray-900">
                     {AGENT_NOTICE_CONFIG.title}
                   </h3>
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-3xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
                     {AGENT_NOTICE_CONFIG.badge}
                   </span>
                 </div>
@@ -223,7 +223,7 @@ export const AgentNoticeModal: React.FC<AgentNoticeModalProps> = ({
                     <div className="w-10 h-10 rounded-full bg-indigo-500/30 border border-indigo-400/40 flex items-center justify-center">
                       <QrCode className="w-6 h-6 text-indigo-300" />
                     </div>
-                    <span className="text-[10px] font-bold text-indigo-200 tracking-wider">
+                    <span className="text-3xs font-bold text-indigo-200 tracking-wider">
                       交大活水 · 赞赏通道
                     </span>
                   </div>
@@ -233,14 +233,14 @@ export const AgentNoticeModal: React.FC<AgentNoticeModalProps> = ({
                     <div className="w-8 h-8 border-4 border-white rounded-lg flex items-center justify-center p-1">
                       <div className="w-3.5 h-3.5 bg-indigo-400 rounded-xs" />
                     </div>
-                    <div className="text-[9px] text-gray-400 text-right leading-tight">
+                    <div className="text-4xs text-gray-400 text-right leading-tight">
                       微信 / 支付宝<br />扫码支持
                     </div>
                   </div>
                 </div>
               )}
 
-              <span className="mt-2 text-[10px] text-gray-400 font-mono">
+              <span className="mt-2 text-3xs text-gray-400 font-mono">
                 扫码支持独立开发 · 共同打造更好的交大社区
               </span>
             </div>

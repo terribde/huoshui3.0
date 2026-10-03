@@ -3,6 +3,7 @@ import { Teacher, Review, UserPointTransaction, Course, Term, PointRule, Teacher
 import { POPULAR_COURSES } from '../data/mockTeachers';
 import { normalizeRatingRecord, readRating, RATING_VERSION } from '../lib/ratings';
 import { cacheApiEnabled, cacheQuery, cacheRequest } from '../lib/cacheApi';
+import { SCHEDULE_SELECT, buildTimetableSections, normalizeCampus, timetableOptions, timetableRecommendations } from '../../server/timetable.mjs';
 
 /**
  * Supabase Data Service
@@ -142,7 +143,7 @@ function mapTeacherRow(row: any): Teacher {
           title: row.title || '教师',
           college: collegeName,
           collegeId: row.college_id || row.colleges?.id || undefined,
-          campus: row.campus || '犀浦校区',
+          campus: normalizeCampus(row.campus) || '犀浦校区',
           courses: finalCourses,
           courseOfferings: offerings,
           isTeachingThisTerm,
@@ -258,269 +259,34 @@ export const supabaseService = {
     preferred?: string,
     signal?: AbortSignal
   ): Promise<TeacherWithSections[]> {
-    // Clean course name (e.g. "高等数学 (I)" -> "高等数学")
-    const cleanName = courseQuery.replace(/\s*[\(（][^()（）]+[\)）]/g, '').trim() || courseQuery.trim();
-    const hasPreferred = Boolean(preferred && preferred.trim());
-    const hasWeekday = Boolean(weekday && weekday !== 'all');
-
-    // Case 1: Pure default empty state (No course, no preferred class, no weekday filter selected)
-    // In this state, show top-rated teachers across the school / college / campus
-    if (!cleanName && !hasPreferred && !hasWeekday) {
-      let teacherQuery = supabase
-        .from('teachers')
-        .select(TEACHER_SELECT)
-        .order('overall_score', { ascending: false, nullsFirst: false })
-        .order('review_count', { ascending: false })
-        .limit(60);
-
-      if (collegeId && collegeId !== 'all') {
-        teacherQuery = teacherQuery.eq('college_id', collegeId);
-      }
-      if (campus && campus !== 'all') {
-        if (campus === '西部校区') {
-          teacherQuery = teacherQuery.or('campus.eq.犀浦校区,campus.eq.西部校区');
-        } else {
-          teacherQuery = teacherQuery.eq('campus', campus);
-        }
-      }
-      if (signal) teacherQuery = teacherQuery.abortSignal(signal);
-
-      const { data: dbTeacherRows, error: tErr } = await teacherQuery;
-      if (tErr || !dbTeacherRows || !dbTeacherRows.length) return [];
-
-      const topTeachers = dbTeacherRows.map(mapTeacherRow);
-      const topIds = topTeachers.map(t => t.id);
-
-      // Fetch timetable sections for these top teachers in term 2026-2027-1
-      let schedQuery = supabase
-        .from('timetable_schedule')
-        .select('*')
-        .in('teacher_id', topIds);
-
-      if (signal) schedQuery = schedQuery.abortSignal(signal);
-
-      const { data: schedRows } = await schedQuery;
-      const rows = (schedRows || []) as any[];
-
-      // Map teacher_id to sections
-      const teacherSectionsMap = new Map<string, Map<string, CourseSection>>();
-      for (const r of rows) {
-        if (!r.teacher_id) continue;
-        let secMap = teacherSectionsMap.get(r.teacher_id);
-        if (!secMap) {
-          secMap = new Map();
-          teacherSectionsMap.set(r.teacher_id, secMap);
-        }
-        const secCode = r.selection_code || r.section_id;
-        let sec = secMap.get(secCode);
-        if (!sec) {
-          sec = {
-            sectionId: r.section_id,
-            selectionCode: r.selection_code,
-            courseCode: r.course_code || undefined,
-            courseName: r.course_name || undefined,
-            credits: r.credits != null ? Number(r.credits) : null,
-            nature: r.nature || null,
-            campus: r.section_campus || r.classroom_campus || null,
-            capacity: r.capacity != null ? Number(r.capacity) : null,
-            preferred: r.preferred || null,
-            meetings: [],
-          };
-          secMap.set(secCode, sec);
-        }
-        if (r.raw_schedule || r.raw_location || r.classroom || r.weekday) {
-          const meetingKey = `${r.meeting_id || ''}_${r.raw_schedule || ''}_${r.classroom || ''}`;
-          const exists = sec.meetings.some(m => `${m.id || ''}_${m.rawSchedule || ''}_${m.classroom || ''}` === meetingKey);
-          if (!exists) {
-            sec.meetings.push({
-              id: r.meeting_id || undefined,
-              weeks: r.weeks || undefined,
-              weekday: r.weekday,
-              periodStart: r.period_start,
-              periodEnd: r.period_end,
-              classroomCampus: r.classroom_campus,
-              classroom: r.classroom,
-              rawSchedule: r.raw_schedule,
-              rawLocation: r.raw_location,
-            });
-          }
-        }
-      }
-
-      const results: TeacherWithSections[] = [];
-      for (const teacher of topTeachers) {
-        const secMap = teacherSectionsMap.get(teacher.id);
-        const sections = secMap ? Array.from(secMap.values()) : [];
-        results.push({ teacher, sections });
-      }
-
-      return results;
+    const options = timetableOptions({ query: courseQuery, campus, collegeId, weekday, preferred });
+    if (cacheApiEnabled) {
+      const rows = await cacheRequest<Array<{ teacher: any; sections: CourseSection[] }>>(
+        `/timetable/recommendations?${cacheQuery(options as unknown as Record<string, unknown>)}`, { signal }
+      );
+      return rows.map(row => ({ teacher: mapTeacherRow(row.teacher), sections: row.sections }));
     }
-
-    // Case 2: At least one timetable filter is active (cleanName OR preferred class OR weekday)
-    // Query timetable_schedule directly so that ALL matching classes and sections are captured
-    let query = supabase
-      .from('timetable_schedule')
-      .select('*')
-      .limit(2000);
-
-    if (cleanName) {
-      query = query.ilike('course_name', `%${cleanName}%`);
-    }
-
-    if (campus && campus !== 'all') {
-      if (campus === '西部校区') {
-        query = query.or('section_campus.eq.犀浦校区,section_campus.eq.西部校区,classroom_campus.eq.犀浦校区,classroom_campus.eq.西部校区');
-      } else {
-        query = query.or(`section_campus.eq.${campus},classroom_campus.eq.${campus}`);
-      }
-    }
-
-    if (hasWeekday) {
-      query = query.eq('weekday', Number(weekday));
-    }
-
-    if (hasPreferred) {
-      query = query.ilike('preferred', `%${preferred!.trim()}%`);
-    }
-
-    if (signal) query = query.abortSignal(signal);
-
-    const { data, error } = await query;
-    if (error) {
-      console.warn('[TimetableSchedule] Query error:', error.message);
-      return [];
-    }
-
-    const rows = (data || []) as any[];
+    if (!supabase) return [];
+    const { data: terms, error: termError } = await supabase.from('terms')
+      .select('id,year_term').eq('is_current', true).abortSignal(signal);
+    if (termError) throw new Error(termError.message);
+    if (terms?.length !== 1) throw new Error('请先设置唯一的当前学期');
+    const rows = await readAllRows((from, to) => supabase.from('timetable_schedule')
+      .select(SCHEDULE_SELECT, { count: from === 0 ? 'exact' : undefined })
+      .eq('term_id', terms[0].id).order('section_id')
+      .order('meeting_id', { nullsFirst: true }).range(from, to).abortSignal(signal));
     if (!rows.length) return [];
-
-    // Group rows by teacher key (prefer teacher_id, fallback to teacher_name)
-    const teacherMap = new Map<string, {
-      teacherId: string | null;
-      teacherName: string;
-      sourceDepartment?: string;
-      sectionCampus?: string;
-      sectionsMap: Map<string, CourseSection>;
-    }>();
-
-    for (const r of rows) {
-      const teacherKey = r.teacher_id || r.teacher_name || r.primary_teacher_name || '未知教师';
-      let entry = teacherMap.get(teacherKey);
-      if (!entry) {
-        entry = {
-          teacherId: r.teacher_id || null,
-          teacherName: r.teacher_name || r.primary_teacher_name || '未知教师',
-          sourceDepartment: r.source_department,
-          sectionCampus: r.section_campus || r.classroom_campus,
-          sectionsMap: new Map(),
-        };
-        teacherMap.set(teacherKey, entry);
-      }
-
-      // Add section
-      const secCode = r.selection_code || r.section_id;
-      let sec = entry.sectionsMap.get(secCode);
-      if (!sec) {
-        sec = {
-          sectionId: r.section_id,
-          selectionCode: r.selection_code,
-          courseCode: r.course_code || undefined,
-          courseName: r.course_name || undefined,
-          credits: r.credits != null ? Number(r.credits) : null,
-          nature: r.nature || null,
-          campus: r.section_campus || r.classroom_campus || null,
-          capacity: r.capacity != null ? Number(r.capacity) : null,
-          preferred: r.preferred || null,
-          meetings: [],
-        };
-        entry.sectionsMap.set(secCode, sec);
-      }
-
-      // Add meeting if present
-      if (r.raw_schedule || r.raw_location || r.classroom || r.weekday) {
-        const meetingKey = `${r.meeting_id || ''}_${r.raw_schedule || ''}_${r.classroom || ''}`;
-        const exists = sec.meetings.some(m => `${m.id || ''}_${m.rawSchedule || ''}_${m.classroom || ''}` === meetingKey);
-        if (!exists) {
-          sec.meetings.push({
-            id: r.meeting_id || undefined,
-            weeks: r.weeks || undefined,
-            weekday: r.weekday,
-            periodStart: r.period_start,
-            periodEnd: r.period_end,
-            classroomCampus: r.classroom_campus,
-            classroom: r.classroom,
-            rawSchedule: r.raw_schedule,
-            rawLocation: r.raw_location,
-          });
-        }
-      }
+    const teacherIds = [...new Set(rows.map(row => row.teacher_id).filter(Boolean))];
+    const teachers: any[] = [];
+    // Keep ID lists bounded while reading every profile page in each batch.
+    for (let offset = 0; offset < teacherIds.length; offset += 100) {
+      const ids = teacherIds.slice(offset, offset + 100);
+      teachers.push(...await readAllRows((from, to) => supabase.from('teachers')
+        .select(TEACHER_SELECT, { count: from === 0 ? 'exact' : undefined })
+        .in('id', ids).order('id').range(from, to).abortSignal(signal)));
     }
-
-    // Collect valid DB teacher IDs to fetch full profiles (scores, ratings, tags)
-    const validIds = Array.from(teacherMap.values())
-      .map(e => e.teacherId)
-      .filter((id): id is string => Boolean(id));
-
-    const dbTeachersMap = new Map<string, Teacher>();
-    if (validIds.length > 0) {
-      const { data: dbTeacherRows } = await supabase
-        .from('teachers')
-        .select(TEACHER_SELECT)
-        .in('id', validIds);
-
-      if (dbTeacherRows) {
-        for (const tRow of dbTeacherRows) {
-          const t = mapTeacherRow(tRow);
-          dbTeachersMap.set(t.id, t);
-        }
-      }
-    }
-
-    // Assemble TeacherWithSections
-    const results: TeacherWithSections[] = [];
-
-    for (const entry of teacherMap.values()) {
-      let teacher: Teacher;
-      if (entry.teacherId && dbTeachersMap.has(entry.teacherId)) {
-        teacher = dbTeachersMap.get(entry.teacherId)!;
-      } else {
-        teacher = {
-          id: entry.teacherId || `tt_${entry.teacherName}`,
-          name: entry.teacherName,
-          title: '授课教师',
-          college: entry.sourceDepartment || '开课学院',
-          campus: entry.sectionCampus || '犀浦校区',
-          courses: [cleanName],
-          isTeachingThisTerm: true,
-          overallScore: null,
-          reviewCount: 0,
-          dimensions: {
-            attendanceStrictness: null,
-            gradingLeniency: null,
-            effortMatters: null,
-            workloadDifficulty: null,
-            approachability: null,
-            teachingQuality: null,
-          },
-          hasHistoricalData: false,
-          tags: [],
-        };
-      }
-
-      // Filter by college if requested
-      if (collegeId && collegeId !== 'all') {
-        const matchCol = teacher.collegeId === collegeId || teacher.college === collegeId;
-        if (!matchCol) continue;
-      }
-
-      results.push({
-        teacher,
-        sections: Array.from(entry.sectionsMap.values()),
-      });
-    }
-
-    return results;
+    return timetableRecommendations(buildTimetableSections(rows), teachers, options)
+      .map(row => ({ teacher: mapTeacherRow(row.teacher), sections: row.sections }));
   },
 
   async getReviewsPage(options: ReviewQuery, signal?: AbortSignal): Promise<DataPage<Review>> {
@@ -1184,7 +950,7 @@ export const supabaseService = {
         data: {
           nickname: metadata?.nickname || '交大学子',
           college: metadata?.college || '计算机与人工智能学院',
-          campus: metadata?.campus || '犀浦校区',
+          campus: normalizeCampus(metadata?.campus) || '犀浦校区',
         },
       },
     });

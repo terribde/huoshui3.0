@@ -1,5 +1,27 @@
 # Redis 缓存部署记录
 
+## 2026-10-02 课表缓存更新（Asia/Tokyo）
+
+- 已部署 Node 新版本：`/opt/swjtu-cache/releases/20261002-timetable-01`，`/opt/swjtu-cache/current` 已指向该目录，systemd 状态 active。
+- 旧版本 `/opt/swjtu-cache/releases/20260927-01` 保留。环境配置、systemd 单元和原版本路径备份在 `/www/backup/swjtu-cache-20261002-timetable-01`，目录权限 0700。
+- 生产依赖锁文件 SHA256 与旧版一致，复制现有 node_modules；没有升级 Node、Redis 软件或修改 Redis 密码、ACL、内存限额、Nginx 配置。
+- 已刷新教师、学期、当前学期课表及已有评价组。当前学期为 `2026-2027第1学期`，ID 为 `002df550-11e0-4c64-bd46-82ce9f76aa06`。
+- Redis 课表键：`swjtu:prod:cache:v1:timetable:002df550-11e0-4c64-bd46-82ce9f76aa06`；4,602 条选课记录，6,979 段安排，教师目录 3,368 人。
+- 服务器后端测试 20 项全部通过。线上健康状态 cache=ready；经实际 Nginx 站点检查，默认推荐返回 60 位教师，周一筛选返回 743 位教师，均为 HIT；原教师列表与评价接口均正常并命中缓存。
+- 预热检查时 Redis 使用约 12.45MB，记录峰值约 18.11MB，限额仍为 256MB；最终检查 API systemd 内存为 97,865,728 字节（约 93.3MiB）。这些是检查时读数。
+- **实际站点监听 6099 端口**，不是旧记录示例中的 80。首次按旧示例检查遇到 404，验证流程自动回滚；确认实际端口后再次切换并通过。没有修改站点端口或代理规则。
+- 前端站点文件未上传或覆盖；新前端需要另行上传才能调用新选课 API。数据库课表、评价、用户、积分未修改。
+
+当前验证命令：
+
+```bash
+curl http://127.0.0.1:3001/health
+curl -H 'Host: temp.com' 'http://127.0.0.1:6099/api/timetable/recommendations'
+curl -H 'Host: temp.com' 'http://127.0.0.1:6099/api/teachers?pageSize=1'
+```
+
+下文保留 2026-09-27 的历史记录，数据量和路径应以上述本次记录为准。
+
 部署日期：2026-09-27。服务器：47.108.145.230。目标宝塔站点：temp.com。
 
 接口参数、调用示例、缓存字段和更新机制详见 [Redis 缓存与 Node API 使用说明](redis-cache-api-guide.md)。

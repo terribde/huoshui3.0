@@ -252,7 +252,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-gray-900 text-base">西南交大学子系统</h3>
-              <p className="text-[11px] text-gray-500">统一身份认证 · 积分权益与评教中心</p>
+              <p className="text-2xs text-gray-500">统一身份认证 · 积分权益与评教中心</p>
             </div>
           </div>
           <motion.button 
@@ -317,7 +317,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
               <div>
                 <p className="font-bold">新人注册福利：即送 100 初始积分</p>
-                <p className="text-[11px] text-amber-700 mt-0.5">
+                <p className="text-2xs text-amber-700 mt-0.5">
                   解锁「全量教师评价查看」、「选课推荐权重计算」及「撰写评教 +20分 奖励」。
                 </p>
               </div>
@@ -330,7 +330,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <Mail className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
               <div>
                 <p className="font-bold">安全密码重置</p>
-                <p className="text-[11px] text-indigo-700 mt-0.5">
+                <p className="text-2xs text-indigo-700 mt-0.5">
                   输入注册时填写的邮箱地址，我们将通过 Supabase 安全服务发送密码重置邮件至您的邮箱。
                 </p>
               </div>
@@ -538,7 +538,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </form>
 
           {/* Privacy Note */}
-          <div className="pt-2 flex items-center justify-center gap-1.5 text-[11px] text-gray-400">
+          <div className="pt-2 flex items-center justify-center gap-1.5 text-2xs text-gray-400">
             <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />
             <span>数据直连 Supabase 安全鉴权 · 评教完全匿名保护</span>
           </div>

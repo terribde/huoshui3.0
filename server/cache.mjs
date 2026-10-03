@@ -24,6 +24,8 @@ export class CatalogCache {
     this.lastSync = 0;
   }
   get teacherKey() { return `${this.prefix}teachers`; }
+  get termKey() { return `${this.prefix}terms`; }
+  timetableKey(id) { return `${this.prefix}timetable:${id}`; }
   reviewKey(id) { return `${this.prefix}reviews:${id}`; }
   exclusive(operation) {
     const next = this.tail.then(operation, operation);
@@ -42,9 +44,15 @@ export class CatalogCache {
       return Object.entries(fields).filter(([id]) => id !== '__meta').map(([, value]) => JSON.parse(value));
     } catch (error) { this.failure(error); return null; }
   }
-  async publish(key, rows) {
+  async publish(key, rows, metadata = {}) {
+    if (key.startsWith(`${this.prefix}timetable:`)) {
+      metadata = { schemaVersion: 1, termId: key.slice(`${this.prefix}timetable:`.length),
+        sectionCount: rows.length,
+        meetingCount: rows.reduce((count, section) => count + section.meetings.filter(meeting => meeting.id).length, 0),
+        ...metadata };
+    }
     const temporary = `${this.prefix}staging:${randomUUID()}`;
-    const values = { __meta: JSON.stringify({ refreshedAt: Date.now() }) };
+    const values = { __meta: JSON.stringify({ refreshedAt: Date.now(), ...metadata }) };
     for (const row of rows) values[row.id] = JSON.stringify(row);
     try {
       await this.redis.hset(temporary, values);
@@ -74,6 +82,8 @@ export class CatalogCache {
     return this.flights.get(key);
   }
   teachers() { return this.load(this.teacherKey, () => this.source.teachers()); }
+  terms() { return this.load(this.termKey, () => this.source.terms()); }
+  timetable(id) { return this.load(this.timetableKey(id), () => this.source.timetable(id)); }
   reviews(id) { return this.load(this.reviewKey(id), () => this.source.reviews(id)); }
 
   // The DB write and cache refresh share the queue with full snapshot refreshes.
@@ -107,6 +117,23 @@ export class CatalogCache {
           await this.publish(this.teacherKey, rows);
           return rows;
         });
+        if (this.source.terms && this.source.timetable) {
+          const termRows = await this.exclusive(async () => {
+            const rows = await this.source.terms();
+            await this.publish(this.termKey, rows);
+            return rows;
+          });
+          const current = termRows.filter(term => term.is_current);
+          if (current.length > 1) throw new Error('Multiple current terms');
+          for (const term of current) {
+            await this.exclusive(async () => {
+              const sections = await this.source.timetable(term.id);
+              await this.publish(this.timetableKey(term.id), sections, {
+                termId: term.id, yearTerm: term.year_term, schemaVersion: 1,
+              });
+            });
+          }
+        }
         const reviewKeys = [];
         let cursor = '0';
         do {

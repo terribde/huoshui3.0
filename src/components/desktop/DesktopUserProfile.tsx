@@ -92,17 +92,17 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                     </h3>
                     {isLoggedIn ? (
                       isUserAdmin ? (
-                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-900 text-white flex items-center gap-1 shadow-2xs">
+                        <span className="px-2.5 py-0.5 rounded-full text-2xs font-bold bg-slate-900 text-white flex items-center gap-1 shadow-2xs">
                           <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
                           审核管理员
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                        <span className="px-2 py-0.5 rounded-full text-2xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
                           评教积极分子
                         </span>
                       )
                     ) : (
-                      <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-600">
+                      <span className="px-2 py-0.5 rounded-full text-2xs font-medium bg-gray-100 text-gray-600">
                         访客身份
                       </span>
                     )}
@@ -112,7 +112,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                       {isLoggedIn ? `${userCampus} · ${currentUser?.email}` : '登录后同步个人评教积分与记录'}
                     </p>
                     {isSupabaseConfigured && (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                      <span className="inline-flex items-center gap-1 text-2xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                         <Database className="w-3 h-3 text-emerald-600" />
                         Supabase 云端直连
                       </span>
@@ -150,12 +150,12 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                   <ShieldCheck className="w-4 h-4 text-indigo-400" />
                   <span>评教审核管理后台</span>
                   {pendingCount > 0 && (
-                    <span className="px-1.5 py-0.2 bg-amber-500 text-slate-900 rounded-full text-[10px] font-bold">
+                    <span className="px-1.5 py-0.2 bg-amber-500 text-slate-900 rounded-full text-3xs font-bold">
                       {pendingCount}待审
                     </span>
                   )}
                 </div>
-                <span className="text-[10px] text-slate-400 group-hover:text-slate-200">
+                <span className="text-3xs text-slate-400 group-hover:text-slate-200">
                   进入后台 ➔
                 </span>
               </button>
@@ -166,7 +166,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
               <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md shadow-amber-500/10 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-amber-100 font-medium">当前有效积分</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/20 text-white">
+                  <span className="text-3xs px-2 py-0.5 rounded-full bg-white/20 text-white">
                     永久有效
                   </span>
                 </div>
@@ -265,7 +265,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                 <span className="text-xs font-bold text-gray-900 group-hover:text-emerald-700 block">
                   {isLoggedIn ? '评价打分 (+20分)' : '登录后写评价'}
                 </span>
-                <span className="text-[10px] text-gray-500 block leading-tight">
+                <span className="text-3xs text-gray-500 block leading-tight">
                   {isLoggedIn ? '标准六维打分，可不写文字' : '登录后参与评教并积累积分'}
                 </span>
               </button>
@@ -286,7 +286,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                 <span className="text-xs font-bold text-gray-900 group-hover:text-amber-700 block">
                   积分规则与说明
                 </span>
-                <span className="text-[10px] text-gray-500 block leading-tight">
+                <span className="text-3xs text-gray-500 block leading-tight">
                   每日签到 +5 分 · 问答消耗 2 分
                 </span>
               </button>
@@ -299,7 +299,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
               <ShieldAlert className="w-4 h-4 text-indigo-600" />
               <span>学生评教绝对隐私保护</span>
             </div>
-            <p className="text-gray-500 text-[11px] leading-relaxed">
+            <p className="text-gray-500 text-2xs leading-relaxed">
               根据系统匿名设计规范：所有发表的打分与评价，对外一律展示为「交大学子」。系统绝不记录或绑定您的真实学号与个人身份信息。
             </p>
           </div>
@@ -323,7 +323,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                         setTimeout(() => setIsRefreshing(false), 400);
                       }
                     }}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-gray-100 hover:bg-indigo-50 text-gray-500 hover:text-indigo-600 text-[11px] font-medium transition-all"
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-gray-100 hover:bg-indigo-50 text-gray-500 hover:text-indigo-600 text-2xs font-medium transition-all"
                     title="重新从服务器同步最新审核状态"
                   >
                     <RotateCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin text-indigo-600' : ''}`} />
@@ -411,7 +411,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                           : '已驳回'
                       }」的评价。`}
                 </p>
-                <p className="text-[11px] text-gray-500">
+                <p className="text-2xs text-gray-500">
                   提交真实教师上课评价通过审核即可获赠 20 积分奖励！
                 </p>
                 <button
@@ -443,27 +443,27 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                           </span>
                           <span className="text-gray-400">·</span>
                           <span className="text-gray-600 font-medium">{rev.courseName}</span>
-                          <span className="text-[10px] text-gray-400">({rev.yearTerm || '近期'})</span>
+                          <span className="text-3xs text-gray-400">({rev.yearTerm || '近期'})</span>
                           {reviewDate && (
-                            <span className="text-[10px] text-gray-400">· {reviewDate}</span>
+                            <span className="text-3xs text-gray-400">· {reviewDate}</span>
                           )}
                         </div>
 
                         {/* Status Badges */}
                         {isPending && (
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
+                          <span className="px-2.5 py-0.5 rounded-full text-3xs font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
                             <Clock className="w-3 h-3 text-amber-600 animate-pulse" /> ⏳ 审核中
                           </span>
                         )}
 
                         {isApproved && (
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                          <span className="px-2 py-0.5 rounded-md text-3xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center gap-1">
                             <CheckCircle2 className="w-2.5 h-2.5" /> ✓ 已公示 (+20分)
                           </span>
                         )}
 
                         {isRejected && (
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200 flex items-center gap-1">
+                          <span className="px-2 py-0.5 rounded-md text-3xs font-bold bg-rose-100 text-rose-700 border border-rose-200 flex items-center gap-1">
                             <XCircle className="w-2.5 h-2.5" /> ✕ 未通过
                           </span>
                         )}
@@ -471,7 +471,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
 
                       {/* Friendly tip for pending reviews */}
                       {isPending && (
-                        <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/80 text-[11px] text-amber-800 flex items-start gap-2">
+                        <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/80 text-2xs text-amber-800 flex items-start gap-2">
                           <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
                           <div>
                             <strong>正在复核：</strong>正在由交大学工/学生审核组复核，预计24小时内公示。
@@ -484,7 +484,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
 
                       {/* Rejection reason box if rejected */}
                       {isRejected && (
-                        <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[11px] text-rose-800 space-y-1.5">
+                        <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-2xs text-rose-800 space-y-1.5">
                           <div className="flex items-start gap-2">
                             <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
                             <div>
@@ -500,7 +500,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                                 }
                                 onOpenReview();
                               }}
-                              className="px-2.5 py-1 bg-white hover:bg-rose-100 text-rose-700 font-bold rounded-lg border border-rose-200 text-[10px] transition-colors flex items-center gap-1"
+                              className="px-2.5 py-1 bg-white hover:bg-rose-100 text-rose-700 font-bold rounded-lg border border-rose-200 text-3xs transition-colors flex items-center gap-1"
                             >
                               <Edit3 className="w-3 h-3" /> 重新编辑提交
                             </button>
@@ -511,7 +511,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                                     onDeleteReview(rev.id);
                                   }
                                 }}
-                                className="px-2 py-1 text-gray-500 hover:text-rose-700 text-[10px] transition-colors flex items-center gap-1"
+                                className="px-2 py-1 text-gray-500 hover:text-rose-700 text-3xs transition-colors flex items-center gap-1"
                               >
                                 <Trash2 className="w-3 h-3" /> 删除记录
                               </button>
@@ -526,17 +526,17 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                         </p>
                       )}
 
-                      <div className="flex items-center justify-between pt-1 text-[11px] text-gray-500">
+                      <div className="flex items-center justify-between pt-1 text-2xs text-gray-500">
                         <div className="flex items-center flex-wrap gap-2">
                           {ratedDims.length > 0 ? (
                             ratedDims.map(d => (
-                              <span key={d.key} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white border border-gray-200/80 text-[10px]">
+                              <span key={d.key} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white border border-gray-200/80 text-3xs">
                                 <span className="text-gray-400">{d.label}</span>
                                 <strong className="text-indigo-600 font-mono">{rev.dimensions[d.key]!.toFixed(1)}</strong>
                               </span>
                             ))
                           ) : (
-                            <span className="text-gray-400 text-[10px]">无详细维度打分</span>
+                            <span className="text-gray-400 text-3xs">无详细维度打分</span>
                           )}
                         </div>
 
@@ -577,13 +577,13 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                   <div key={tx.id} className="p-3 bg-white flex items-center justify-between text-xs">
                     <div>
                       <span className="font-semibold text-gray-800">{tx.action}</span>
-                      <span className="text-[10px] text-gray-400 block mt-0.5">{tx.timestamp}</span>
+                      <span className="text-3xs text-gray-400 block mt-0.5">{tx.timestamp}</span>
                     </div>
                     <div className="text-right">
                       <span className={`font-bold ${tx.amount > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                         {tx.amount > 0 ? `+${tx.amount}` : tx.amount}
                       </span>
-                      <span className="text-[10px] text-gray-400 block mt-0.5">余额: {tx.balanceAfter}</span>
+                      <span className="text-3xs text-gray-400 block mt-0.5">余额: {tx.balanceAfter}</span>
                     </div>
                   </div>
                 ))}
@@ -597,7 +597,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
               <Coins className="w-3.5 h-3.5 text-amber-500" />
               <span>积分体系对照表</span>
             </div>
-            <div className="grid grid-cols-2 gap-3 text-[11px] pt-1">
+            <div className="grid grid-cols-2 gap-3 text-2xs pt-1">
               <div className="p-2.5 bg-white rounded-xl border border-gray-100 space-y-1">
                 <span className="font-bold text-emerald-700 block">积分获取渠道：</span>
                 <p>• 每日签到奖励：+5 积分/天</p>

@@ -1,3 +1,5 @@
+import { SCHEDULE_SELECT, buildTimetableSections } from './timetable.mjs';
+
 export const TEACHER_SELECT = '*,colleges(id,name),course_offerings(course_id,courses(id,name),term_id,terms(id,year_term,is_current))';
 export const REVIEW_SELECT = 'id,teacher_id,course_id,year_term,attendance_strictness,grading_leniency,effort_matters,workload_difficulty,approachability,teaching_quality,comment,author_nickname,is_historical_migrated,status,created_at,likes,rating_version,courses(id,name),teachers(name)';
 
@@ -55,6 +57,19 @@ export async function readAll(loadPage) {
 
 export function createSource(client) {
   return {
+    async terms() {
+      return readAll((from, to) => client.from('terms').select('id,year_term,is_current',
+        { count: from === 0 ? 'exact' : undefined }).order('id').range(from, to));
+    },
+    async timetable(termId) {
+      const rows = await readAll(async (from, to) => {
+        const result = await client.from('timetable_schedule').select(SCHEDULE_SELECT,
+          { count: from === 0 ? 'exact' : undefined }).eq('term_id', termId)
+          .order('section_id').order('meeting_id', { nullsFirst: true }).range(from, to);
+        return { ...result, data: result.data?.map(row => ({ ...row, id: `${row.section_id}:${row.meeting_id || 'unknown'}` })) };
+      });
+      return buildTimetableSections(rows);
+    },
     async teachers() {
       return (await readAll((from, to) => client.from('teachers').select(TEACHER_SELECT,
         { count: from === 0 ? 'exact' : undefined }).order('id').range(from, to))).map(publicTeacher);

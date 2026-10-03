@@ -297,7 +297,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                   <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
                   <div className="flex-1">
                     <p className="font-semibold">评价提交未完成</p>
-                    <p className="text-[11px] text-rose-600 mt-0.5 leading-relaxed">{submitError}</p>
+                    <p className="text-2xs text-rose-600 mt-0.5 leading-relaxed">{submitError}</p>
                   </div>
                 </motion.div>
               )}
@@ -394,7 +394,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                       <span>公开昵称</span>
                     </button>
                   </div>
-                  <div className="mt-1 flex items-center justify-between text-[11px] text-gray-400 px-0.5">
+                  <div className="mt-1 flex items-center justify-between text-2xs text-gray-400 px-0.5">
                     {isAnonymous ? (
                       <span>对外署名：<strong className="text-gray-600 font-medium">匿名学子</strong>（保护隐私）</span>
                     ) : (
@@ -406,7 +406,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                           onChange={(e) => setCustomNickname(e.target.value)}
                           placeholder="公开昵称"
                           maxLength={12}
-                          className="px-2 py-0.5 bg-white border border-gray-200 rounded text-gray-800 text-[11px] font-medium w-28 focus:outline-hidden focus:border-indigo-500"
+                          className="px-2 py-0.5 bg-white border border-gray-200 rounded text-gray-800 text-2xs font-medium w-28 focus:outline-hidden focus:border-indigo-500"
                         />
                       </span>
                     )}
@@ -418,7 +418,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
               <div className="space-y-3 pt-2">
                 <div className="flex items-center justify-between border-b border-gray-100 pb-2">
                   <h4 className="text-sm font-bold text-gray-900">多维度真实打分 (必填，1-5分)</h4>
-                  <span className="text-[11px] text-gray-400">独立打分互不排斥</span>
+                  <span className="text-2xs text-gray-400">独立打分互不排斥</span>
                 </div>
 
                 <div className="space-y-3">
@@ -434,7 +434,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                         </span>
                       </div>
                       <div className="flex items-center gap-3 pt-1">
-                        <span className="text-[11px] text-gray-400 w-12 shrink-0">{item.lowDesc}</span>
+                        <span className="text-2xs text-gray-400 w-12 shrink-0">{item.lowDesc}</span>
                         <div className="flex-1 min-w-0 flex justify-between gap-1">
                           {[1, 2, 3, 4, 5].map((score) => (
                             <motion.button
@@ -453,7 +453,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                             </motion.button>
                           ))}
                         </div>
-                        <span className="text-[11px] text-gray-400 w-14 shrink-0 text-right">{item.highDesc}</span>
+                        <span className="text-2xs text-gray-400 w-14 shrink-0 text-right">{item.highDesc}</span>
                       </div>
                     </div>
                   ))}
@@ -466,7 +466,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                   <label className="text-xs font-bold text-gray-700">
                     课程评价文字（选填，打分与文字独立）
                   </label>
-                  <span className="text-[11px] text-emerald-600 font-medium">写文字上课体验更容易过审</span>
+                  <span className="text-2xs text-emerald-600 font-medium">写文字上课体验更容易过审</span>
                 </div>
                 <textarea
                   id="review-comment-textarea"
@@ -479,7 +479,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
               </div>
 
               {/* Policy note */}
-              <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 flex items-start gap-2 text-[11px] text-blue-800">
+              <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 flex items-start gap-2 text-2xs text-blue-800">
                 <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                 <span>
                   <strong>社区公约：</strong>严禁注水评价（如仅输入“很好”）及人身攻击、虚假编造事实。宽松审核，真实体验即可通过。
@@ -549,7 +549,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                 </div>
               </div>
 
-              <p className="text-[11px] text-gray-400 text-left">
+              <p className="text-2xs text-gray-400 text-left">
                 提示：请修改或移除上述涉嫌不当、隐私泄露或广告的内容后重新提交。
               </p>
 

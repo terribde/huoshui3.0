@@ -180,7 +180,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
         </form>
 
         <div className="flex flex-wrap gap-2 pt-3 mt-2 border-t border-gray-50">
-          <span className="text-[11px] text-gray-400 flex items-center py-1">热门热搜：</span>
+          <span className="text-2xs text-gray-400 flex items-center py-1">热门热搜：</span>
           <button
             onClick={() => handleQuickPromptClick('高等数学哪位老师给分松？', 'ai')}
             className="text-xs px-3 py-1 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-600 text-gray-600 rounded-full transition-colors"
@@ -220,7 +220,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
           </div>
           <div>
             <span className="text-sm font-bold text-gray-800 group-hover:text-indigo-600 block">找老师</span>
-            <span className="text-[11px] text-gray-400 mt-0.5 block">结构化精准检索</span>
+            <span className="text-2xs text-gray-400 mt-0.5 block">结构化精准检索</span>
           </div>
         </button>
 
@@ -234,7 +234,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
           </div>
           <div>
             <span className="text-sm font-bold text-gray-800 group-hover:text-amber-600 block">智能选课</span>
-            <span className="text-[11px] text-gray-400 mt-0.5 block">六维加权动态匹配</span>
+            <span className="text-2xs text-gray-400 mt-0.5 block">六维加权动态匹配</span>
           </div>
         </button>
 
@@ -248,7 +248,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
           </div>
           <div>
             <span className="text-sm font-bold text-gray-800 group-hover:text-indigo-600 block">AI 问答</span>
-            <span className="text-[11px] text-gray-400 mt-0.5 block">RAG 校园大模型</span>
+            <span className="text-2xs text-gray-400 mt-0.5 block">RAG 校园大模型</span>
           </div>
         </button>
 
@@ -262,7 +262,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
           </div>
           <div>
             <span className="text-sm font-bold text-gray-800 group-hover:text-emerald-600 block">写评价</span>
-            <span className="text-[11px] text-gray-400 mt-0.5 block">打分赚 +20 积分</span>
+            <span className="text-2xs text-gray-400 mt-0.5 block">打分赚 +20 积分</span>
           </div>
         </button>
 
@@ -276,7 +276,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
           </div>
           <div>
             <span className="text-sm font-bold text-gray-800 group-hover:text-purple-600 block">院系库</span>
-            <span className="text-[11px] text-gray-400 mt-0.5 block">全校11大院系</span>
+            <span className="text-2xs text-gray-400 mt-0.5 block">全校11大院系</span>
           </div>
         </button>
       </div>
@@ -292,7 +292,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
           </div>
           <div>
             <span className="text-sm font-bold text-gray-800 group-hover:text-blue-600 block">历史库</span>
-            <span className="text-[11px] text-gray-400 mt-0.5 block">2024前沉淀数据迁移</span>
+            <span className="text-2xs text-gray-400 mt-0.5 block">2024前沉淀数据迁移</span>
           </div>
         </button>
 
@@ -305,7 +305,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
           </div>
           <div>
             <span className="text-sm font-bold text-gray-800 group-hover:text-rose-600 block">积分中心</span>
-            <span className="text-[11px] text-gray-400 mt-0.5 block">每日签到 · 流水明细</span>
+            <span className="text-2xs text-gray-400 mt-0.5 block">每日签到 · 流水明细</span>
           </div>
         </button>
 
@@ -318,7 +318,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
           </div>
           <div>
             <span className="text-sm font-bold text-gray-800 group-hover:text-amber-600 block">经验攻略</span>
-            <span className="text-[11px] text-gray-400 mt-0.5 block">保研综测 · 转专业指南</span>
+            <span className="text-2xs text-gray-400 mt-0.5 block">保研综测 · 转专业指南</span>
           </div>
         </button>
 
@@ -331,7 +331,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
           </div>
           <div>
             <span className="text-sm font-bold text-gray-800 group-hover:text-emerald-600 block">教务通知</span>
-            <span className="text-[11px] text-gray-400 mt-0.5 block">选课排期 · 免修免试</span>
+            <span className="text-2xs text-gray-400 mt-0.5 block">选课排期 · 免修免试</span>
           </div>
         </button>
       </div>
@@ -372,11 +372,11 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
                         {teacher.name}
                       </span>
                       <span className="text-xs text-gray-500 font-medium">{teacher.title}</span>
-                      <span className="text-[11px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded-md">
+                      <span className="text-2xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-md">
                         {teacher.college.replace('学院', '')}
                       </span>
                       {teacher.isTeachingThisTerm && (
-                        <span className="text-[10px] px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md border border-emerald-200">
+                        <span className="text-3xs px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md border border-emerald-200">
                           本学期在教
                         </span>
                       )}
@@ -396,7 +396,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
                     <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
                     <span>{formatRating(teacher.overallScore)}</span>
                   </div>
-                  <span className="text-[11px] text-gray-400">{teacher.reviewCount} 条评价</span>
+                  <span className="text-2xs text-gray-400">{teacher.reviewCount} 条评价</span>
                 </div>
               </div>
             ))}
@@ -430,7 +430,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
                   className="px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-indigo-50 hover:text-indigo-600 text-xs text-gray-700 border border-gray-100 hover:border-indigo-200 transition-all font-medium flex items-center gap-1.5"
                 >
                   <span>{c.name}</span>
-                  <span className="text-[10px] text-gray-400">{c.tag}</span>
+                  <span className="text-3xs text-gray-400">{c.tag}</span>
                 </button>
               ))}
             </div>
@@ -443,7 +443,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
                 <Bot className="w-4 h-4 text-indigo-600" />
                 <h4 className="text-sm font-bold text-gray-900">AI 选课顾问速问</h4>
               </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-semibold">
+              <span className="text-3xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-semibold">
                 2积分 / 次
               </span>
             </div>
@@ -472,7 +472,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
               <span>交大公益社区共建公约</span>
             </div>
-            <p className="text-[11px] leading-relaxed text-gray-600">
+            <p className="text-2xs leading-relaxed text-gray-600">
               结构化查询全校教师永久免费。提交真实上课评价通过审核可获 <strong className="text-amber-600">+20 积分</strong>。严禁注水与人身攻击，真实互助让选课不再踩坑！
             </p>
           </div>

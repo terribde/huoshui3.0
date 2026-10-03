@@ -140,7 +140,7 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
                 transition={{ duration: 0.18 }}
                 className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-xl shadow-gray-900/10 border border-gray-100 p-2 z-30 max-h-60 overflow-y-auto scrollbar-thin"
               >
-                <div className="px-2 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center justify-between">
+                <div className="px-2 py-1 text-3xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-between">
                   <span>智能联想推荐</span>
                   <span>{result.total} 位匹配教师</span>
                 </div>
@@ -163,9 +163,9 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
                         <div className="truncate">
                           <div className="flex items-center gap-1.5">
                             <span className="text-xs font-bold text-gray-900">{t.name}</span>
-                            <span className="text-[10px] text-gray-400">{t.college}</span>
+                            <span className="text-3xs text-gray-400">{t.college}</span>
                           </div>
-                          <p className="text-[10px] text-gray-500 truncate">
+                          <p className="text-3xs text-gray-500 truncate">
                             {t.courses.join(' · ')}
                           </p>
                         </div>
@@ -191,7 +191,7 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
                 key={chip.id}
                 whileTap={{ scale: 0.92 }}
                 onClick={() => setSelectedCollege(chip.id)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium whitespace-nowrap transition-colors shrink-0 cursor-pointer ${
+                className={`px-2.5 py-1 rounded-lg text-2xs font-medium whitespace-nowrap transition-colors shrink-0 cursor-pointer ${
                   isSelected
                     ? 'bg-indigo-600 text-white shadow-2xs font-semibold'
                     : 'bg-gray-100/90 text-gray-600 hover:bg-gray-200'
@@ -209,7 +209,7 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
             <motion.button
               whileTap={{ scale: 0.92 }}
               onClick={() => setOnlyThisTerm(!onlyThisTerm)}
-              className={`px-2 py-1 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
+              className={`px-2 py-1 rounded-lg text-2xs font-medium transition-all cursor-pointer ${
                 onlyThisTerm
                   ? 'bg-emerald-600 text-white shadow-2xs font-semibold'
                   : 'bg-gray-100 text-gray-600'
@@ -225,7 +225,7 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
               onChange={setSelectedCollege}
               options={collegeDropdownOptions}
               searchable
-              buttonClassName="px-2 py-1 bg-gray-100 text-gray-600 rounded-lg text-[11px] font-medium max-w-[110px]"
+              buttonClassName="px-2 py-1 bg-gray-100 text-gray-600 rounded-lg text-2xs font-medium max-w-[110px]"
               menuClassName="w-56"
             />
           </div>
@@ -244,7 +244,7 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
                 { value: 'attendance', label: '最少点名' },
               ]}
               align="right"
-              buttonClassName="px-2 py-1 bg-gray-100/90 text-gray-700 rounded-lg text-[11px] font-medium"
+              buttonClassName="px-2 py-1 bg-gray-100/90 text-gray-700 rounded-lg text-2xs font-medium"
               menuClassName="w-36"
             />
           </div>
@@ -253,7 +253,7 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
 
       {/* 2. Teachers Count Header */}
       <PageFeedback loading={false} error={result.error} onRetry={result.reload} />
-      <div className="flex items-center justify-between px-1 text-[11px] text-gray-500">
+      <div className="flex items-center justify-between px-1 text-2xs text-gray-500">
         <span>共找到 <strong className="text-gray-900">{result.total}</strong> 位教师</span>
         <span className="text-gray-400">永久免费查询</span>
       </div>
@@ -265,7 +265,7 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
         ) : result.error ? null : filteredTeachers.length === 0 ? (
           <div className="bg-white p-8 rounded-2xl border border-gray-100 text-center text-gray-400 space-y-1.5">
             <p className="text-xs font-medium text-gray-600">没有找到匹配的老师</p>
-            <p className="text-[11px]">尝试缩短关键词或在“全部”中搜索</p>
+            <p className="text-2xs">尝试缩短关键词或在“全部”中搜索</p>
           </div>
         ) : (
           filteredTeachers.map((teacher) => (
@@ -286,14 +286,14 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
                       <h4 className="font-bold text-gray-900 text-sm">
                         {teacher.name}
                       </h4>
-                      <span className="text-[11px] text-gray-500">{teacher.title}</span>
+                      <span className="text-2xs text-gray-500">{teacher.title}</span>
                       {teacher.isTeachingThisTerm && (
-                        <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-0.5">
+                        <span className="text-4xs px-1.5 py-0.2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-0.5">
                           <CheckCircle2 className="w-2.5 h-2.5" /> 本学期
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-gray-400 mt-0.5">
+                    <p className="text-2xs text-gray-400 mt-0.5">
                       {teacher.college} · {teacher.campus}
                     </p>
                   </div>
@@ -304,24 +304,24 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
                     <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
                     <span>{formatRating(teacher.overallScore)}</span>
                   </div>
-                  <span className="text-[10px] text-gray-400">{teacher.reviewCount} 条评价</span>
+                  <span className="text-3xs text-gray-400">{teacher.reviewCount} 条评价</span>
                 </div>
               </div>
 
               {/* Course Snippet */}
-              <div className="flex flex-wrap gap-1 items-center text-[11px]">
-                <span className="text-gray-400 flex items-center gap-0.5 text-[10px]">
+              <div className="flex flex-wrap gap-1 items-center text-2xs">
+                <span className="text-gray-400 flex items-center gap-0.5 text-3xs">
                   <BookOpen className="w-3 h-3" /> 开课:
                 </span>
                 {teacher.courses.map((course, cIdx) => (
-                  <span key={cIdx} className="px-1.5 py-0.2 rounded bg-gray-50 text-gray-700 text-[11px] border border-gray-100">
+                  <span key={cIdx} className="px-1.5 py-0.2 rounded bg-gray-50 text-gray-700 text-2xs border border-gray-100">
                     {course}
                   </span>
                 ))}
               </div>
 
               {/* 3 Core Dimensions (考勤宽松度 / 给分大方 / 教学质量) */}
-              <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-gray-50 text-[10px]">
+              <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-gray-50 text-3xs">
                 <div className="flex items-center justify-between px-2 py-1 bg-gray-50 rounded-lg">
                   <span className="text-gray-500">考勤宽松度</span>
                   <span className="font-bold text-gray-800">{formatRating(teacher.dimensions.attendanceStrictness, '分')}</span>
@@ -340,18 +340,18 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
               <div className="flex items-center justify-between pt-0.5">
                 <div className="flex flex-wrap gap-1">
                   {teacher.tags.map((tag, tIdx) => (
-                    <span key={tIdx} className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-50/70 text-indigo-700 font-medium">
+                    <span key={tIdx} className="text-3xs px-1.5 py-0.2 rounded bg-indigo-50/70 text-indigo-700 font-medium">
                       #{tag}
                     </span>
                   ))}
                   {teacher.hasHistoricalData && (
-                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-50 text-blue-600 flex items-center gap-0.5 font-medium">
+                    <span className="text-4xs px-1.5 py-0.2 rounded bg-blue-50 text-blue-600 flex items-center gap-0.5 font-medium">
                       <History className="w-2.5 h-2.5" /> 老站迁移
                     </span>
                   )}
                 </div>
 
-                <span className="text-[11px] text-gray-400 flex items-center gap-0.5 font-medium">
+                <span className="text-2xs text-gray-400 flex items-center gap-0.5 font-medium">
                   详情 <ChevronRight className="w-3 h-3" />
                 </span>
               </div>

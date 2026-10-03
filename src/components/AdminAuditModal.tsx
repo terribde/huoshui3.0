@@ -341,7 +341,7 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
                 <h3 className="text-base font-bold tracking-tight text-white">
                   西南交大选课评教 · 管理工作台
                 </h3>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                <span className="px-2 py-0.5 rounded-full text-3xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   {adminRole === 'super_admin' ? '超管权限' : '审核权限'}
                 </span>
               </div>
@@ -370,7 +370,7 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
                   <MessageSquare className="w-3.5 h-3.5" />
                   <span>评教审核</span>
                   {pendingCount > 0 && (
-                    <span className="px-1.5 py-0.2 bg-amber-500 text-slate-950 rounded-full text-[9px] font-black">
+                    <span className="px-1.5 py-0.2 bg-amber-500 text-slate-950 rounded-full text-4xs font-black">
                       {pendingCount}
                     </span>
                   )}
@@ -453,7 +453,7 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
                 <div>
                   <div className="flex items-center gap-2">
                     <h4 className="text-sm font-bold text-gray-900">Supabase 动态管理员配置表 (public.admin_users)</h4>
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-3xs font-bold">
                       云端同步已连接
                     </span>
                   </div>
@@ -575,29 +575,29 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-bold text-gray-900">{adm.email}</span>
                             {adm.role === 'super_admin' ? (
-                              <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-md text-[10px] font-bold">
+                              <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-md text-3xs font-bold">
                                 👑 站长超管
                               </span>
                             ) : adm.role === 'moderator' ? (
-                              <span className="px-2 py-0.5 bg-sky-100 text-sky-800 rounded-md text-[10px] font-bold">
+                              <span className="px-2 py-0.5 bg-sky-100 text-sky-800 rounded-md text-3xs font-bold">
                                 助理协管
                               </span>
                             ) : (
-                              <span className="px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded-md text-[10px] font-bold">
+                              <span className="px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded-md text-3xs font-bold">
                                 审核管理员
                               </span>
                             )}
                             {adm.is_active ? (
-                              <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-700 rounded text-[10px] font-medium">
+                              <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-700 rounded text-3xs font-medium">
                                 活跃有效
                               </span>
                             ) : (
-                              <span className="px-1.5 py-0.2 bg-gray-100 text-gray-500 rounded text-[10px] font-medium">
+                              <span className="px-1.5 py-0.2 bg-gray-100 text-gray-500 rounded text-3xs font-medium">
                                 已停用
                               </span>
                             )}
                           </div>
-                          <p className="text-[11px] text-gray-500 mt-0.5">
+                          <p className="text-2xs text-gray-500 mt-0.5">
                             身份昵称：{adm.nickname} · 登记时间：{new Date(adm.created_at || Date.now()).toLocaleDateString()}
                           </p>
                         </div>
@@ -661,7 +661,7 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
                 >
                   <Clock className="w-3.5 h-3.5 text-amber-500" />
                   <span>待审核</span>
-                  <span className="px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold">
+                  <span className="px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-700 text-3xs font-bold">
                     {pendingCount}
                   </span>
                 </button>
@@ -676,7 +676,7 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
                 >
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
                   <span>已公示</span>
-                  <span className="text-[10px] text-gray-400">({approvedCount})</span>
+                  <span className="text-3xs text-gray-400">({approvedCount})</span>
                 </button>
 
                 <button
@@ -689,7 +689,7 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
                 >
                   <XCircle className="w-3.5 h-3.5 text-rose-500" />
                   <span>已驳回</span>
-                  <span className="text-[10px] text-gray-400">({rejectedCount})</span>
+                  <span className="text-3xs text-gray-400">({rejectedCount})</span>
                 </button>
 
                 <button
@@ -757,7 +757,7 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
                           若其他账号已提交评价却在此处看不到？
                         </div>
                       </div>
-                      <p className="text-[11px] text-amber-800 leading-relaxed">
+                      <p className="text-2xs text-amber-800 leading-relaxed">
                         请确认账号已获授权、网络正常且数据库迁移已完成；空列表也可能表示目前没有待审评价。
                       </p>
                       <button
@@ -802,7 +802,7 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
                           <span className="text-xs font-semibold text-gray-800">
                             {rev.courseName}
                           </span>
-                          <span className="text-[11px] text-gray-400">
+                          <span className="text-2xs text-gray-400">
                             ({rev.yearTerm})
                           </span>
                         </div>
@@ -810,28 +810,28 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
                         {/* Status Badge */}
                         <div className="flex items-center gap-2">
                           {rev.status === 'pending' && (
-                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
+                            <span className="px-2.5 py-0.5 rounded-full text-2xs font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
                               <Clock className="w-3 h-3 text-amber-600 animate-pulse" /> ⏳ 待审核
                             </span>
                           )}
                           {rev.status === 'approved' && (
-                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                            <span className="px-2.5 py-0.5 rounded-full text-2xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
                               <CheckCircle2 className="w-3 h-3 text-emerald-600" /> ✓ 已公示 (+20分)
                             </span>
                           )}
                           {rev.status === 'rejected' && (
-                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
+                            <span className="px-2.5 py-0.5 rounded-full text-2xs font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
                               <XCircle className="w-3 h-3 text-rose-600" /> ✕ 已驳回
                             </span>
                           )}
-                          <span className="text-[10px] text-gray-400">
+                          <span className="text-3xs text-gray-400">
                             {formatReviewDate(rev.createdAt)}
                           </span>
                         </div>
                       </div>
 
                       {/* Dimension Scores */}
-                      <div className="flex flex-wrap gap-2 text-[11px] text-gray-600 bg-gray-50/80 p-2.5 rounded-xl">
+                      <div className="flex flex-wrap gap-2 text-2xs text-gray-600 bg-gray-50/80 p-2.5 rounded-xl">
                         <span className="px-2 py-0.5 bg-white rounded-md border border-gray-100">
                           给分宽松：<strong className="text-emerald-600">{rev.dimensions.gradingLeniency ?? '-'}分</strong>
                         </span>
@@ -865,7 +865,7 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
                               {sensitiveScan.reason}
                               <div className="mt-1 flex flex-wrap gap-1">
                                 {sensitiveScan.violations.map((v, i) => (
-                                  <span key={i} className="px-1.5 py-0.2 bg-amber-200/70 text-amber-900 rounded text-[10px] font-mono">
+                                  <span key={i} className="px-1.5 py-0.2 bg-amber-200/70 text-amber-900 rounded text-3xs font-mono">
                                     {v}
                                   </span>
                                 ))}
@@ -888,7 +888,7 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
 
                       {/* Author & Action Bar */}
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-                        <div className="text-[11px] text-gray-500 flex items-center gap-2">
+                        <div className="text-2xs text-gray-500 flex items-center gap-2">
                           <span>作者昵称：<strong>{rev.authorNickname}</strong></span>
                           {rev.userEmail && (
                             <>
@@ -974,7 +974,7 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
         )}
 
         {/* Footer info */}
-        <div className="shrink-0 px-4 sm:px-6 py-3 bg-gray-50 border-t border-gray-100 text-[11px] text-gray-500 flex items-center justify-between">
+        <div className="shrink-0 px-4 sm:px-6 py-3 bg-gray-50 border-t border-gray-100 text-2xs text-gray-500 flex items-center justify-between">
           <span>
             {isAdminAuthenticated ? '✓ 已通过管理员权限认证' : '未授权状态'}
           </span>

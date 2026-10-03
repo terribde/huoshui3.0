@@ -2,7 +2,7 @@
 
 文档日期：2026-10-01。根据当前仓库代码整理，供前端调用、后端维护和服务器运维查阅。
 
-本文描述实际实现，不代表本次重新检查了线上服务。部署信息引用 2026-09-27 的部署记录，历史数据量和内存用量不作为当前监控值。本次仅修改文档，不部署或改动业务代码，也不记录任何真实密码或令牌。
+本文描述当前代码，不代表已经部署或重新检查了线上服务。部署信息引用 2026-09-27 的部署记录，历史数据量和内存用量不作为当前监控值。2026-10-01 新增当前学期智能选课缓存接入。
 
 ## 1. 架构与职责
 
@@ -16,6 +16,7 @@
 - Node API 负责鉴权、读缓存、回源查询、写数据库，以及更新缓存。
 - 浏览器只调用同域 API，不连接 Redis，不接收 Redis 密码。无需开放公网 6379 或 3001。
 - 教师搜索、筛选、排序和分页在 Node 内完成。浏览器只下载当前页，不会把整个 Redis 下载到本地。
+- 智能选课是独立接口：Node 筛选课表并关联教师，返回完整匹配候选；前端继续计算偏好排名并按每页 20 人展示。默认无课程、优选班级、星期条件时返回本学期开课教师中综合评分最高的 60 人。
 - 当前按单个 Node 进程部署。前端静态文件、Node 服务和 Redis 是三个独立部分。
 
 ## 2. 缓存了什么
@@ -64,11 +65,23 @@
 
 完整发布时，先写 `swjtu:prod:cache:v1:staging:<随机UUID>`，设置 TTL，再通过 RENAME 替换正式键，避免暴露只加载了一半的数据。临时键也有过期时间。
 
+### 2.4 当前学期课表
+
+- `swjtu:prod:cache:v1:terms`：Hash，学期 ID 对应 `{ id, year_term, is_current }`。
+- `swjtu:prod:cache:v1:timetable:<termId>`：Hash，教学班 `section_id` 对应一个 JSON 对象，包含课程、选课编号、开课单位、学分、性质、校区、优选班级、总容量和 `meetings[]`。
+- 每段安排保留教师 ID/姓名、周次、星期、节次、教室、分组和原始时间地点。无时段的教学班也保留；接口展示的 meetings 不包含无安排占位记录。身份合并仍沿用教师 ID 优先、无 ID 时按姓名的原逻辑。
+- 课表不复制教师评分；每次推荐关联现有教师缓存，评分更新后不必重建课表。容量表示导入时的总容量，不计算剩余名额、不接入实时名额同步。
+- 页面和接口统一使用“犀浦校区”，兼容来源中的“西部校区”。原始数据库不被修改。
+- 课表 `__meta` 额外包含 `schemaVersion`、`termId`、`sectionCount`、`meetingCount`；定期校准还写入 `yearTerm`。原始 CSV 整行、中转表、导入审计不缓存。
+- 启动、每小时校准及管理员刷新会重建学期目录与当前学期课表，默认 TTL 为 7 天。切换当前学期后刷新缓存即可生效，旧学期键自然过期。没有当前学期或存在多个当前学期时接口报错，不混用其他学期。
+- 首次缺失时分批完整回源，相同键并发回源合并；Redis 故障沿用 BYPASS。全量回源使用稳定的 section_id/meeting_id 顺序，检查数量和重复记录后发布，不使用固定 1000/2000 行截断。
+- 单个 Hash 发布是原子的，学期目录、课表、教师三个 Hash 不构成数据库级一致性事务。导入及学期切换完成后应调用管理员刷新接口，并在上线时检查 Redis 内存、刷新时双份快照峰值和接口延迟。
+
 ## 3. 读取与更新机制
 
 ### 3.1 读取流程
 
-1. 启动时尝试连接 Redis，并校准全部教师及 Redis 中已经存在的评价分组。
+1. 启动时尝试连接 Redis，并校准全部教师、学期目录、当前学期课表及 Redis 中已经存在的评价分组。
 2. 读取教师时，先读取教师 Hash；没有完整快照则从 Supabase 分批加载全部教师。
 3. 读取评价时，先读取该教师的 Hash；没有快照则加载该教师全部 approved 评价。
 4. 数据库读取初始每批 500 条，并检查总数、页数完整性和重复 ID，避免仅缓存第一页。
@@ -156,7 +169,7 @@ Content-Type 用于带 JSON body 的请求，body 上限 32KB。token 不是 Red
 
 请求体过大等解析错误还可能返回中间件的其他 4xx 状态。所有响应带 Cache-Control: no-store，避免浏览器 HTTP 缓存掩盖数据变化。
 
-三个公开 GET 接口另带 X-Cache：HIT 表示命中 Redis；MISS 表示回源并成功建缓存；BYPASS 表示缓存旁路，直接由 Node 查询数据库。这不是浏览器静态文件缓存状态。
+公开教师、评价和智能选课 GET 接口另带 X-Cache：HIT 表示命中 Redis；MISS 表示回源并成功建缓存；BYPASS 表示缓存旁路，直接由 Node 查询数据库。智能选课的任一数据来源旁路时返回 BYPASS，否则任一缺失时返回 MISS。这不是浏览器静态文件缓存状态。
 
 ### 4.2 接口总表
 
@@ -165,6 +178,7 @@ Content-Type 用于带 JSON body 的请求，body 上限 32KB。token 不是 Red
 | GET | /api/teachers | 公开，教师搜索/筛选/分页 |
 | GET | /api/teachers/:id | 公开，教师详情 |
 | GET | /api/teachers/:id/reviews | 公开，包含历史评价的已审核评价分页 |
+| GET | /api/timetable/recommendations | 公开，当前学期智能选课候选 |
 | POST | /api/reviews/:id/approve | 登录，RPC 检查审核权限 |
 | POST | /api/reviews/:id/reject | 登录，RPC 检查审核权限 |
 | POST | /api/reviews/:id/like | 登录，RPC 检查操作权限 |
@@ -176,6 +190,8 @@ Content-Type 用于带 JSON body 的请求，body 上限 32KB。token 不是 Red
 路径 ID 只能包含 1 至 128 位英文字母、数字、下划线或连字符，不允许保留值 __meta。当前没有 POST /api/reviews，也没有 /api/health。
 
 ### 4.3 教师查询参数
+
+智能选课接口独立支持 `query`（课程名）、`campus`、`collegeId`、`weekday`（1–7 或 all）、`preferred`（优选班级原文包含匹配）。字符串上限 200 字符。不接受指定学期，始终跟随唯一 `is_current` 学期；响应为 `{ data: [{ teacher, sections }] }`，teacher 使用数据库 snake_case 字段，sections 使用前端 CourseSection 字段。校区与星期匹配同一段安排，选中后返回该教师在此教学班的全部安排，避免隐藏其他上课日。无结果返回空数组，读取错误报错；正式界面不生成模拟课表。
 
 示例：GET /api/teachers?page=0&pageSize=20&sortBy=overall&onlyThisTerm=true。
 
@@ -331,6 +347,7 @@ PATCH 允许字段：rating_version、course_id、year_term、六个评分字段
 | server/app.mjs | 路由、参数校验、用户鉴权、数据库写入 |
 | server/cache.mjs | Hash 缓存、完整发布、单条更新、队列、校准、旁路 |
 | server/data.mjs | 字段白名单、分批回源、搜索排序分页 |
+| server/timetable.mjs | 课表字段白名单、按教学班聚合、校区归一化和推荐筛选；无服务端依赖，前端直连模式复用 |
 | src/lib/cacheApi.ts | 前端开关、查询参数、JWT 和 fetch 封装 |
 | src/services/supabaseService.ts | 业务接口的缓存/直连分流 |
 | scripts/build-cache-frontend.mjs | 缓存版前端构建 |

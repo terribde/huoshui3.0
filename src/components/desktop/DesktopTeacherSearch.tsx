@@ -243,7 +243,7 @@ export const DesktopTeacherSearch: React.FC<DesktopTeacherSearchProps> = ({
                         </h4>
                         <span className="text-xs text-gray-500 font-medium">{teacher.title}</span>
                         {teacher.isTeachingThisTerm && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-0.5">
+                          <span className="text-3xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-0.5">
                             <CheckCircle2 className="w-2.5 h-2.5" /> 本学期在教
                           </span>
                         )}
@@ -259,13 +259,13 @@ export const DesktopTeacherSearch: React.FC<DesktopTeacherSearchProps> = ({
                       <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
                       <span>{formatRating(teacher.overallScore)}</span>
                     </div>
-                    <span className="text-[10px] text-gray-400">{teacher.reviewCount} 条评价</span>
+                    <span className="text-3xs text-gray-400">{teacher.reviewCount} 条评价</span>
                   </div>
                 </div>
 
                 {/* Courses list */}
                 <div className="flex flex-wrap gap-1.5 items-center text-xs">
-                  <span className="text-[11px] text-gray-400 flex items-center gap-1">
+                  <span className="text-2xs text-gray-400 flex items-center gap-1">
                     <BookOpen className="w-3.5 h-3.5" /> 开设课程：
                   </span>
                   {teacher.courses.map((course, cIdx) => (
@@ -296,12 +296,12 @@ export const DesktopTeacherSearch: React.FC<DesktopTeacherSearchProps> = ({
               <div className="flex items-center justify-between pt-2 border-t border-gray-50/80">
                 <div className="flex flex-wrap gap-1.5">
                   {teacher.tags.map((tag, tIdx) => (
-                    <span key={tIdx} className="text-[10px] px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-medium">
+                    <span key={tIdx} className="text-3xs px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-medium">
                       #{tag}
                     </span>
                   ))}
                   {teacher.hasHistoricalData && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 flex items-center gap-0.5 font-medium">
+                    <span className="text-3xs px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 flex items-center gap-0.5 font-medium">
                       <History className="w-2.5 h-2.5" /> 老站迁移数据
                     </span>
                   )}

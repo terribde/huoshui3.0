@@ -92,7 +92,7 @@ export const AnimatedDropdown: React.FC<AnimatedDropdownProps> = ({
         </div>
         <div className="flex items-center gap-1.5 shrink-0 ml-1">
           {selectedOption?.badge && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-600 font-medium">
+            <span className="text-3xs px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-600 font-medium">
               {selectedOption.badge}
             </span>
           )}
@@ -159,7 +159,7 @@ export const AnimatedDropdown: React.FC<AnimatedDropdownProps> = ({
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0 ml-2">
                         {option.badge && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-500">
+                          <span className="text-3xs px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-500">
                             {option.badge}
                           </span>
                         )}

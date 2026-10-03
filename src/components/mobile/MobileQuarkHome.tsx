@@ -74,7 +74,7 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
           >
             <Coins className="w-3.5 h-3.5 text-amber-500" />
             <span className="font-bold">{userPoints}</span>
-            <span className="text-[10px] text-amber-700">积分</span>
+            <span className="text-3xs text-amber-700">积分</span>
           </motion.div>
         ) : (
           <button
@@ -94,7 +94,7 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
             <h1 className="text-4xl font-extrabold tracking-tight text-gray-950 font-sans">
               交大活水
             </h1>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-100">
+            <span className="px-2 py-0.5 rounded-full text-3xs font-bold bg-indigo-50 text-indigo-600 border border-indigo-100">
               Agent
             </span>
           </div>
@@ -200,21 +200,21 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
             <motion.button
               whileTap={{ scale: 0.93 }}
               onClick={() => handleQuickPromptClick('高等数学哪位老师给分松？', 'ai')}
-              className="text-[11px] px-2.5 py-1 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-600 text-gray-600 rounded-full transition-colors"
+              className="text-2xs px-2.5 py-1 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-600 text-gray-600 rounded-full transition-colors"
             >
               高数哪位老师给分松？
             </motion.button>
             <motion.button
               whileTap={{ scale: 0.93 }}
               onClick={() => handleQuickPromptClick('高等数学 (I)', 'recommend')}
-              className="text-[11px] px-2.5 py-1 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-600 text-gray-600 rounded-full transition-colors"
+              className="text-2xs px-2.5 py-1 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-600 text-gray-600 rounded-full transition-colors"
             >
               高数偏好推荐
             </motion.button>
             <motion.button
               whileTap={{ scale: 0.93 }}
               onClick={() => handleQuickPromptClick('不点名', 'search')}
-              className="text-[11px] px-2.5 py-1 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-600 text-gray-600 rounded-full transition-colors"
+              className="text-2xs px-2.5 py-1 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-600 text-gray-600 rounded-full transition-colors"
             >
               从不点名神仙老师
             </motion.button>
@@ -233,7 +233,7 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
           >
             <PenLine className="w-3.5 h-3.5" />
             <span>快速评价</span>
-            <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full text-indigo-50 font-normal">
+            <span className="text-3xs bg-white/20 px-1.5 py-0.5 rounded-full text-indigo-50 font-normal">
               +20积分
             </span>
           </motion.button>
@@ -241,7 +241,7 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
       </div>
 
       {/* 3. Subtle bottom hint */}
-      <div className="text-[11px] text-gray-400 text-center pb-2 select-none">
+      <div className="text-2xs text-gray-400 text-center pb-2 select-none">
         底部点击【服务】进入全校功能中心与专区
       </div>
     </div>
