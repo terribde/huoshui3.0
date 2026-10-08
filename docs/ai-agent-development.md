@@ -13,19 +13,24 @@
 ## 2. 架构与代码入口
 
 ```mermaid
-flowchart TD
-    UI[React 聊天框] --> Client[aiService / Bearer Token]
-    Client --> Nginx[nginx :6099 /api/ai/]
-    Nginx --> Web[Node :3002 / web.mjs]
-    Web --> Auth[Supabase Auth 验证用户]
-    Web --> Billing[SupabaseBilling / 积分 RPC]
-    Billing --> DB[point_rules / user_profiles / point_transactions]
-    Web --> Cache[RedisConversations / 临时上下文]
-    Web --> Agent[Agents SDK / Chat Completions]
-    Agent --> Model[DeepSeek]
-    Model --> SSE[最终回答文字 SSE]
-    SSE --> UI
+graph TD
+    UI["React 聊天框"] --> Client["aiService / Bearer Token"]
+    Client --> Nginx["nginx :6099 /api/ai/"]
+    Nginx --> Web["Node :3002 / web.mjs"]
+    Web --> Auth["Supabase Auth：验证用户"]
+    Web --> Billing["SupabaseBilling：预扣、结算、退款"]
+    Billing --> DB["Supabase：point_rules / user_profiles / point_transactions"]
+    Web --> Cache["RedisConversations：临时上下文、回答缓存、限流、取消标记"]
+    Web --> Agent["Agents SDK / Chat Completions"]
+    Agent --> Model["DeepSeek"]
+    Model --> Agent
+    Agent --> Web
+    Web --> SSE["SSE：逐段返回回答，保存并结算成功后发送 done"]
+    SSE --> Nginx
+    Nginx --> UI
 ```
+
+积分的持久数据保存在 Supabase；Redis 不保存积分余额或积分流水。
 
 | 文件 | 职责 |
 | --- | --- |
@@ -211,7 +216,7 @@ nginx -t
 nginx -s reload
 ```
 
-前端修改后，在仓库根目录执行 `npm run lint`、`npm test`、`npm run build`，再按现有网站静态资源发布流程更新。只修改后端时不需要重建前端。
+前端修改后，在仓库根目录执行 `npm run lint`、`npm test`、`npm run build:cache`，再按现有网站静态资源发布流程更新。`build:cache` 明确启用现有教师、课表缓存 API；普通 `build` 是否启用这些 API 取决于构建环境变量。两种构建均通过 `/api/ai` 调用 AI 后端，其 Redis 依赖不受前端构建选项影响。只修改后端时不需要重建前端。
 
 ### 内部调试
 
