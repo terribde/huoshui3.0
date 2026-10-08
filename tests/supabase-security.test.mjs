@@ -176,6 +176,36 @@ test('review approval adds to remote balance exactly once across retries and rej
   } finally { await db.close(); }
 });
 
+for (const upgrade of [false,true]) test(`approved review deletion retains points, ledger and reward marker (${upgrade?'existing database migration':'fresh schema'})`,async()=>{
+  const db=await createDB();
+  try {
+    if(upgrade) await db.exec(`ALTER TABLE point_transactions DROP CONSTRAINT point_transactions_related_review_id_fkey;
+      ALTER TABLE point_transactions ADD CONSTRAINT legacy_review_fk FOREIGN KEY(related_review_id) REFERENCES reviews(id);`);
+    await asUser(db,student,reviewInsert());
+    await asUser(db,admin,"SELECT approve_review('review')");
+    const ledger=(await db.query("SELECT * FROM point_transactions WHERE related_review_id='review'")).rows[0];
+    if(upgrade) {
+      await assert.rejects(asUser(db,admin,"DELETE FROM reviews WHERE id='review'"),{code:'23503'});
+      const sql=fs.readFileSync(new URL('../supabase/migrations/20261008_review_deletion.sql',import.meta.url),'utf8');
+      await db.exec(sql); await db.exec(sql);
+    }
+    assert.equal((await asUser(db,student,"DELETE FROM reviews WHERE id='review' RETURNING id")).rows.length,0);
+    assert.equal((await asUser(db,other,"DELETE FROM reviews WHERE id='review' RETURNING id")).rows.length,0);
+    assert.equal((await asUser(db,admin,"DELETE FROM reviews WHERE id='review' RETURNING id")).rows.length,1);
+    assert.equal((await db.query("SELECT review_count FROM teachers WHERE id='teacher'")).rows[0].review_count,0);
+    assert.equal((await db.query(`SELECT points FROM user_profiles WHERE id='${student}'`)).rows[0].points,120);
+    const retained=(await db.query(`SELECT * FROM point_transactions WHERE id='${ledger.id}'`)).rows[0];
+    assert.deepEqual(retained,{...ledger,related_review_id:null});
+    assert.equal((await db.query("SELECT count(*)::int AS n FROM private.swjtu_review_rewards WHERE review_id='review'")).rows[0].n,1);
+    // Reusing a deleted ID must never award points again.
+    await asUser(db,student,reviewInsert());
+    assert.equal((await asUser(db,admin,"SELECT approve_review('review') AS result")).rows[0].result.points_awarded,false);
+    assert.equal((await db.query(`SELECT points FROM user_profiles WHERE id='${student}'`)).rows[0].points,120);
+    await asUser(db,admin,"SELECT reject_review('review','removed')");
+    assert.equal((await asUser(db,student,"DELETE FROM reviews WHERE id='review' RETURNING id")).rows.length,1);
+  } finally {await db.close();}
+});
+
 test('reward failure rolls back moderation and points in the same transaction', async () => {
   const db = await createDB();
   try {

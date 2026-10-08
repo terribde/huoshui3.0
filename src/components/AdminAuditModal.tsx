@@ -20,7 +20,7 @@ interface AdminAuditModalProps {
   teachers: Teacher[];
   onApproveReview: (reviewId: string, authorUserId?: string) => Promise<{ success: boolean; message?: string } | void>;
   onRejectReview: (reviewId: string, reason: string) => Promise<{ success: boolean; message?: string } | void>;
-  onDeleteReview: (reviewId: string) => Promise<void>;
+  onDeleteReview: (reviewId: string, teacherId?: string) => Promise<void>;
   onRefreshReviews?: () => Promise<void> | void;
   currentUserEmail?: string;
   currentUserId?: string;
@@ -954,7 +954,7 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
                           <button
                             onClick={async () => {
                               if (confirm('确定要彻底删除此条评价吗？')) {
-                                await onDeleteReview(rev.id);
+                                await onDeleteReview(rev.id, rev.teacherId);
                                   setReviewRevision(value => value + 1);
                               }
                             }}

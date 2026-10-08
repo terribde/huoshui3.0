@@ -555,14 +555,26 @@ export default function App() {
   };
 
   // Delete review handler
-  const handleDeleteReview = async (reviewId: string) => {
-    const success = await supabaseService.deleteReview(reviewId);
-    if (!success) {
-      alert('删除失败，请刷新后重试');
+  const handleDeleteReview = async (reviewId: string, relatedTeacherId?: string) => {
+    const teacherId = relatedTeacherId || reviews.find(r => r.id === reviewId)?.teacherId;
+    const result = await supabaseService.deleteReview(reviewId);
+    if (!result.success) {
+      alert(`删除失败：${result.message || '请刷新后核实'}`);
       return;
     }
     setReviews((prev) => prev.filter((r) => r.id !== reviewId));
+    clearPagedQueryCache();
     handleRefreshReviews();
+    loadFeaturedTeachers();
+    if (teacherId) {
+      try {
+        const teacher = await supabaseService.getTeacherById(teacherId);
+        if (teacher) {
+          rememberTeachers([teacher]);
+          setSelectedTeacher(current => current?.id === teacher.id ? teacher : current);
+        }
+      } catch (error) { console.warn('删除后教师统计刷新失败', error); }
+    }
   };
 
   // Like review

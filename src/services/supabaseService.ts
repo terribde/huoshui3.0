@@ -816,18 +816,25 @@ export const supabaseService = {
   /**
    * Delete a review (e.g., author deletes rejected review or admin removes)
    */
-  async deleteReview(reviewId: string): Promise<boolean> {
+  async deleteReview(reviewId: string): Promise<{ success: boolean; message?: string }> {
     if (isSupabaseConfigured && supabase) {
       try {
         if (cacheApiEnabled) {
-          await cacheRequest(`/reviews/${encodeURIComponent(reviewId)}`, { method: 'DELETE', authenticated: true });
+          const result = await cacheRequest<{ success: boolean; message?: string }>(`/reviews/${encodeURIComponent(reviewId)}`, { method: 'DELETE', authenticated: true });
+          if (result?.success !== true) return { success: false, message: result?.message || '删除结果无法确认，请刷新后核实' };
         } else {
           const { data, error } = await supabase.from('reviews').delete().eq('id', reviewId).select('id');
-          if (error || data?.length !== 1) return false;
+          if (error) {
+            console.warn('[Supabase] Failed to delete review:', error);
+            return { success: false, message: error.code === '23503'
+              ? '此评价仍被关联记录引用，请联系管理员检查数据库删除规则'
+              : error.message };
+          }
+          if (data?.length !== 1) return { success: false, message: '评价不存在或当前账号没有删除权限，请刷新或重新登录后核实' };
         }
-      } catch (err) {
+      } catch (err: any) {
         console.warn('[Supabase] Failed to delete review from remote:', err);
-        return false;
+        return { success: false, message: typeof err?.message === 'string' ? err.message : '删除结果无法确认，请刷新后核实' };
       }
     }
     // 1. Remove from local cache
@@ -840,7 +847,7 @@ export const supabaseService = {
       console.warn('Failed to delete review from local storage:', e);
     }
 
-    return true;
+    return { success: true };
   },
 
   /**

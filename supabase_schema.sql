@@ -72,7 +72,7 @@ CREATE TABLE public.reviews (
   reviewed_at TIMESTAMPTZ, likes INTEGER NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-ALTER TABLE public.point_transactions ADD CONSTRAINT point_transactions_related_review_id_fkey FOREIGN KEY(related_review_id) REFERENCES public.reviews(id);
+ALTER TABLE public.point_transactions ADD CONSTRAINT point_transactions_related_review_id_fkey FOREIGN KEY(related_review_id) REFERENCES public.reviews(id) ON DELETE SET NULL;
 
 
 -- Source: supabase/production-compat.sql

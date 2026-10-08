@@ -110,13 +110,30 @@ test('cached deployment routes mutations through authenticated API and never ret
   assert.equal((await f.service.approveReview('review')).success,true);
   assert.equal((await f.service.rejectReview('review','reason')).success,true);
   assert.equal((await f.service.setReviewLike('review',true)).likes,8);
-  assert.equal(await f.service.deleteReview('review'),true);
+  assert.equal((await f.service.deleteReview('review')).success,true);
   assert.equal(f.calls.length,0);assert.equal(f.writes.length,0);
   assert.ok(f.apiCalls.every(c=>c.options.authenticated));
   const failed=setup({cacheEnabled:true,apiError:'offline'});
   assert.equal((await failed.service.approveReview('review')).success,false);
-  assert.equal(await failed.service.deleteReview('review'),false);
+  const deletion = await failed.service.deleteReview('review');
+  assert.equal(deletion.success,false);
+  assert.equal(deletion.message,'offline');
   assert.equal(failed.writes.length,0);assert.equal(failed.calls.length,0);
+});
+
+test('failed deletion preserves the local review and explains constraint or permission failures',async()=>{
+  const f=setup({readError:{code:'23503',message:'foreign key violation'}});
+  f.service.saveLocalReview({id:'review',status:'approved'});
+  const result=await f.service.deleteReview('review');
+  assert.equal(result.success,false);
+  assert.match(result.message,/关联记录/);
+  assert.equal(f.service.getLocalReviews().length,1);
+  const denied=setup();
+  assert.match((await denied.service.deleteReview('review')).message,/删除权限/);
+  const unconfirmed=setup({cacheEnabled:true,apiResult:{success:false,message:'Deletion denied'}});
+  unconfirmed.service.saveLocalReview({id:'review'});
+  assert.equal((await unconfirmed.service.deleteReview('review')).success,false);
+  assert.equal(unconfirmed.service.getLocalReviews().length,1);
 });
 
 test('remote balance including zero replaces a higher local cache and old ledger',async()=>{
