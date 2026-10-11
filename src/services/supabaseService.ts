@@ -257,9 +257,10 @@ export const supabaseService = {
     collegeId?: string,
     weekday?: number | string,
     preferred?: string,
+    teacherName?: string,
     signal?: AbortSignal
   ): Promise<TeacherWithSections[]> {
-    const options = timetableOptions({ query: courseQuery, campus, collegeId, weekday, preferred });
+    const options = timetableOptions({ query: courseQuery, campus, collegeId, weekday, preferred, teacherName });
     if (cacheApiEnabled) {
       const rows = await cacheRequest<Array<{ teacher: any; sections: CourseSection[] }>>(
         `/timetable/recommendations?${cacheQuery(options as unknown as Record<string, unknown>)}`, { signal }
@@ -287,6 +288,26 @@ export const supabaseService = {
     }
     return timetableRecommendations(buildTimetableSections(rows), teachers, options)
       .map(row => ({ teacher: mapTeacherRow(row.teacher), sections: row.sections }));
+  },
+
+  /** 某位老师本学期开设的全部教学班（含上课时间、地点）。 */
+  async getTeacherSections(teacherId: string, signal?: AbortSignal): Promise<CourseSection[]> {
+    if (cacheApiEnabled) {
+      return cacheRequest<CourseSection[]>(`/teachers/${encodeURIComponent(teacherId)}/sections`, { signal });
+    }
+    if (!supabase) return [];
+    const { data: terms, error: termError } = await supabase.from('terms')
+      .select('id,year_term').eq('is_current', true).abortSignal(signal);
+    if (termError) throw new Error(termError.message);
+    if (terms?.length !== 1) throw new Error('请先设置唯一的当前学期');
+    const rows = await readAllRows((from, to) => supabase.from('timetable_schedule')
+      .select(SCHEDULE_SELECT, { count: from === 0 ? 'exact' : undefined })
+      .eq('term_id', terms[0].id).eq('teacher_id', teacherId).order('section_id')
+      .order('meeting_id', { nullsFirst: true }).range(from, to).abortSignal(signal));
+    return buildTimetableSections(rows)
+      .map(section => ({ ...section, meetings: section.meetings.filter((m: any) => m.scheduleStatus !== 'unknown') }))
+      .sort((x: any, y: any) => String(x.courseName || '').localeCompare(String(y.courseName || ''), 'zh') ||
+        String(x.selectionCode || '').localeCompare(String(y.selectionCode || '')));
   },
 
   async getReviewsPage(options: ReviewQuery, signal?: AbortSignal): Promise<DataPage<Review>> {
