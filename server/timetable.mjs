@@ -4,7 +4,7 @@ export const normalizeCampus = campus => campus === '西部校区' ? '犀浦校�
 
 export function timetableOptions(query) {
   const options = {};
-  for (const key of ['query', 'campus', 'collegeId', 'preferred']) {
+  for (const key of ['query', 'campus', 'collegeId', 'preferred', 'teacherName']) {
     if (query[key] !== undefined && typeof query[key] !== 'string') throw new Error('Invalid timetable filter');
     options[key] = (query[key] || '').trim();
     if (options[key].length > 200) throw new Error('Invalid timetable filter');
@@ -76,6 +76,7 @@ export function timetableRecommendations(sections, teachers, options) {
         overall_score: null, review_count: 0, tags: [], rating_version: 2,
       };
       if (options.collegeId && options.collegeId !== 'all' && teacher.college_id !== options.collegeId && teacher.college !== options.collegeId) continue;
+      if (options.teacherName && !String(teacher.name || first.teacherName || '').toLocaleLowerCase().includes(options.teacherName.toLocaleLowerCase())) continue;
       if (!groups.has(key)) groups.set(key, { teacher, sections: [] });
       groups.get(key).sections.push({ ...section, meetings: meetings.filter(meeting => meeting.scheduleStatus !== 'unknown') });
     }
@@ -84,5 +85,17 @@ export function timetableRecommendations(sections, teachers, options) {
     (b.teacher.overall_score ?? -1) - (a.teacher.overall_score ?? -1) ||
     (b.teacher.review_count || 0) - (a.teacher.review_count || 0) ||
     String(a.teacher.id).localeCompare(String(b.teacher.id)));
-  return !text && !options.preferred && !options.weekday ? results.slice(0, 60) : results;
+  return !text && !options.preferred && !options.weekday && !options.teacherName ? results.slice(0, 60) : results;
+}
+
+// All current-term sections taught by one teacher, for the teacher profile page.
+export function teacherSections(sections, teacherId) {
+  const result = [];
+  for (const section of sections) {
+    const meetings = section.meetings.filter(meeting => meeting.teacherId === teacherId);
+    if (!meetings.length) continue;
+    result.push({ ...section, meetings: meetings.filter(meeting => meeting.scheduleStatus !== 'unknown') });
+  }
+  return result.sort((a, b) => String(a.courseName || '').localeCompare(String(b.courseName || ''), 'zh') ||
+    String(a.selectionCode || '').localeCompare(String(b.selectionCode || '')));
 }

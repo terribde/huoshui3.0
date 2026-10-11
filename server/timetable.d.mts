@@ -6,8 +6,10 @@ export interface TimetableOptions {
   campus: string;
   collegeId: string;
   preferred: string;
+  teacherName: string;
   weekday?: number;
 }
 export function timetableOptions(query: Record<string, unknown>): TimetableOptions;
 export function buildTimetableSections(rows: any[]): CourseSection[];
+export function teacherSections(sections: CourseSection[], teacherId: string): CourseSection[];
 export function timetableRecommendations(sections: CourseSection[], teachers: any[], options: TimetableOptions): { teacher: any; sections: CourseSection[] }[];

@@ -1,6 +1,6 @@
 import express from 'express';
 import { pagination, teacherOptions, teacherPage, reviewPage } from './data.mjs';
-import { timetableOptions, timetableRecommendations } from './timetable.mjs';
+import { timetableOptions, timetableRecommendations, teacherSections } from './timetable.mjs';
 
 const asyncRoute = fn => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
 const httpError = (status, message) => Object.assign(new Error(message), { status });
@@ -49,6 +49,16 @@ export function createApp({ cache, authClient, userClient, logger = console }) {
     const teacherId = id(req.params.id);
     const result = await cache.teachers();
     res.set('X-Cache', result.cache).json({ data: result.rows.find(row => row.id === teacherId) || null });
+  }));
+  app.get('/api/teachers/:id/sections', asyncRoute(async (req, res) => {
+    const teacherId = id(req.params.id);
+    const terms = await cache.terms();
+    const current = terms.rows.filter(term => term.is_current);
+    if (current.length !== 1) throw httpError(503, 'Current term is not configured uniquely');
+    const timetable = await cache.timetable(current[0].id);
+    const states = [terms.cache, timetable.cache];
+    res.set('X-Cache', states.includes('BYPASS') ? 'BYPASS' : states.includes('MISS') ? 'MISS' : 'HIT')
+      .json({ data: teacherSections(timetable.rows, teacherId) });
   }));
   app.get('/api/teachers/:id/reviews', asyncRoute(async (req, res) => {
     const teacherId = id(req.params.id);
