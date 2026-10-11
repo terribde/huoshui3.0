@@ -11,6 +11,7 @@ import { isSupabaseConfigured } from './lib/supabase';
 
 // Mobile Dedicated Views (Clean, pure Quark layout matching reference image)
 import { MobileQuarkHome } from './components/mobile/MobileQuarkHome';
+import { MobileSearchHub, HubMode } from './components/mobile/MobileSearchHub';
 import { MobileUserProfile } from './components/mobile/MobileUserProfile';
 import { MobileTeacherSearch } from './components/mobile/MobileTeacherSearch';
 import { MobileServicesView } from './components/mobile/MobileServicesView';
@@ -31,7 +32,6 @@ const TeacherDetailModal = lazy(() => import('./components/TeacherDetailModal').
 const AiAssistantModal = lazy(() => import('./components/AiAssistantModal').then(m => ({ default: m.AiAssistantModal })));
 const ReviewModal = lazy(() => import('./components/ReviewModal').then(m => ({ default: m.ReviewModal })));
 const UserPointsModal = lazy(() => import('./components/UserPointsModal').then(m => ({ default: m.UserPointsModal })));
-const CollegeListModal = lazy(() => import('./components/CollegeListModal').then(m => ({ default: m.CollegeListModal })));
 const ExperienceGuideModal = lazy(() => import('./components/ExperienceGuideModal').then(m => ({ default: m.ExperienceGuideModal })));
 const AuthModal = lazy(() => import('./components/AuthModal').then(m => ({ default: m.AuthModal })));
 const AdminAuditModal = lazy(() => import('./components/AdminAuditModal').then(m => ({ default: m.AdminAuditModal })));
@@ -104,10 +104,17 @@ export default function App() {
   const [hasOpenedAi, setHasOpenedAi] = useState(false);
   useEffect(() => { if (isAiModalOpen) setHasOpenedAi(true); }, [isAiModalOpen]);
   const [aiInitialPrompt, setAiInitialPrompt] = useState<string>('');
+  // 手机端：搜索 / AI 问答合并页
+  const [mobileHubOpen, setMobileHubOpen] = useState<boolean>(false);
+  const [mobileHubMode, setMobileHubMode] = useState<HubMode>('search');
+  const openMobileHub = (mode: HubMode, prompt?: string) => {
+    if (mode === 'ai') setAiInitialPrompt(prompt || '');
+    setMobileHubMode(mode);
+    setMobileHubOpen(true);
+  };
   const [isReviewModalOpen, setIsReviewModalOpen] = useState<boolean>(false);
   const [reviewTargetTeacher, setReviewTargetTeacher] = useState<Teacher | null>(null);
   const [isPointsModalOpen, setIsPointsModalOpen] = useState<boolean>(false);
-  const [isCollegesModalOpen, setIsCollegesModalOpen] = useState<boolean>(false);
   const [colleges, setColleges] = useState<Array<{ id: string; name: string; code?: string }>>([]);
   const [isExperienceModalOpen, setIsExperienceModalOpen] = useState<boolean>(false);
   const [experienceTab, setExperienceTab] = useState<'guides' | 'notices' | 'history'>('guides');
@@ -618,6 +625,14 @@ export default function App() {
       )
     : [];
 
+  const handleAiBalance = (balance: number) => {
+    if (currentUserIdRef.current !== currentUser?.id) return;
+    pointsRequestRef.current++;
+    setUserPoints(balance);
+    setIsCheckinStatusLoading(false);
+    if (currentUser?.id) void loadUserPointsData(currentUser.id);
+  };
+
   return (
     <div className="min-h-screen bg-white sm:bg-slate-100/90 text-gray-900 flex flex-col items-center relative">
       {/* Top Floating Toast Notification Banner */}
@@ -663,6 +678,23 @@ export default function App() {
           <div className="w-full max-w-[430px] min-h-screen sm:min-h-[92vh] bg-white sm:rounded-3xl sm:shadow-[0_20px_60px_rgba(0,0,0,0.12)] sm:border sm:border-gray-200/80 relative overflow-x-hidden flex flex-col justify-between">
             
             {/* Mobile Tab Views with Smooth Fade Transition */}
+            {mobileHubOpen ? (
+              <MobileSearchHub
+                mode={mobileHubMode}
+                onModeChange={setMobileHubMode}
+                onBack={() => setMobileHubOpen(false)}
+                teachers={teachers}
+                colleges={colleges}
+                initialSearch={initialTeacherSearch}
+                onSelectTeacher={(teacher) => setSelectedTeacher(teacher)}
+                onOpenReview={(teacher) => handleOpenReview(teacher)}
+                userId={currentUser?.id || null}
+                userPoints={userPoints}
+                aiInitialPrompt={aiInitialPrompt}
+                onLogin={() => handleOpenAuth('login')}
+                onBalance={handleAiBalance}
+              />
+            ) : (
             <div className="flex-1 w-full relative overflow-x-hidden">
               <AnimatePresence mode="wait">
                 <motion.div
@@ -678,16 +710,9 @@ export default function App() {
                       currentUser={currentUser}
                       onOpenAuth={handleOpenAuth}
                       userPoints={userPoints}
-                      onOpenSearch={(query) => {
-                        setInitialTeacherSearch(query || '');
-                        setCurrentTab('search');
-                      }}
-                      onOpenRecommend={() => {
-                        setCurrentTab('recommend');
-                      }}
-                      onOpenAiChat={(prompt) => {
-                        setAiInitialPrompt(prompt || '');
-                        setIsAiModalOpen(true);
+                      onOpenSearchHub={() => {
+                        setInitialTeacherSearch('');
+                        openMobileHub('search');
                       }}
                       onOpenPoints={() => {
                         if (!currentUser) {
@@ -721,10 +746,7 @@ export default function App() {
                       onOpenRecommend={() => {
                         setCurrentTab('recommend');
                       }}
-                      onOpenAiChat={(prompt) => {
-                        setAiInitialPrompt(prompt || '');
-                        setIsAiModalOpen(true);
-                      }}
+                      onOpenAiChat={(prompt) => openMobileHub('ai', prompt)}
                       onOpenReview={(teacher) => handleOpenReview(teacher)}
                       onOpenPoints={() => {
                         if (!currentUser) {
@@ -733,7 +755,6 @@ export default function App() {
                           setIsPointsModalOpen(true);
                         }
                       }}
-                      onOpenCollegeList={() => setIsCollegesModalOpen(true)}
                       onOpenExperienceModal={(tab) => {
                         setExperienceTab(tab || 'guides');
                         setIsExperienceModalOpen(true);
@@ -785,11 +806,12 @@ export default function App() {
                 </motion.div>
               </AnimatePresence>
             </div>
+            )}
 
             {/* Quark Mobile Bottom Navigation Dock */}
             <BottomNav
               currentTab={currentTab}
-              onTabChange={(tab) => setCurrentTab(tab)}
+              onTabChange={(tab) => { setMobileHubOpen(false); setCurrentTab(tab); }}
               userPoints={userPoints}
             />
           </div>
@@ -1003,7 +1025,6 @@ export default function App() {
                         setIsPointsModalOpen(true);
                       }
                     }}
-                    onOpenCollegeList={() => setIsCollegesModalOpen(true)}
                     onOpenExperienceModal={(tab) => {
                       setExperienceTab(tab || 'guides');
                       setIsExperienceModalOpen(true);
@@ -1104,13 +1125,7 @@ export default function App() {
             isOpen={isAiModalOpen}
             onClose={() => setIsAiModalOpen(false)}
             onLogin={() => { setIsAiModalOpen(false); handleOpenAuth('login'); }}
-            onBalance={balance => {
-              if (currentUserIdRef.current !== currentUser?.id) return;
-              pointsRequestRef.current++;
-              setUserPoints(balance);
-              setIsCheckinStatusLoading(false);
-              if (currentUser?.id) void loadUserPointsData(currentUser.id);
-            }}
+            onBalance={handleAiBalance}
           />
           </Suspense>
         )}
@@ -1145,23 +1160,6 @@ export default function App() {
             isCheckinStatusLoading={isCheckinStatusLoading}
             onCheckIn={handleCheckIn}
             onOpenReview={() => handleOpenReview()}
-          />
-          </Suspense>
-        )}
-      </AnimatePresence>
-
-      {/* 5. 院系库 Modal */}
-      <AnimatePresence>
-        {isCollegesModalOpen && (
-          <Suspense fallback={<LazyFallback />}>
-          <CollegeListModal
-            isOpen={isCollegesModalOpen}
-            onClose={() => setIsCollegesModalOpen(false)}
-            colleges={colleges}
-            onSelectCollege={(_college, collegeId) => {
-              setInitialTeacherSearch(collegeId || _college || '');
-              setCurrentTab('search');
-            }}
           />
           </Suspense>
         )}

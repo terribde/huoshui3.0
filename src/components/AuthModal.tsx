@@ -331,7 +331,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <div>
                 <p className="font-bold">安全密码重置</p>
                 <p className="text-2xs text-indigo-700 mt-0.5">
-                  输入注册时填写的邮箱地址，我们将通过 Supabase 安全服务发送密码重置邮件至您的邮箱。
+                  输入注册时填写的邮箱地址，我们将发送密码重置邮件至您的邮箱。
                 </p>
               </div>
             </div>
@@ -540,7 +540,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {/* Privacy Note */}
           <div className="pt-2 flex items-center justify-center gap-1.5 text-2xs text-gray-400">
             <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />
-            <span>数据直连 Supabase 安全鉴权 · 评教完全匿名保护</span>
+            <span>安全鉴权 · 评教完全匿名保护</span>
           </div>
         </div>
       </motion.div>

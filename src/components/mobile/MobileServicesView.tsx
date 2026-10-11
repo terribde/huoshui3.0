@@ -6,7 +6,6 @@ import {
   Sliders, 
   Bot, 
   PenLine, 
-  LayoutGrid, 
   FileText, 
   GraduationCap, 
   Coins, 
@@ -26,7 +25,6 @@ interface MobileServicesViewProps {
   onOpenAiChat: (initialPrompt?: string) => void;
   onOpenReview: (teacher?: Teacher) => void;
   onOpenPoints: () => void;
-  onOpenCollegeList: () => void;
   onOpenExperienceModal: (tab?: 'guides' | 'notices' | 'history') => void;
   onSelectTeacher: (teacher: Teacher) => void;
 }
@@ -39,7 +37,6 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
   onOpenAiChat,
   onOpenReview,
   onOpenPoints,
-  onOpenCollegeList,
   onOpenExperienceModal,
   onSelectTeacher,
 }) => {
@@ -79,7 +76,7 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
         <span className="text-2xs font-bold text-gray-400 px-1 uppercase tracking-wider block">
           核心功能
         </span>
-        <div className="grid grid-cols-5 gap-1">
+        <div className="grid grid-cols-4 gap-1">
           {/* 1. 找老师 */}
           <motion.button
             onClick={() => onOpenSearch()}
@@ -130,19 +127,6 @@ export const MobileServicesView: React.FC<MobileServicesViewProps> = ({
               <PenLine className="w-5 h-5 stroke-[1.8]" />
             </div>
             <span className="text-2xs font-medium text-gray-700">写评价</span>
-          </motion.button>
-
-          {/* 5. 院系库 */}
-          <motion.button
-            onClick={onOpenCollegeList}
-            whileHover={{ scale: 1.06, y: -2 }}
-            whileTap={{ scale: 0.88 }}
-            className="flex flex-col items-center gap-1 p-1 rounded-2xl transition-all group cursor-pointer"
-          >
-            <div className="w-11 h-11 rounded-2xl bg-purple-50 text-purple-700 flex items-center justify-center group-hover:bg-purple-600 group-hover:text-white group-hover:shadow-md group-hover:shadow-purple-200 transition-all">
-              <LayoutGrid className="w-5 h-5 stroke-[1.8]" />
-            </div>
-            <span className="text-2xs font-medium text-gray-700">院系库</span>
           </motion.button>
         </div>
       </div>

@@ -8,7 +8,6 @@ import {
   Sliders, 
   Bot, 
   PenLine, 
-  LayoutGrid, 
   FileText, 
   GraduationCap, 
   Coins, 
@@ -32,7 +31,6 @@ interface DesktopQuarkHomeProps {
   onOpenAiChat: (initialPrompt?: string) => void;
   onOpenReview: (teacher?: Teacher) => void;
   onOpenPoints: () => void;
-  onOpenCollegeList: () => void;
   onOpenExperienceModal: (tab?: 'guides' | 'notices' | 'history') => void;
   onSelectTeacher: (teacher: Teacher) => void;
 }
@@ -48,7 +46,6 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
   onOpenAiChat,
   onOpenReview,
   onOpenPoints,
-  onOpenCollegeList,
   onOpenExperienceModal,
   onSelectTeacher,
 }) => {
@@ -209,7 +206,7 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
       </div>
 
       {/* 4. Row 1: 5 Core Feature Cards (Desktop 5-Column Grid) */}
-      <div className="w-full grid grid-cols-5 gap-3.5 mb-4">
+      <div className="w-full grid grid-cols-4 gap-3.5 mb-4">
         {/* 1. 找老师 */}
         <button
           onClick={() => onOpenSearch()}
@@ -263,20 +260,6 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
           <div>
             <span className="text-sm font-bold text-gray-800 group-hover:text-emerald-600 block">写评价</span>
             <span className="text-2xs text-gray-400 mt-0.5 block">打分赚 +20 积分</span>
-          </div>
-        </button>
-
-        {/* 5. 院系库 */}
-        <button
-          onClick={onOpenCollegeList}
-          className="flex items-center gap-3 p-3.5 bg-white rounded-2xl border border-gray-100 hover:border-purple-200 hover:shadow-xs active:scale-98 transition-all group text-left"
-        >
-          <div className="w-11 h-11 rounded-2xl bg-purple-50 text-purple-700 flex items-center justify-center shrink-0 group-hover:bg-purple-600 group-hover:text-white transition-colors">
-            <LayoutGrid className="w-5 h-5 stroke-[1.8]" />
-          </div>
-          <div>
-            <span className="text-sm font-bold text-gray-800 group-hover:text-purple-600 block">院系库</span>
-            <span className="text-2xs text-gray-400 mt-0.5 block">全校11大院系</span>
           </div>
         </button>
       </div>

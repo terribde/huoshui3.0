@@ -1,6 +1,7 @@
 import { ModalFrame } from './ModalFrame';
 import { formatRating, isRating, RATING_DIMENSIONS } from '../lib/ratings';
 import { RatingRadar } from './RatingRadar';
+import { TeacherTermCourses } from './TeacherTermCourses';
 import { usePagedQuery } from '../hooks/usePagedQuery';
 import { supabaseService } from '../services/supabaseService';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -185,6 +186,8 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
                   ))}
                 </div>
               </div>
+
+              <TeacherTermCourses teacher={teacher} />
 
               {/* Tags */}
               <div className="flex flex-wrap gap-1.5 pt-1">

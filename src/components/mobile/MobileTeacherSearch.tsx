@@ -26,6 +26,7 @@ interface MobileTeacherSearchProps {
   onSelectTeacher: (teacher: Teacher) => void;
   onOpenReview?: (teacher?: Teacher) => void;
   initialSearch?: string;
+  autoFocus?: boolean;
 }
 
 export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
@@ -34,6 +35,7 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
   onSelectTeacher,
   onOpenReview,
   initialSearch = '',
+  autoFocus = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState<string>(initialSearch);
   const [selectedCollege, setSelectedCollege] = useState<string>('all');
@@ -111,6 +113,7 @@ export const MobileTeacherSearch: React.FC<MobileTeacherSearchProps> = ({
             <input
               id="mobile-search-teachers-input"
               type="text"
+              autoFocus={autoFocus}
               value={searchTerm}
               onFocus={() => setIsSearchFocused(true)}
               onChange={(e) => {

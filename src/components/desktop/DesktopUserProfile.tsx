@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserPointTransaction, Review, Teacher } from '../../types';
-import { Coins, MessageSquare, Info, History, ArrowUpRight, CheckCircle2, ShieldAlert, Sparkles, User, Database, LogIn, LogOut, Lock, Clock, XCircle, ShieldCheck, Trash2, Edit3, AlertCircle, RotateCw } from 'lucide-react';
-import { isSupabaseConfigured } from '../../lib/supabase';
+import { Coins, MessageSquare, Info, History, ArrowUpRight, CheckCircle2, ShieldAlert, Sparkles, User, LogIn, LogOut, Lock, Clock, XCircle, ShieldCheck, Trash2, Edit3, AlertCircle, RotateCw } from 'lucide-react';
 import { isRating, RATING_DIMENSIONS } from '../../lib/ratings';
 
 interface DesktopUserProfileProps {
@@ -111,12 +110,6 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                     <p className="text-xs text-gray-500">
                       {isLoggedIn ? `${userCampus} · ${currentUser?.email}` : '登录后同步个人评教积分与记录'}
                     </p>
-                    {isSupabaseConfigured && (
-                      <span className="inline-flex items-center gap-1 text-2xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                        <Database className="w-3 h-3 text-emerald-600" />
-                        Supabase 云端直连
-                      </span>
-                    )}
                   </div>
                 </div>
               </div>

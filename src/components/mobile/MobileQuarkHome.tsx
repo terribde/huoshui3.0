@@ -1,21 +1,13 @@
-import React, { useState } from 'react';
-import { 
-  Search, 
-  Sparkles, 
-  Volume2, 
-  Sliders, 
-  Coins, 
-  PenLine,
-} from 'lucide-react';
+import React from 'react';
+import { Search, Coins, PenLine } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface MobileQuarkHomeProps {
   currentUser?: any | null;
   onOpenAuth?: (mode?: 'login' | 'register') => void;
   userPoints: number;
-  onOpenSearch: (query?: string) => void;
-  onOpenRecommend: (course?: string) => void;
-  onOpenAiChat: (initialPrompt?: string) => void;
+  /** 点击首页搜索框：进入「搜索 / AI 问答」合并页 */
+  onOpenSearchHub: () => void;
   onOpenPoints: () => void;
   onOpenReview: () => void;
 }
@@ -24,49 +16,23 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
   currentUser,
   onOpenAuth,
   userPoints,
-  onOpenSearch,
-  onOpenRecommend,
-  onOpenAiChat,
+  onOpenSearchHub,
   onOpenPoints,
   onOpenReview,
 }) => {
-  const [query, setQuery] = useState('');
-  const [searchMode, setSearchMode] = useState<'ai' | 'search'>('search');
   const isLoggedIn = Boolean(currentUser);
 
-  const handleInputSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query.trim()) return;
-
-    if (searchMode === 'ai') {
-      onOpenAiChat(query.trim());
-    } else {
-      onOpenSearch(query.trim());
-    }
-    setQuery('');
-  };
-
-  const handleQuickPromptClick = (prompt: string, mode: 'ai' | 'recommend' | 'search') => {
-    if (mode === 'ai') {
-      onOpenAiChat(prompt);
-    } else if (mode === 'recommend') {
-      onOpenRecommend(prompt);
-    } else {
-      onOpenSearch(prompt);
-    }
-  };
-
   return (
-    <div 
-      id="mobile-quark-home" 
-      className="w-full min-h-[75vh] px-4 pt-4 pb-20 flex flex-col justify-between items-center"
+    <div
+      id="mobile-quark-home"
+      className="w-full min-h-[75vh] px-4 pt-4 pb-20 flex flex-col items-center"
     >
       {/* 1. Top status / campus indicator + Points badge */}
-      <div className="w-full flex items-center justify-between text-xs text-gray-400 mb-6">
+      <div className="w-full flex items-center justify-between text-xs text-gray-400">
         <span className="font-medium tracking-tight text-gray-500">西南交通大学 · 犀浦 / 九里</span>
-        
+
         {isLoggedIn ? (
-          <motion.div 
+          <motion.div
             onClick={onOpenPoints}
             whileTap={{ scale: 0.92 }}
             whileHover={{ scale: 1.03 }}
@@ -86,150 +52,37 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
         )}
       </div>
 
-      {/* 2. Center Brand Title + Clean Quark AI Input Box */}
+      {/* 2. Brand + flat search bar, vertically centered */}
       <div className="w-full flex-1 flex flex-col items-center justify-center -mt-6">
-        {/* Brand Title: Stylized Logo like Quark */}
-        <div className="flex flex-col items-center justify-center mb-6 select-none">
-          <div className="flex items-center gap-2">
-            <h1 className="text-4xl font-extrabold tracking-tight text-gray-950 font-sans">
-              交大活水
-            </h1>
-            <span className="px-2 py-0.5 rounded-full text-3xs font-bold bg-indigo-50 text-indigo-600 border border-indigo-100">
-              Agent
-            </span>
-          </div>
+        <div className="flex flex-col items-center justify-center mb-7 select-none">
+          <h1 className="text-4xl font-extrabold tracking-tight text-gray-950 font-sans">
+            交大活水
+          </h1>
           <p className="text-xs text-gray-400 mt-1.5 tracking-wide">
             西南交通大学专属教师评价 · 校园智能助手
           </p>
         </div>
 
-        {/* Center Search Card (The Quark AI Input Box) */}
-        <div className="w-full bg-white rounded-3xl border border-gray-200/80 shadow-[0_6px_25px_rgb(0,0,0,0.06)] p-3.5 transition-all">
-          <form onSubmit={handleInputSubmit} className="space-y-3">
-            {/* Main Input */}
-            <div className="relative">
-              <input
-                id="mobile-search-input"
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={
-                  searchMode === 'search'
-                    ? '输入教师姓名、学院或课程搜索老师…'
-                    : '问问学习与选课思路（暂未接教师库）'
-                }
-                className="w-full px-2 py-1 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-hidden bg-transparent"
-              />
-            </div>
+        {/* 只放搜索框：点击后进入搜索 / AI 问答页，首页不展示问题内容 */}
+        <motion.button
+          type="button"
+          id="mobile-home-search-bar"
+          onClick={onOpenSearchHub}
+          whileTap={{ scale: 0.98 }}
+          aria-label="搜索"
+          className="w-full h-11 px-4 flex items-center gap-2.5 bg-white rounded-full border border-gray-200/80 shadow-[0_4px_18px_rgb(0,0,0,0.05)] text-left cursor-pointer transition-shadow hover:shadow-[0_6px_22px_rgb(0,0,0,0.08)]"
+        >
+          <Search className="w-4 h-4 text-gray-400 shrink-0" />
+          <span className="text-sm text-gray-400 truncate">搜索</span>
+        </motion.button>
 
-            {/* Bottom Row Inside Card */}
-            <div className="flex items-center justify-between pt-1 border-t border-gray-100/80">
-              {/* Mode toggles with fluid sliding pill */}
-              <div className="flex items-center bg-gray-100/80 p-0.5 rounded-xl relative">
-                <button
-                  type="button"
-                  onClick={() => setSearchMode('search')}
-                  className={`relative z-10 px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${
-                    searchMode === 'search' ? 'text-white' : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <Search className="w-3 h-3" />
-                  <span>搜老师</span>
-                  {searchMode === 'search' && (
-                    <motion.div
-                      layoutId="searchModePill"
-                      className="absolute inset-0 bg-indigo-600 rounded-lg -z-10 shadow-xs"
-                      transition={{ type: 'spring', stiffness: 450, damping: 32 }}
-                    />
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setSearchMode('ai')}
-                  className={`relative z-10 px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${
-                    searchMode === 'ai' ? 'text-white' : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <Sparkles className="w-3 h-3" />
-                  <span>AI 问答</span>
-                  {searchMode === 'ai' && (
-                    <motion.div
-                      layoutId="searchModePill"
-                      className="absolute inset-0 bg-indigo-600 rounded-lg -z-10 shadow-xs"
-                      transition={{ type: 'spring', stiffness: 450, damping: 32 }}
-                    />
-                  )}
-                </button>
-              </div>
-
-              {/* Right icons like Quark's sliders / volume / search */}
-              <div className="flex items-center gap-1.5 text-gray-400">
-                <motion.button
-                  type="button"
-                  whileTap={{ scale: 0.88 }}
-                  onClick={() => onOpenRecommend()}
-                  title="智能选课推荐"
-                  className="p-1.5 rounded-full hover:bg-gray-100 hover:text-gray-700 transition-colors"
-                >
-                  <Sliders className="w-4 h-4" />
-                </motion.button>
-                <motion.button
-                  type="button"
-                  whileTap={{ scale: 0.88 }}
-                  onClick={() => onOpenAiChat('选课时应该考虑哪些因素？')}
-                  title="快捷提问"
-                  className="p-1.5 rounded-full hover:bg-gray-100 hover:text-gray-700 transition-colors"
-                >
-                  <Volume2 className="w-4 h-4" />
-                </motion.button>
-                <motion.button
-                  type="submit"
-                  whileTap={{ scale: 0.9 }}
-                  whileHover={{ scale: 1.05 }}
-                  className="p-1.5 rounded-full bg-indigo-600 text-white shadow-xs"
-                >
-                  <Search className="w-4 h-4" />
-                </motion.button>
-              </div>
-            </div>
-          </form>
-
-          {/* Quick prompt suggestions chips underneath */}
-          <div className="flex flex-wrap gap-1.5 pt-2.5 mt-2 border-t border-gray-50">
-            <motion.button
-              whileTap={{ scale: 0.93 }}
-              onClick={() => handleQuickPromptClick('如何制定高数复习计划？', 'ai')}
-              className="text-2xs px-2.5 py-1 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-600 text-gray-600 rounded-full transition-colors"
-            >
-              高数复习怎么安排？
-            </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.93 }}
-              onClick={() => handleQuickPromptClick('高等数学 (I)', 'recommend')}
-              className="text-2xs px-2.5 py-1 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-600 text-gray-600 rounded-full transition-colors"
-            >
-              高数偏好推荐
-            </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.93 }}
-              onClick={() => handleQuickPromptClick('不点名', 'search')}
-              className="text-2xs px-2.5 py-1 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-600 text-gray-600 rounded-full transition-colors"
-            >
-              从不点名神仙老师
-            </motion.button>
-          </div>
-        </div>
-
-        {/* Quick Review Button below search area */}
-        <div className="mt-4 flex justify-center">
+        <div className="mt-5 flex justify-center">
           <motion.button
             type="button"
             id="home-quick-review-btn"
             whileTap={{ scale: 0.94 }}
-            whileHover={{ scale: 1.03 }}
             onClick={onOpenReview}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-full shadow-md shadow-indigo-200/70 hover:shadow-lg hover:shadow-indigo-300/80 transition-all text-xs font-semibold"
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-full shadow-md shadow-indigo-200/70 transition-all text-xs font-semibold"
           >
             <PenLine className="w-3.5 h-3.5" />
             <span>快速评价</span>
@@ -238,11 +91,6 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
             </span>
           </motion.button>
         </div>
-      </div>
-
-      {/* 3. Subtle bottom hint */}
-      <div className="text-2xs text-gray-400 text-center pb-2 select-none">
-        底部点击【服务】进入全校功能中心与专区
       </div>
     </div>
   );

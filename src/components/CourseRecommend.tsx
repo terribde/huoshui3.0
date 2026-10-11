@@ -5,7 +5,7 @@ import { isSupabaseConfigured } from '../lib/supabase';
 import { Pagination, PageFeedback } from './Pagination';
 import { Teacher, RecommendationWeights, College, TeacherWithSections, CourseSection } from '../types';
 import { POPULAR_COURSES } from '../data/mockTeachers';
-import { Sliders, Sparkles, CheckCircle2, ChevronRight, HelpCircle, Star, Award, RotateCcw, Building2, MapPin, Copy, Check, Clock, BookOpen, Calendar, Users, X } from 'lucide-react';
+import { Search, Sliders, Sparkles, CheckCircle2, ChevronRight, HelpCircle, Star, Award, RotateCcw, Building2, MapPin, Copy, Check, Clock, BookOpen, Calendar, Users, X } from 'lucide-react';
 
 const CAMPUS_OPTIONS = [
   { id: 'all', name: '全部校区' },
@@ -46,6 +46,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
   const [selectedCampus, setSelectedCampus] = useState<string>('all');
   const [selectedWeekday, setSelectedWeekday] = useState<string>('all');
   const [preferredClass, setPreferredClass] = useState<string>('');
+  const [teacherNameFilter, setTeacherNameFilter] = useState<string>('');
   const [searchKeyword, setSearchKeyword] = useState<string>('');
   const [hasCalculated, setHasCalculated] = useState<boolean>(true);
   const [timetableResults, setTimetableResults] = useState<TeacherWithSections[]>([]);
@@ -78,6 +79,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
         selectedCollegeId,
         selectedWeekday,
         preferredClass,
+        teacherNameFilter.trim(),
         controller.signal
       )
         .then(items => { if (active) setTimetableResults(items); })
@@ -85,7 +87,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
         .finally(() => { if (active) setLoading(false); });
     }, 250);
     return () => { active = false; clearTimeout(timer); controller.abort(); };
-  }, [courseToMatch, selectedCampus, selectedCollegeId, selectedWeekday, preferredClass, retry]);
+  }, [courseToMatch, selectedCampus, selectedCollegeId, selectedWeekday, preferredClass, teacherNameFilter, retry]);
 
   // Weights (0 to 100) for user preferences
   const [weights, setWeights] = useState<RecommendationWeights>({
@@ -137,7 +139,8 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
             ? (t.campus === '犀浦校区' || t.campus === '西部校区')
             : t.campus === selectedCampus);
 
-        return matchCourse && t.isTeachingThisTerm && matchCollege && matchCampus;
+        const matchTeacherName = !teacherNameFilter.trim() || t.name.toLowerCase().includes(teacherNameFilter.trim().toLowerCase());
+        return matchCourse && t.isTeachingThisTerm && matchCollege && matchCampus && matchTeacherName;
       });
 
       list = filtered.map((t, idx) => {
@@ -198,8 +201,8 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
       if (bVal !== aVal) return bVal - aVal;
       return (b.teacher.reviewCount || 0) - (a.teacher.reviewCount || 0);
     });
-  }, [teachers, timetableResults, selectedCourse, searchKeyword, selectedCollegeId, selectedCampus, selectedWeekday, preferredClass, colleges, weights]);
-  useEffect(() => { setPage(0); }, [weights, selectedCourse, searchKeyword, selectedCollegeId, selectedCampus, selectedWeekday, preferredClass]);
+  }, [teachers, timetableResults, selectedCourse, searchKeyword, selectedCollegeId, selectedCampus, selectedWeekday, preferredClass, teacherNameFilter, colleges, weights]);
+  useEffect(() => { setPage(0); }, [weights, selectedCourse, searchKeyword, selectedCollegeId, selectedCampus, selectedWeekday, preferredClass, teacherNameFilter]);
 
   return (
     <div id="course-recommend-panel" className="max-w-5xl mx-auto space-y-4 sm:space-y-6 pb-20">
@@ -362,6 +365,34 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
             </select>
           </div>
 
+          {/* Teacher Name Filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-500 font-medium flex items-center gap-1">
+              <Search className="w-3.5 h-3.5 text-indigo-500" />
+              老师姓名:
+            </span>
+            <div className="relative flex items-center">
+              <input
+                id="course-recommend-teacher-name-input"
+                type="text"
+                placeholder="输入老师姓名，如: 张"
+                value={teacherNameFilter}
+                onChange={(e) => setTeacherNameFilter(e.target.value)}
+                className="text-xs px-2.5 py-1.5 pr-6 bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-500 text-gray-700 w-32 sm:w-40 transition-all"
+              />
+              {teacherNameFilter && (
+                <button
+                  type="button"
+                  onClick={() => setTeacherNameFilter('')}
+                  className="absolute right-2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                  title="清空老师姓名筛选"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Preferred Class Filter */}
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-gray-500 font-medium flex items-center gap-1">
@@ -390,13 +421,14 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
             </div>
           </div>
 
-          {(selectedCollegeId !== 'all' || selectedCampus !== 'all' || selectedWeekday !== 'all' || Boolean(preferredClass.trim())) && (
+          {(selectedCollegeId !== 'all' || selectedCampus !== 'all' || selectedWeekday !== 'all' || Boolean(preferredClass.trim()) || Boolean(teacherNameFilter.trim())) && (
             <button
               onClick={() => {
                 setSelectedCollegeId('all');
                 setSelectedCampus('all');
                 setSelectedWeekday('all');
                 setPreferredClass('');
+                setTeacherNameFilter('');
               }}
               className="text-2xs text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
             >

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserPointTransaction, Review, Teacher } from '../../types';
-import { Coins, MessageSquare, Info, History, CheckCircle2, ArrowUpRight, Database, LogIn, LogOut, Lock, User, Sparkles, Clock, XCircle, ShieldCheck, AlertCircle, Edit3, Trash2, RotateCw, Star } from 'lucide-react';
-import { isSupabaseConfigured } from '../../lib/supabase';
+import { Coins, MessageSquare, History, CheckCircle2, ArrowUpRight, LogIn, LogOut, Lock, User, Sparkles, Clock, XCircle, ShieldCheck, AlertCircle, Edit3, Trash2, RotateCw, Star } from 'lucide-react';
 import { isRating, RATING_DIMENSIONS } from '../../lib/ratings';
 
 interface MobileUserProfileProps {
@@ -105,12 +104,6 @@ export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
                 <p className="text-2xs text-gray-500">
                   {isLoggedIn ? `${userCampus} · ${currentUser?.email}` : '登录后同步个人积分与评价档案'}
                 </p>
-                {isSupabaseConfigured && (
-                  <span className="inline-flex items-center gap-1 text-3xs font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                    <Database className="w-2.5 h-2.5 text-emerald-600" />
-                    Supabase
-                  </span>
-                )}
               </div>
             </div>
           </div>
@@ -162,6 +155,7 @@ export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
                 <span>{userPoints}</span>
                 <span className="text-xs font-normal text-amber-100">分</span>
               </div>
+              <p className="text-3xs text-amber-100/90 mt-1">写评价通过审核，赠 20 积分</p>
             </div>
 
             <div className="flex items-center gap-2">
@@ -350,7 +344,7 @@ export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
         ) : filteredMyReviews.length === 0 ? (
           <div className="py-6 text-center text-gray-400 text-xs">
             {reviewFilterTab === 'all'
-              ? '您尚未提交过教师评价。写一条评价并通过审核，即可获赠 20 积分！'
+              ? '您尚未提交过教师评价。'
               : `暂无状态为「${
                   reviewFilterTab === 'pending'
                     ? '审核中'
@@ -461,18 +455,6 @@ export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
             })}
           </div>
         )}
-      </div>
-
-      {/* 4. Background Card */}
-      <div className="bg-gray-50/80 p-3.5 rounded-2xl border border-gray-100 text-2xs text-gray-500 space-y-1.5">
-        <div className="flex items-center gap-1.5 font-bold text-gray-700">
-          <Info className="w-3.5 h-3.5 text-indigo-600" />
-          <span>西南交大教师评价翻新说明</span>
-        </div>
-        <p className="leading-relaxed">
-          原公益打分网站自 2024 年起停更两年。本项目定位为「西南交通大学专属 Agent」，包含智能选课推荐、AI 自然语言问答、积分激励机制。
-        </p>
-        <p className="text-3xs text-gray-400">核心团队：2人（产品+技术协同）· 草案 v1</p>
       </div>
     </div>
   );

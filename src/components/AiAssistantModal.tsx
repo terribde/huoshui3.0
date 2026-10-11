@@ -8,8 +8,10 @@ type Message = { id: string; role: 'user' | 'assistant'; content: string; note?:
 interface Props {
   isOpen: boolean; userId: string | null; userPoints: number; initialPrompt?: string;
   onClose: () => void; onLogin: () => void; onBalance: (balance: number) => void;
+  /** 嵌入页面（手机端搜索 / AI 合并页）：不使用弹窗外壳，也不显示关闭按钮 */
+  embedded?: boolean;
 }
-export function AiAssistantModal({ isOpen, userId, userPoints, initialPrompt, onClose, onLogin, onBalance }: Props) {
+export function AiAssistantModal({ isOpen, userId, userPoints, initialPrompt, onClose, onLogin, onBalance, embedded = false }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [config, setConfig] = useState<AiConfig | null>(null);
@@ -98,32 +100,21 @@ export function AiAssistantModal({ isOpen, userId, userPoints, initialPrompt, on
     }
   }
   const canSend = Boolean(userId && config?.available && config.cost && userPoints >= config.cost && input.trim() && !busy && !uncertain);
-  return (
-    <AnimatePresence>
-      {isOpen && (
-        <ModalFrame id="ai-assistant-modal" label="交大 AI 助手" onClose={onClose}>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="absolute inset-0 bg-black/50 backdrop-blur-xs"
-            onClick={onClose}
-          />
-          <motion.section
-            id="ai-assistant-content"
-            initial={{ opacity: 0, y: 36, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 28, scale: 0.96 }}
-            transition={{ type: 'spring', damping: 28, stiffness: 350 }}
-            className="modal-panel relative z-10 bg-white w-full max-w-2xl h-[90dvh] sm:h-[82dvh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
-          >
-            <header className="shrink-0 p-4 border-b border-gray-100 flex items-center gap-3 bg-indigo-50/60">
+  const inner = (
+    <>
+            {embedded ? (
+        <header className="shrink-0 px-4 py-2 border-b border-gray-100 flex items-center gap-2 bg-indigo-50/60">
+          <p className="flex-1 min-w-0 text-xs text-gray-500">学习与选课问答 · 暂未接入教师库</p>
+          <button title="清空对话" aria-label="清空对话" disabled={busy || !!uncertain} onClick={() => { setMessages([]); setConversation(newAiId()); setError(''); }} className="p-1.5 text-gray-500 disabled:opacity-30"><Trash2 size={16} /></button>
+        </header>
+      ) : (
+      <header className="shrink-0 p-4 border-b border-gray-100 flex items-center gap-3 bg-indigo-50/60">
         <Bot className="w-9 h-9 p-2 rounded-xl bg-indigo-600 text-white" />
         <div className="flex-1 min-w-0"><h2 className="font-bold text-gray-900">交大 AI 助手</h2><p className="text-xs text-gray-500">学习与选课问答 · 暂未接入教师库</p></div>
         <button title="清空对话" aria-label="清空对话" disabled={busy || !!uncertain} onClick={() => { setMessages([]); setConversation(newAiId()); setError(''); }} className="p-2 text-gray-500 disabled:opacity-30"><Trash2 size={18} /></button>
         <button data-modal-close aria-label="关闭窗口" onClick={onClose} className="p-2 text-gray-500"><X size={20} /></button>
       </header>
+      )}
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
         <motion.div
           initial={{ opacity: 0, y: -6 }}
@@ -342,6 +333,38 @@ export function AiAssistantModal({ isOpen, userId, userPoints, initialPrompt, on
           </>
         )}
       </footer>
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div id="ai-assistant-embedded" className="flex flex-col flex-1 min-h-0 bg-white">
+        {inner}
+      </div>
+    );
+  }
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <ModalFrame id="ai-assistant-modal" label="交大 AI 助手" onClose={onClose}>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="absolute inset-0 bg-black/50 backdrop-blur-xs"
+            onClick={onClose}
+          />
+          <motion.section
+            id="ai-assistant-content"
+            initial={{ opacity: 0, y: 36, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 28, scale: 0.96 }}
+            transition={{ type: 'spring', damping: 28, stiffness: 350 }}
+            className="modal-panel relative z-10 bg-white w-full max-w-2xl h-[90dvh] sm:h-[82dvh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden"
+          >
+            {inner}
           </motion.section>
         </ModalFrame>
       )}
