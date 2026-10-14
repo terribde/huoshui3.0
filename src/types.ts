@@ -181,3 +181,21 @@ export interface TeacherWithSections {
   sections: CourseSection[];
 }
 
+
+export interface Notice {
+  id: number;
+  url: string;
+  title: string;
+  /** YYYY-MM-DD */
+  publishedOn: string;
+  /** 教务网分类代码，如 jxyx、jsfz */
+  categories: string[];
+}
+
+export interface NoticeQuery {
+  query?: string;
+  /** 'all' 或 NOTICE_CATEGORIES 中的代码 */
+  category?: string;
+  page?: number;
+  pageSize?: number;
+}

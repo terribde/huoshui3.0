@@ -1,6 +1,7 @@
 import express from 'express';
 import { pagination, teacherOptions, teacherPage, reviewPage } from './data.mjs';
 import { timetableOptions, timetableRecommendations } from './timetable.mjs';
+import { noticeOptions, createNoticeReader } from './notices.mjs';
 
 const asyncRoute = fn => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
 const httpError = (status, message) => Object.assign(new Error(message), { status });
@@ -17,6 +18,7 @@ function check(result) {
 
 export function createApp({ cache, authClient, userClient, logger = console }) {
   const app = express();
+  const readNotices = createNoticeReader(authClient);
   app.disable('x-powered-by');
   app.use(express.json({ limit: '32kb' }));
   app.use((req, _res, next) => { req.body ||= {}; next(); });
@@ -57,6 +59,14 @@ export function createApp({ cache, authClient, userClient, logger = console }) {
     catch (error) { throw httpError(400, error.message); }
     const result = await cache.reviews(teacherId);
     res.set('X-Cache', result.cache).json({ data: reviewPage(result.rows, options) });
+  }));
+
+  app.get('/api/notices', asyncRoute(async (req, res) => {
+    let options;
+    try { options = noticeOptions(req.query); }
+    catch (error) { throw httpError(400, error.message); }
+    const result = await readNotices(options);
+    res.set('X-Cache', result.cache).json({ data: result.data });
   }));
 
   // Express 4 does not automatically forward rejected promises from async middleware.

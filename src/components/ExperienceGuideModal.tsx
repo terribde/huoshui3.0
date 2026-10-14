@@ -2,6 +2,7 @@ import { ModalFrame } from './ModalFrame';
 import React, { useState } from 'react';
 import { X, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
+import { NoticesPanel } from './NoticesPanel';
 
 interface ExperienceGuideModalProps {
   isOpen: boolean;
@@ -75,22 +76,9 @@ export const ExperienceGuideModal: React.FC<ExperienceGuideModalProps> = ({
             }`}
           >
             教务网公开通知
-            {activeTab === 'notices' && (
-              <motion.div 
-                layoutId="guideTabLine"
-                className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full" 
-              />
-            )}
-          </button>
+            {activeTab === 'notices' && <NoticesPanel />}
 
-          <button
-            onClick={() => setActiveTab('history')}
-            className={`pb-2.5 text-xs sm:text-sm font-semibold transition-colors relative cursor-pointer ${
-              activeTab === 'history' ? 'text-indigo-600' : 'text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            历史数据迁移说明
-            {activeTab === 'history' && (
+          {activeTab === 'history' && (
               <motion.div 
                 layoutId="guideTabLine"
                 className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full" 
