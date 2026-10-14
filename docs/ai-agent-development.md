@@ -15,7 +15,7 @@
 ```mermaid
 graph TD
     UI["React 聊天框"] --> Client["aiService / Bearer Token"]
-    Client --> Nginx["nginx :6099 /api/ai/"]
+    Client --> Nginx["nginx :80 / :443 /api/ai/"]
     Nginx --> Web["Node :3002 / web.mjs"]
     Web --> Auth["Supabase Auth：验证用户"]
     Web --> Billing["SupabaseBilling：预扣、结算、退款"]
@@ -186,7 +186,7 @@ Redis 限流跨进程共享，数据库也拒绝同账号多个 pending；全局
 | 项目 | 值 |
 | --- | --- |
 | 服务器 | `47.108.145.230`，SSH 22 |
-| 网站 | `http://47.108.145.230:6099/` |
+| 网站 | `http://47.108.145.230/`（80 端口）；正式域名 `https://huoshui3.top/` |
 | AI 目录 | `/opt/swjtu-ai`（对应仓库 `server/ai` 内容） |
 | Node | 部署验证时为 22.22.2 |
 | systemd | `swjtu-ai.service`，运行用户 `swjtu-ai` |
@@ -209,7 +209,7 @@ journalctl -u swjtu-ai -n 50 --no-pager
 
 代码和依赖应允许服务账号读取；环境文件保持 600，由 systemd 读取。更新单元文件后先执行 `systemctl daemon-reload`。现有发布约定为原地更新，不建立版本备份目录，Git 由用户自行提交。
 
-nginx 模板见 [`server/ai/nginx-ai.conf`](../server/ai/nginx-ai.conf)，应放入现有监听 6099 的 `server` 块，保留其他 API 路由。模板使用 `location ^~ /api/ai/`，转发至 3002，关闭缓冲、缓存和 gzip，读取超时 150 秒。现有站点配置文件的绝对路径未在仓库模板中固定，修改前使用 `nginx -T` 确认实际加载位置。
+nginx 模板见 [`server/ai/nginx-ai.conf`](../server/ai/nginx-ai.conf)，应放入现有监听 80 的站点 `server` 块；正式域名的同一站点配置还监听 HTTPS 443，保留其他 API 路由。模板使用 `location ^~ /api/ai/`，转发至 3002，关闭缓冲、缓存和 gzip，读取超时 150 秒。现有站点配置文件的绝对路径未在仓库模板中固定，修改前使用 `nginx -T` 确认实际加载位置。
 
 ```bash
 nginx -t

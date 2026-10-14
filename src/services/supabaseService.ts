@@ -710,13 +710,13 @@ export const supabaseService = {
 
   async getMyLikedReviewIds(): Promise<string[]> {
     if (!isSupabaseConfigured || !supabase) return [];
-    const { data: auth, error: authError } = await supabase.auth.getUser();
-    if (authError || !auth.user) return [];
+    const { data: auth, error: authError } = await supabase.auth.getSession();
+    if (authError || !auth.session?.user) return [];
     const ids: string[] = [];
     const pageSize = 500;
     for (let offset = 0; ; offset += pageSize) {
       const { data, error } = await supabase.from('review_likes').select('review_id')
-        .eq('user_id', auth.user.id).order('review_id').range(offset, offset + pageSize - 1);
+        .eq('user_id', auth.session.user.id).order('review_id').range(offset, offset + pageSize - 1);
       if (error) throw new Error('点赞状态读取失败，请刷新后重试');
       ids.push(...(data || []).map(row => row.review_id));
       if (!data || data.length < pageSize) return ids;
@@ -913,8 +913,10 @@ export const supabaseService = {
     points: number; transactions: UserPointTransaction[]; hasCheckedInToday: boolean;
   }> {
     if (!isSupabaseConfigured || !supabase) throw new Error('数据库未连接，无法确认积分');
-    const { data: auth, error: authError } = await supabase.auth.getUser();
-    if (authError || !auth.user || auth.user.id !== userId) throw new Error('请重新登录后查看积分');
+    // getSession refreshes expired tokens locally; the following RLS-protected
+    // reads verify the token on the server. Avoid an extra serial /auth/v1/user.
+    const { data: auth, error: authError } = await supabase.auth.getSession();
+    if (authError || !auth.session?.user || auth.session.user.id !== userId) throw new Error('请重新登录后查看积分');
     // No cached balance may override a successful authoritative read, including zero.
     const [userRes, txRes] = await Promise.all([
       supabase.from('user_profiles').select('points, last_checkin_date').eq('id', userId).maybeSingle(),
@@ -1104,18 +1106,31 @@ export const supabaseService = {
   /**
    * Check whether a user email is an authorized administrator dynamically from Supabase database
    */
-  async checkIsAdmin(_email?: string, _userMetadata?: any): Promise<{ isAdmin: boolean; role?: string; nickname?: string }> {
-    if (!isSupabaseConfigured || !supabase) return { isAdmin: false };
-    try {
-      // The server derives identity from auth.uid(), never from a supplied email or role.
-      const { data, error } = await supabase.rpc('get_my_admin_status');
-      if (error || data?.is_admin !== true || !['super_admin', 'admin', 'moderator'].includes(data.role)) {
-        return { isAdmin: false };
+  async checkIsAdmin(_email?: string, _userMetadata?: any): Promise<{ isAdmin: boolean; role?: string; nickname?: string; error?: string }> {
+    if (!isSupabaseConfigured || !supabase) return { isAdmin: false, error: '登录服务尚未配置。' };
+    // A failed request is an unknown permission state, not a server denial.
+    // Retry a transient read once; neither errors nor editable metadata grant access.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const { data, error, status } = await supabase.rpc('get_my_admin_status')
+          .abortSignal(AbortSignal.timeout(12000));
+        if (error) {
+          if (status === 401 || error.code === 'PGRST301' || error.code === 'PGRST303') {
+            return { isAdmin: false, error: '登录状态已过期，请退出后重新登录。' };
+          }
+          if (attempt === 0 && (!error.code || status >= 500)) continue;
+          return { isAdmin: false, error: '管理员权限校验失败，请检查网络后重试。' };
+        }
+        if (data?.is_admin === false) return { isAdmin: false };
+        if (data?.is_admin === true && ['super_admin', 'admin', 'moderator'].includes(data.role)) {
+          return { isAdmin: true, role: data.role, nickname: data.nickname || undefined };
+        }
+        return { isAdmin: false, error: '管理员权限服务返回异常，请稍后重试。' };
+      } catch {
+        if (attempt === 0) continue;
       }
-      return { isAdmin: true, role: data.role, nickname: data.nickname || undefined };
-    } catch {
-      return { isAdmin: false };
     }
+    return { isAdmin: false, error: '管理员权限校验超时或连接失败，请检查网络后重试。' };
   },
 
   /**

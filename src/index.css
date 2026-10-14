@@ -36,6 +36,17 @@
   }
 }
 
+/*
+ * iOS Safari zooms the whole page when a focused input/textarea/select has a computed
+ * font-size below 16px (text-xs / text-sm), and does not always zoom back out. On phones
+ * every form control is therefore kept at 16px. This rule is unlayered, so it wins over
+ * Tailwind's text-* utilities.
+ */
+@media (max-width: 767px) {
+  input, textarea, select { font-size: 16px; }
+}
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
 /* Prevent scrollbar layout shift and sudden scrollbar flash during transitions */
 html {
   scrollbar-gutter: stable;

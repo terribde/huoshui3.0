@@ -1,5 +1,6 @@
 import { formatRating } from '../../lib/ratings';
 import React, { useState } from 'react';
+import { SiteNoticeBanner } from '../AgentNoticeModal';
 import { Teacher } from '../../types';
 import { 
   Search, 
@@ -21,6 +22,7 @@ import {
 } from 'lucide-react';
 
 interface DesktopQuarkHomeProps {
+  onOpenNotice?: () => void;
   currentUser?: any | null;
   onOpenAuth?: (mode?: 'login' | 'register') => void;
   teachers: Teacher[];
@@ -36,6 +38,7 @@ interface DesktopQuarkHomeProps {
 }
 
 export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
+  onOpenNotice,
   currentUser,
   onOpenAuth,
   teachers,
@@ -98,11 +101,13 @@ export const DesktopQuarkHome: React.FC<DesktopQuarkHomeProps> = ({
           </span>
         </div>
         <p className="text-sm text-gray-500 mt-2 tracking-wide text-center">
-          西南交通大学专属教师评价 · 校园智能助手 · 六维打分 · 选课偏好推荐
+          交大校园智能助手 · 六维打分 · 选课偏好推荐
         </p>
       </div>
 
       {/* 3. Center Search Card (Desktop Quark Input) */}
+      {onOpenNotice && <div className="w-full max-w-3xl mb-4"><SiteNoticeBanner onOpen={onOpenNotice} /></div>}
+
       <div className="w-full max-w-3xl bg-white rounded-3xl border border-gray-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.06)] p-5 mb-8 transition-all hover:shadow-[0_10px_35px_rgb(0,0,0,0.09)]">
         <form onSubmit={handleInputSubmit} className="space-y-3.5">
           <div className="relative">

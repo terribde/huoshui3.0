@@ -12,9 +12,9 @@ import { isSupabaseConfigured } from './lib/supabase';
 // Mobile Dedicated Views (Clean, pure Quark layout matching reference image)
 import { MobileQuarkHome } from './components/mobile/MobileQuarkHome';
 import { MobileSearchHub, HubMode } from './components/mobile/MobileSearchHub';
+import { MobileHotTeachers } from './components/mobile/MobileHotTeachers';
 import { MobileUserProfile } from './components/mobile/MobileUserProfile';
 import { MobileTeacherSearch } from './components/mobile/MobileTeacherSearch';
-import { MobileServicesView } from './components/mobile/MobileServicesView';
 import { BottomNav, NavTab } from './components/BottomNav';
 
 // Desktop Dedicated Views (Spacious 2-column wide screen layout)
@@ -24,10 +24,10 @@ import { DesktopTeacherSearch } from './components/desktop/DesktopTeacherSearch'
 
 // Shared Functional Components
 import { CourseRecommend } from './components/CourseRecommend';
+import { AgentNoticeModal } from './components/AgentNoticeModal';
 import { clearPagedQueryCache } from './hooks/usePagedQuery';
 
-// Modals are only mounted when the user opens them, so load them on demand
-// instead of shipping every dialog in the entry bundle.
+// Keep the startup announcement available immediately; load other dialogs on demand.
 const TeacherDetailModal = lazy(() => import('./components/TeacherDetailModal').then(m => ({ default: m.TeacherDetailModal })));
 const AiAssistantModal = lazy(() => import('./components/AiAssistantModal').then(m => ({ default: m.AiAssistantModal })));
 const ReviewModal = lazy(() => import('./components/ReviewModal').then(m => ({ default: m.ReviewModal })));
@@ -99,13 +99,16 @@ export default function App() {
   const [initialTeacherSearch, setInitialTeacherSearch] = useState<string>('');
 
   // Modals state
+  const [isSiteNoticeOpen, setIsSiteNoticeOpen] = useState(true);
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
+  const openTeacher = (teacher: Teacher) => setSelectedTeacher(teacher);
   const [isAiModalOpen, setIsAiModalOpen] = useState<boolean>(false);
   const [hasOpenedAi, setHasOpenedAi] = useState(false);
   useEffect(() => { if (isAiModalOpen) setHasOpenedAi(true); }, [isAiModalOpen]);
   const [aiInitialPrompt, setAiInitialPrompt] = useState<string>('');
   // 手机端：搜索 / AI 问答合并页
   const [mobileHubOpen, setMobileHubOpen] = useState<boolean>(false);
+  const [hotTeachersOpen, setHotTeachersOpen] = useState<boolean>(false);
   const [mobileHubMode, setMobileHubMode] = useState<HubMode>('search');
   const openMobileHub = (mode: HubMode, prompt?: string) => {
     if (mode === 'ai') setAiInitialPrompt(prompt || '');
@@ -120,6 +123,7 @@ export default function App() {
   const [experienceTab, setExperienceTab] = useState<'guides' | 'notices' | 'history'>('guides');
   const [isAdminAuditModalOpen, setIsAdminAuditModalOpen] = useState<boolean>(false);
   const [isUserAdmin, setIsUserAdmin] = useState<boolean>(false);
+  const [adminCheckError, setAdminCheckError] = useState('');
   const [reviewRevision, setReviewRevision] = useState(0);
   const [pendingReviewCount, setPendingReviewCount] = useState(0);
   useEffect(() => {
@@ -177,11 +181,16 @@ export default function App() {
 
   const currentUserIdRef = useRef<string | null>(null);
   const pointsRequestRef = useRef(0);
+  const pointsLoadRef = useRef<{ userId: string; rerun: boolean; promise: Promise<void> } | null>(null);
   const applyCurrentUser = useCallback((user: any | null) => {
     const nextId = user?.id || null;
     if (currentUserIdRef.current !== nextId) {
       currentUserIdRef.current = nextId;
+      setIsUserAdmin(false);
+      setAdminCheckError('');
+      setIsAdminAuditModalOpen(false);
       pointsRequestRef.current++;
+      pointsLoadRef.current = null;
       setUserPoints(0);
       setTransactions([]);
       setHasCheckedInToday(false);
@@ -189,28 +198,44 @@ export default function App() {
     setCurrentUser(user);
   }, []);
 
-  const loadUserPointsData = useCallback(async (userId: string) => {
-    const request = ++pointsRequestRef.current;
-    setIsCheckinStatusLoading(true);
-    try {
-      const pointData = await supabaseService.getUserPoints(userId);
-      if (pointData && request === pointsRequestRef.current && currentUserIdRef.current === userId) {
-        setUserPoints(pointData.points);
-        setTransactions(pointData.transactions);
-        if (typeof pointData.hasCheckedInToday === 'boolean') {
-          setHasCheckedInToday(pointData.hasCheckedInToday);
-        }
-      }
-    } catch (err) {
-      if (request === pointsRequestRef.current && currentUserIdRef.current === userId) {
-        setUserPoints(0);
-        setTransactions([]);
-        setHasCheckedInToday(false);
-      }
-      console.warn('Failed to load user points data:', err);
-    } finally {
-      if (request === pointsRequestRef.current) setIsCheckinStatusLoading(false);
+  const loadUserPointsData = useCallback((userId: string, force = true): Promise<void> => {
+    const pending = pointsLoadRef.current;
+    if (pending?.userId === userId) {
+      // A completed mutation needs a new read after any older request finishes.
+      if (force) pending.rerun = true;
+      return pending.promise;
     }
+    const entry = { userId, rerun: false, promise: Promise.resolve() };
+    pointsLoadRef.current = entry;
+    entry.promise = (async () => {
+      do {
+        entry.rerun = false;
+        const request = ++pointsRequestRef.current;
+        setIsCheckinStatusLoading(true);
+        try {
+          const pointData = await supabaseService.getUserPoints(userId);
+          if (pointData && !entry.rerun && request === pointsRequestRef.current && currentUserIdRef.current === userId) {
+            setUserPoints(pointData.points);
+            setTransactions(pointData.transactions);
+            if (typeof pointData.hasCheckedInToday === 'boolean') {
+              setHasCheckedInToday(pointData.hasCheckedInToday);
+            }
+          }
+        } catch (err) {
+          if (request === pointsRequestRef.current && currentUserIdRef.current === userId) {
+            setUserPoints(0);
+            setTransactions([]);
+            setHasCheckedInToday(false);
+          }
+          console.warn('Failed to load user points data:', err);
+        } finally {
+          if (request === pointsRequestRef.current && !entry.rerun) setIsCheckinStatusLoading(false);
+        }
+      } while (entry.rerun && pointsLoadRef.current === entry && currentUserIdRef.current === userId);
+    })().finally(() => {
+      if (pointsLoadRef.current === entry) pointsLoadRef.current = null;
+    });
+    return entry.promise;
   }, []);
 
   // Refresh reviews from Supabase & local cache (remote status always takes precedence)
@@ -263,15 +288,7 @@ export default function App() {
 
     if (!isSupabaseConfigured) return;
 
-    // Only authoritative balances are displayed after session restoration.
-    supabaseService.getCurrentUser().then((user) => {
-      if (user) {
-        applyCurrentUser(user);
-        loadUserPointsData(user.id);
-      }
-    });
-
-    // Subscribe to auth state changes
+    // INITIAL_SESSION restores identity; avoid a second getUser + points load.
     const { data: authListener } = supabaseService.onAuthStateChange((event, session) => {
       const user = session?.user || null;
       if (event === 'SIGNED_OUT') {
@@ -280,10 +297,13 @@ export default function App() {
         setTransactions([]);
         setHasCheckedInToday(false);
       } else if (user) {
+        const identityChanged = currentUserIdRef.current !== user.id;
         applyCurrentUser(user);
         // Leave the Supabase auth callback before starting another auth request.
         setTimeout(() => {
-          if (currentUserIdRef.current === user.id) loadUserPointsData(user.id);
+          if (currentUserIdRef.current === user.id && (identityChanged || event === 'INITIAL_SESSION')) {
+            loadUserPointsData(user.id, false);
+          }
         }, 0);
       }
     });
@@ -291,17 +311,18 @@ export default function App() {
     // Subscribe to real-time reviews changes (e.g. admin approval from another device)
     const reviewsSub = supabaseService.subscribeToReviews(() => {
       handleRefreshReviews();
-      supabaseService.getCurrentUser().then((u) => {
-        if (u) loadUserPointsData(u.id);
-      });
+      const userId = currentUserIdRef.current;
+      if (userId) loadUserPointsData(userId);
     });
 
     // Window focus and visibility listeners for auto background sync
+    let lastActiveSync = 0;
     const handleSyncOnActive = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - lastActiveSync < 1000) return;
+      lastActiveSync = Date.now();
       handleRefreshReviews();
-      supabaseService.getCurrentUser().then((u) => {
-        if (u) loadUserPointsData(u.id);
-      });
+      const userId = currentUserIdRef.current;
+      if (userId) loadUserPointsData(userId, false);
     };
 
     window.addEventListener('focus', handleSyncOnActive);
@@ -325,32 +346,34 @@ export default function App() {
     if (currentTab === 'profile') {
       handleRefreshReviews();
       if (currentUser) {
-        loadUserPointsData(currentUser.id);
+        loadUserPointsData(currentUser.id, false);
       }
     }
-  }, [currentTab, currentUser, handleRefreshReviews, loadUserPointsData]);
+  }, [currentTab, currentUser?.id, handleRefreshReviews, loadUserPointsData]);
 
-  // Verify administrator privilege whenever currentUser changes
+  // Recheck on identity/profile entry changes, not every token refresh. A new
+  // user object for the same session must not unmount an open audit dialog.
   useEffect(() => {
     let isMounted = true;
+    setAdminCheckError('');
     if (!currentUser || !currentUser.email) {
       setIsUserAdmin(false);
       setIsAdminAuditModalOpen(false);
       return;
     }
 
-    setIsUserAdmin(false);
     supabaseService.checkIsAdmin().then((res) => {
       if (isMounted) {
         setIsUserAdmin(res.isAdmin);
-        if (!res.isAdmin) setIsAdminAuditModalOpen(false);
+        setAdminCheckError(res.error || '');
+        if (!res.isAdmin && !res.error) setIsAdminAuditModalOpen(false);
       }
     });
 
     return () => {
       isMounted = false;
     };
-  }, [currentUser]);
+  }, [currentUser?.id, currentUser?.email, currentTab]);
 
   const handleOpenAuth = (mode: 'login' | 'register' = 'login') => {
     setAuthModalMode(mode);
@@ -678,7 +701,13 @@ export default function App() {
           <div className="w-full max-w-[430px] min-h-screen sm:min-h-[92vh] bg-white sm:rounded-3xl sm:shadow-[0_20px_60px_rgba(0,0,0,0.12)] sm:border sm:border-gray-200/80 relative overflow-x-hidden flex flex-col justify-between">
             
             {/* Mobile Tab Views with Smooth Fade Transition */}
-            {mobileHubOpen ? (
+            {hotTeachersOpen ? (
+              <MobileHotTeachers
+                teachers={teachers}
+                onBack={() => setHotTeachersOpen(false)}
+                onSelectTeacher={openTeacher}
+              />
+            ) : mobileHubOpen ? (
               <MobileSearchHub
                 mode={mobileHubMode}
                 onModeChange={setMobileHubMode}
@@ -686,7 +715,7 @@ export default function App() {
                 teachers={teachers}
                 colleges={colleges}
                 initialSearch={initialTeacherSearch}
-                onSelectTeacher={(teacher) => setSelectedTeacher(teacher)}
+                onSelectTeacher={openTeacher}
                 onOpenReview={(teacher) => handleOpenReview(teacher)}
                 userId={currentUser?.id || null}
                 userPoints={userPoints}
@@ -707,13 +736,16 @@ export default function App() {
                 >
                   {currentTab === 'home' && (
                     <MobileQuarkHome
+                      onOpenNotice={() => setIsSiteNoticeOpen(true)}
                       currentUser={currentUser}
                       onOpenAuth={handleOpenAuth}
                       userPoints={userPoints}
-                      onOpenSearchHub={() => {
+                      onOpenSearchHub={(mode) => {
                         setInitialTeacherSearch('');
-                        openMobileHub('search');
+                        openMobileHub(mode);
                       }}
+                      onOpenHotTeachers={() => setHotTeachersOpen(true)}
+                      onOpenRecommend={() => setCurrentTab('recommend')}
                       onOpenPoints={() => {
                         if (!currentUser) {
                           handleOpenAuth('login');
@@ -722,6 +754,10 @@ export default function App() {
                         }
                       }}
                       onOpenReview={() => handleOpenReview()}
+                      onOpenExperienceModal={(tab) => {
+                        setExperienceTab(tab || 'guides');
+                        setIsExperienceModalOpen(true);
+                      }}
                     />
                   )}
 
@@ -730,36 +766,8 @@ export default function App() {
                       teachers={teachers}
                       colleges={colleges}
                       initialSearch={initialTeacherSearch}
-                      onSelectTeacher={(teacher) => setSelectedTeacher(teacher)}
+                      onSelectTeacher={openTeacher}
                       onOpenReview={(teacher) => handleOpenReview(teacher)}
-                    />
-                  )}
-
-                  {currentTab === 'services' && (
-                    <MobileServicesView
-                      teachers={teachers}
-                      userPoints={userPoints}
-                      onOpenSearch={(query) => {
-                        setInitialTeacherSearch(query || '');
-                        setCurrentTab('search');
-                      }}
-                      onOpenRecommend={() => {
-                        setCurrentTab('recommend');
-                      }}
-                      onOpenAiChat={(prompt) => openMobileHub('ai', prompt)}
-                      onOpenReview={(teacher) => handleOpenReview(teacher)}
-                      onOpenPoints={() => {
-                        if (!currentUser) {
-                          handleOpenAuth('login');
-                        } else {
-                          setIsPointsModalOpen(true);
-                        }
-                      }}
-                      onOpenExperienceModal={(tab) => {
-                        setExperienceTab(tab || 'guides');
-                        setIsExperienceModalOpen(true);
-                      }}
-                      onSelectTeacher={(teacher) => setSelectedTeacher(teacher)}
                     />
                   )}
 
@@ -768,9 +776,7 @@ export default function App() {
                       <CourseRecommend
                         teachers={teachers}
                         colleges={colleges}
-                        userPoints={userPoints}
-                        onSelectTeacher={(teacher) => setSelectedTeacher(teacher)}
-                        onDeductPoints={handleDeductPoints}
+                        onSelectTeacher={openTeacher}
                       />
                     </div>
                   )}
@@ -794,10 +800,11 @@ export default function App() {
                         }
                       }}
                       onOpenReview={() => handleOpenReview()}
-                      onSelectTeacher={(teacher) => setSelectedTeacher(teacher)}
+                      onSelectTeacher={openTeacher}
                       myReviews={myReviews}
                       teachers={teachers}
-                      onOpenAdminAudit={isUserAdmin ? () => setIsAdminAuditModalOpen(true) : undefined}
+                      onOpenAdminAudit={isUserAdmin || adminCheckError ? () => setIsAdminAuditModalOpen(true) : undefined}
+                      adminCheckError={adminCheckError}
                       onDeleteReview={handleDeleteReview}
                       onRefreshReviews={handleRefreshReviews}
                       isUserAdmin={isUserAdmin}
@@ -811,7 +818,7 @@ export default function App() {
             {/* Quark Mobile Bottom Navigation Dock */}
             <BottomNav
               currentTab={currentTab}
-              onTabChange={(tab) => { setMobileHubOpen(false); setCurrentTab(tab); }}
+              onTabChange={(tab) => { setMobileHubOpen(false); setHotTeachersOpen(false); setCurrentTab(tab); }}
               userPoints={userPoints}
             />
           </div>
@@ -1001,6 +1008,7 @@ export default function App() {
               >
                 {currentTab === 'home' && (
                   <DesktopQuarkHome
+                    onOpenNotice={() => setIsSiteNoticeOpen(true)}
                     teacherTotal={teacherTotal}
                     currentUser={currentUser}
                     onOpenAuth={handleOpenAuth}
@@ -1029,7 +1037,7 @@ export default function App() {
                       setExperienceTab(tab || 'guides');
                       setIsExperienceModalOpen(true);
                     }}
-                    onSelectTeacher={(teacher) => setSelectedTeacher(teacher)}
+                    onSelectTeacher={openTeacher}
                   />
                 )}
 
@@ -1039,7 +1047,7 @@ export default function App() {
                       teachers={teachers}
                       colleges={colleges}
                       initialSearch={initialTeacherSearch}
-                      onSelectTeacher={(teacher) => setSelectedTeacher(teacher)}
+                      onSelectTeacher={openTeacher}
                       onOpenReview={(teacher) => handleOpenReview(teacher)}
                     />
                   </div>
@@ -1050,9 +1058,7 @@ export default function App() {
                     <CourseRecommend
                       teachers={teachers}
                       colleges={colleges}
-                      userPoints={userPoints}
-                      onSelectTeacher={(teacher) => setSelectedTeacher(teacher)}
-                      onDeductPoints={handleDeductPoints}
+                      onSelectTeacher={openTeacher}
                     />
                   </div>
                 )}
@@ -1076,10 +1082,11 @@ export default function App() {
                       }
                     }}
                     onOpenReview={() => handleOpenReview()}
-                    onSelectTeacher={(teacher) => setSelectedTeacher(teacher)}
+                    onSelectTeacher={openTeacher}
                     myReviews={myReviews}
                     teachers={teachers}
-                    onOpenAdminAudit={isUserAdmin ? () => setIsAdminAuditModalOpen(true) : undefined}
+                    onOpenAdminAudit={isUserAdmin || adminCheckError ? () => setIsAdminAuditModalOpen(true) : undefined}
+                    adminCheckError={adminCheckError}
                     onDeleteReview={handleDeleteReview}
                     onRefreshReviews={handleRefreshReviews}
                     isUserAdmin={isUserAdmin}
@@ -1178,6 +1185,19 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {isSiteNoticeOpen && (
+          <AgentNoticeModal
+            isOpen={isSiteNoticeOpen}
+            onClose={() => setIsSiteNoticeOpen(false)}
+            onRegister={currentUser ? undefined : () => {
+              setIsSiteNoticeOpen(false);
+              handleOpenAuth('register');
+            }}
+          />
+        )}
+      </AnimatePresence>
+
       {/* 7. Supabase 用户认证 Modal (登录 / 注册) */}
       <AnimatePresence>
         {isAuthModalOpen && (
@@ -1186,9 +1206,10 @@ export default function App() {
             isOpen={isAuthModalOpen}
             onClose={() => setIsAuthModalOpen(false)}
             initialMode={authModalMode}
+            colleges={colleges}
             onAuthSuccess={(user) => {
               applyCurrentUser(user);
-              loadUserPointsData(user.id);
+              loadUserPointsData(user.id, false);
               setIsAuthModalOpen(false);
             }}
           />
@@ -1198,7 +1219,7 @@ export default function App() {
 
       {/* 8. 管理员审核后台工作台 Modal */}
       <AnimatePresence>
-        {isAdminAuditModalOpen && isUserAdmin && (
+        {isAdminAuditModalOpen && currentUser && (
           <Suspense fallback={<LazyFallback />}>
           <AdminAuditModal
             isOpen={isAdminAuditModalOpen}

@@ -17,12 +17,14 @@ import {
 } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 import { SWJTU_COLLEGES } from '../data/mockTeachers';
+import type { College } from '../types';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAuthSuccess?: (user: any, isNewRegistration?: boolean) => void;
   initialMode?: 'login' | 'register';
+  colleges?: College[];
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -30,6 +32,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   onAuthSuccess,
   initialMode = 'login',
+  colleges,
 }) => {
   const [mode, setMode] = useState<'login' | 'register' | 'forgot'>(initialMode);
   
@@ -38,7 +41,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [nickname, setNickname] = useState('');
-  const [college, setCollege] = useState(SWJTU_COLLEGES[0] || '计算机与人工智能学院');
+  const [college, setCollege] = useState('');
   const [campus, setCampus] = useState<'犀浦校区' | '九里校区'>('犀浦校区');
 
   // Status
@@ -48,6 +51,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  const collegeOptions = [...new Set(
+    (colleges?.length ? colleges.map((c) => c.name) : SWJTU_COLLEGES)
+      .map((name) => name.trim())
+      .filter((name) => name && name !== '全部学院' && name !== '课表教师院系待核实')
+  )];
+
   if (!isOpen) return null;
 
   const resetForm = () => {
@@ -55,6 +64,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setPassword('');
     setConfirmPassword('');
     setNickname('');
+    setCollege('');
     setErrorMsg(null);
     setSuccessMsg(null);
     setCanResendVerification(false);
@@ -132,6 +142,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
 
     if (mode === 'register') {
+      if (!collegeOptions.includes(college)) {
+        setErrorMsg('请选择所属学院');
+        return;
+      }
       if (password !== confirmPassword) {
         setErrorMsg('两次输入的密码不一致');
         return;
@@ -467,16 +481,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 {/* College & Campus Selector */}
                 <div className="grid grid-cols-2 gap-2.5 pt-1">
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                    <label htmlFor="auth-college" className="block text-xs font-semibold text-gray-700 mb-1.5">
                       所属学院
                     </label>
                     <div className="relative">
                       <select
-                        value={college}
+                        id="auth-college"
+                        required
+                        value={collegeOptions.includes(college) ? college : ''}
                         onChange={(e) => setCollege(e.target.value)}
                         className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-2xl text-xs text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500"
                       >
-                        {SWJTU_COLLEGES.map((c) => (
+                        <option value="" disabled>请选择所属学院</option>
+                        {collegeOptions.map((c) => (
                           <option key={c} value={c}>{c}</option>
                         ))}
                       </select>

@@ -15,8 +15,9 @@ function setup({points=37,rpcData=null,rpcError=null,readError=null,configured=t
   const storage=new Map(); const writes=[]; const calls=[]; const queries=[];
   const apiCalls=[];
   const supabase={
-    auth:{getUser:async()=>({data:{user:{id:'student'}},error:null})},
-    rpc:async(name,args)=>{calls.push({name,args});return{data:rpcData,error:rpcError};},
+    auth:{getUser:async()=>({data:{user:{id:'student'}},error:null}),
+      getSession:async()=>({data:{session:{user:{id:'student'}}},error:null})},
+    rpc:(name,args)=>{calls.push({name,args});const response=Promise.resolve({data:rpcData,error:rpcError});response.abortSignal=()=>response;return response;},
     from(table){
       let method='select', start=0, end=999, columns='*', selectOptions={};
       const filters=[],orders=[],patterns=[],ors=[],notFilters=[];
@@ -65,9 +66,9 @@ function setup({points=37,rpcData=null,rpcError=null,readError=null,configured=t
     cacheRequest:async(path,options)=>{apiCalls.push({path,options});if(apiError)throw new Error(apiError);return apiResult;},
     POPULAR_COURSES:[],window:{},
     localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},
-    console:{warn(){},error(){}},setTimeout};
+    console:{warn(){},error(){}},setTimeout,AbortSignal};
   vm.createContext(context);vm.runInContext(ratingsCompiled,context);vm.runInContext(compiled,context);
-  return {service:context.service,writes,calls,queries,apiCalls};
+  return {service:context.service,supabase,writes,calls,queries,apiCalls};
 }
 
 test('enabled cache API serves teacher and public review pages while personal and moderation queries stay private',async()=>{
@@ -89,6 +90,21 @@ test('smart course recommendations use the cache API and preserve genuine empty 
   const failed=setup({cacheEnabled:true,apiError:'offline'});
   await assert.rejects(failed.service.getTimetableCourseRecommendations('数学'),/offline/);
   assert.equal(failed.queries.length,0);
+});
+
+test('smart course teacher-name filters reach the cache API with the other filters and cancellation signal',async()=>{
+  const f=setup({cacheEnabled:true,apiResult:[]});
+  const controller=new AbortController();
+  await f.service.getTimetableCourseRecommendations('高等数学','西部校区','college','1','计算机','  张  ',controller.signal);
+  const params=new URLSearchParams(f.apiCalls[0].path.split('?')[1]);
+  assert.equal(params.get('teacherName'),'张');
+  assert.equal(params.get('query'),'高等数学');
+  assert.equal(params.get('campus'),'犀浦校区');
+  assert.equal(params.get('collegeId'),'college');
+  assert.equal(params.get('weekday'),'1');
+  assert.equal(params.get('preferred'),'计算机');
+  assert.equal(f.apiCalls[0].options.signal,controller.signal);
+  assert.equal(f.queries.length,0);
 });
 
 test('direct timetable reads isolate the current term and load all capped pages and teacher batches',async()=>{
@@ -150,6 +166,16 @@ test('read failure does not report cached or invented welcome points as authorit
   service.saveLocalUserPoints('student',100,[]);
   await assert.rejects(service.getUserPoints('student'),/read denied/);
 });
+test('points and likes read with the session token without a serial auth network lookup',async()=>{
+  const f=setup({points:42});
+  f.supabase.auth.getUser=async()=>{throw new Error('Redundant auth round trip');};
+  assert.equal((await f.service.getUserPoints('student')).points,42);
+  await f.service.getMyLikedReviewIds();
+  await assert.rejects(f.service.getUserPoints('another-user'),/重新登录/);
+  assert.equal(f.queries.filter(q=>q.table==='user_profiles').length,1);
+  f.supabase.auth.getSession=async()=>({data:{session:null},error:null});
+  await assert.rejects(f.service.getUserPoints('student'),/重新登录/);
+});
 test('failed or malformed spend RPC never falls back to direct writes or local success',async()=>{
   for(const response of [{rpcError:{message:'permission denied'}},{rpcError:{message:'timeout'}},{rpcData:null},{rpcData:'98'}]) {
     const {service,writes}=setup(response);service.saveLocalUserPoints('student',100,[]);
@@ -195,6 +221,33 @@ test('unconfigured database fails closed for privileged operations',async()=>{
   assert.equal((await service.spendPoints('ai_question')).success,false);
   assert.equal((await service.approveReview('review')).success,false);
   assert.equal((await service.checkIsAdmin('admin@example.test')).isAdmin,false);
+});
+
+test('transient admin RPC failure retries and recovers without granting access from metadata',async()=>{
+  const f=setup();let attempts=0;
+  f.supabase.rpc=()=>({abortSignal(signal){
+    assert.ok(signal instanceof AbortSignal);
+    return Promise.resolve(++attempts===1
+      ? {error:{message:'Failed to fetch'},status:0}
+      : {data:{is_admin:true,role:'super_admin'}});
+  }});
+  assert.equal((await f.service.checkIsAdmin()).isAdmin,true);
+  assert.equal(attempts,2);
+});
+test('admin denial, connection errors, malformed responses and expired sessions stay distinct',async()=>{
+  const denied=setup({rpcData:{is_admin:false}});
+  assert.equal((await denied.service.checkIsAdmin()).error,undefined);
+  assert.equal(denied.calls.length,1);
+  const offline=setup({rpcError:{message:'Failed to fetch'}});
+  const failed=await offline.service.checkIsAdmin('owner@example.test',{role:'super_admin'});
+  assert.equal(failed.isAdmin,false);assert.match(failed.error,/校验失败/);assert.equal(offline.calls.length,2);
+  for(const rpcData of [null,{is_admin:true,role:'invalid'}]) {
+    const result=await setup({rpcData}).service.checkIsAdmin();
+    assert.equal(result.isAdmin,false);assert.match(result.error,/返回异常/);
+  }
+  const expired=setup({rpcError:{code:'PGRST301',message:'JWT expired'}});
+  const result=await expired.service.checkIsAdmin();
+  assert.equal(result.isAdmin,false);assert.match(result.error,/重新登录/);assert.equal(expired.calls.length,1);
 });
 
 test('likes use explicit desired state via RPC, never direct count writes',async()=>{

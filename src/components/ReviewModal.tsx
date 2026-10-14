@@ -276,8 +276,6 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
             </motion.div>
             <h4 className="text-xl font-bold text-gray-900">评价已提交审核！</h4>
             <p className="text-xs text-gray-500 max-w-sm leading-relaxed">
-              根据评教规范，评价正进入学工/学生审核组复核流程（预计24小时内公示）。
-              <br />
               <strong>审核通过后将自动计入教师主页，并即时发放 <span className="text-amber-600 font-bold">+20 积分</span> 奖励！</strong>
             </p>
             <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-semibold border border-amber-200">

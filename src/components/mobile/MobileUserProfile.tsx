@@ -22,6 +22,7 @@ interface MobileUserProfileProps {
   onDeleteReview?: (reviewId: string) => void;
   onRefreshReviews?: () => Promise<void>;
   isUserAdmin?: boolean;
+  adminCheckError?: string;
 }
 
 export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
@@ -43,6 +44,7 @@ export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
   onDeleteReview,
   onRefreshReviews,
   isUserAdmin = false,
+  adminCheckError = '',
 }) => {
   const isLoggedIn = Boolean(currentUser);
   const userNickname = currentUser?.user_metadata?.nickname || '西南交大学子';
@@ -128,6 +130,7 @@ export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
         </div>
 
         {/* Admin Portal Quick Switch */}
+        {adminCheckError && <p role="status" className="text-xs text-amber-700">{adminCheckError} 可打开下方入口重新核验。</p>}
         {onOpenAdminAudit && (
           <button
             onClick={onOpenAdminAudit}
@@ -395,7 +398,7 @@ export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
 
                   {isPending && (
                     <div className="p-2 rounded-xl bg-amber-50 border border-amber-200/80 text-3xs text-amber-800 leading-tight">
-                      <strong>正在复核：</strong>学工/学生审核组复核中，预计24h内公示。+20积分待通过后到账。
+                      <strong>提示：</strong>+20 积分待审核通过后自动到账并记入教师主页。
                     </div>
                   )}
 

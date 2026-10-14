@@ -78,7 +78,7 @@ export const TeacherTermCourses: React.FC<{ teacher: Teacher }> = ({ teacher }) 
         </div>
       )}
 
-      {!loading && !error && sections && sections.length === 0 && (
+      {!loading && !error && (sections?.length === 0 || (!isSupabaseConfigured && fallbackNames.length === 0)) && (
         <p className="py-2 text-xs text-gray-400">本学期暂无该教师的开课信息</p>
       )}
 

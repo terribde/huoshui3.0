@@ -1,8 +1,8 @@
 import React from 'react';
-import { Search, Sliders, User, BookOpen, LayoutGrid } from 'lucide-react';
+import { Search, Sliders, User, BookOpen } from 'lucide-react';
 import { motion } from 'motion/react';
 
-export type NavTab = 'home' | 'search' | 'services' | 'recommend' | 'profile';
+export type NavTab = 'home' | 'search' | 'recommend' | 'profile';
 
 interface BottomNavProps {
   currentTab: NavTab;
@@ -18,7 +18,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   const tabs: { id: NavTab; label: string; icon: React.FC<{ className?: string }> }[] = [
     { id: 'home', label: '首页', icon: BookOpen },
     { id: 'search', label: '教师库', icon: Search },
-    { id: 'services', label: '服务', icon: LayoutGrid },
     { id: 'recommend', label: '智能选课', icon: Sliders },
     { id: 'profile', label: '我的', icon: User },
   ];
@@ -47,10 +46,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             >
               <div className="relative">
                 <IconComponent className={`w-5 h-5 transition-transform duration-200 ${isActive ? 'stroke-[2.2] scale-110 text-indigo-600' : 'stroke-[1.8]'}`} />
-                
-                {tab.id === 'services' && !isActive && (
-                  <span className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse" />
-                )}
               </div>
 
               <span className={`text-3xs transition-colors ${isActive ? 'text-gray-900 font-semibold' : 'text-gray-400'}`}>

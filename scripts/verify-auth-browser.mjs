@@ -1,0 +1,66 @@
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import fs from 'node:fs/promises';
+import { createServer } from 'vite';
+const require = createRequire(import.meta.url);
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'C:/Users/terribde/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+const server = await createServer({ server: { host: '127.0.0.1', port: 0 } });
+await server.listen();
+const browser = await chromium.launch({ executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
+const errors = [];
+try {
+  const page = await browser.newPage({ viewport: { width: 1365, height: 950 } });
+  page.on('pageerror', error => errors.push(error.message));
+  // No real account or data is used.
+  await page.route('**/*.supabase.co/**', route => route.abort());
+  await page.goto(server.resolvedUrls.local[0] + 'tests/ui/auth.html');
+  await page.waitForFunction(() => window.authFixture?.pointsCalls === 1);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '个人中心', exact: true }).click();
+  const profile = page.locator('#desktop-user-profile');
+  await profile.getByText('73', { exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => window.authFixture.currentUserCalls), 0);
+  await page.evaluate(() => { window.authFixture.adminMode = 'error'; });
+  await page.getByRole('button', { name: /评教审核管理后台/ }).click();
+  const dialog = page.getByRole('dialog', { name: '管理员工作台' });
+  await dialog.getByText('管理员权限校验失败，请检查网络后重试。', { exact: false }).waitFor();
+  assert.equal(await dialog.getByText(/当前账号未获得有效管理员授权/).count(), 0);
+  assert.equal(await dialog.getByRole('button', { name: '评教审核', exact: true }).count(), 0);
+  await page.evaluate(() => { window.authFixture.adminMode = 'allowed'; });
+  await dialog.getByRole('button', { name: '重新核验权限' }).click();
+  await dialog.getByRole('button', { name: '评教审核', exact: true }).waitFor();
+  const before = await page.evaluate(() => ({ points: window.authFixture.pointsCalls, admin: window.authFixture.adminCalls }));
+  await page.evaluate(() => { window.authFixture.emit('SIGNED_IN'); window.authFixture.emit('TOKEN_REFRESHED'); });
+  await page.waitForTimeout(150);
+  assert.ok(await dialog.isVisible());
+  assert.deepEqual(await page.evaluate(() => ({ points: window.authFixture.pointsCalls, admin: window.authFixture.adminCalls })), before);
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => { window.authFixture.holdPoints = true; window.dispatchEvent(new Event('focus')); document.dispatchEvent(new Event('visibilitychange')); });
+  await page.waitForFunction(n => window.authFixture.pointsCalls === n + 1, before.points);
+  await page.evaluate(() => { window.authFixture.emit('SIGNED_IN'); window.authFixture.emit('TOKEN_REFRESHED'); });
+  await page.waitForTimeout(150);
+  assert.equal(await page.evaluate(() => window.authFixture.pointsCalls), before.points + 1);
+  // A mutation during an older read queues a fresh balance instead of losing it.
+  await page.evaluate(() => { window.authFixture.balance = 93; window.authFixture.changed(); });
+  await page.evaluate(() => { window.authFixture.holdPoints = false; window.authFixture.release(); });
+  await profile.getByText('93', { exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => window.authFixture.pointsCalls), before.points + 2);
+  await page.evaluate(() => { window.authFixture.adminMode = 'denied'; });
+  await page.getByRole('button', { name: /评教审核管理后台/ }).click();
+  await dialog.getByText(/当前账号未获得有效管理员授权/).waitFor();
+  assert.equal(await dialog.getByRole('button', { name: '评教审核', exact: true }).count(), 0);
+  await page.evaluate(() => window.authFixture.emit('SIGNED_OUT'));
+  await dialog.waitFor({ state: 'hidden' });
+  // Late results from a former account must not overwrite a newly signed-in user.
+  await page.evaluate(() => { window.authFixture.holdPoints = true; window.authFixture.balance = 101; window.authFixture.emit('SIGNED_IN', 'old-user'); });
+  await page.waitForFunction(() => window.authFixture.pending.length === 1);
+  await page.evaluate(() => { window.authFixture.emit('SIGNED_OUT'); window.authFixture.holdPoints = false; window.authFixture.balance = 27; window.authFixture.emit('SIGNED_IN', 'new-user'); });
+  await profile.getByText('27', { exact: true }).waitFor();
+  await page.evaluate(() => window.authFixture.release());
+  await page.waitForTimeout(150);
+  assert.equal(await profile.getByText('27', { exact: true }).count(), 1);
+  await fs.mkdir('temp/auth-check', { recursive: true });
+  assert.deepEqual(errors, []);
+  await fs.writeFile('temp/auth-check/browser-verification.json', JSON.stringify({ success: true, errors, checks: ['permission-error-distinct-from-denial', 'retry-recovers', 'ordinary-user-denied', 'token-refresh-keeps-dialog', 'one-startup-points-read', 'focus-visibility-coalesced', 'no-extra-getUser', 'logout-closes-dialog'] }, null, 2));
+  console.log('Auth browser checks passed: permission error/retry/denial, token refresh, coalesced points, logout.');
+} finally { await browser.close(); await server.close(); }

@@ -22,6 +22,7 @@ interface DesktopUserProfileProps {
   onDeleteReview?: (reviewId: string) => void;
   onRefreshReviews?: () => Promise<void>;
   isUserAdmin?: boolean;
+  adminCheckError?: string;
 }
 
 export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
@@ -43,6 +44,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
   onDeleteReview,
   onRefreshReviews,
   isUserAdmin = false,
+  adminCheckError = '',
 }) => {
   const isLoggedIn = Boolean(currentUser);
   const userNickname = currentUser?.user_metadata?.nickname || '西南交大学子';
@@ -134,6 +136,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
             </div>
 
             {/* Admin Audit Quick Entrance */}
+            {adminCheckError && <p role="status" className="text-xs text-amber-700">{adminCheckError} 可打开下方入口重新核验。</p>}
             {onOpenAdminAudit && (
               <button
                 onClick={onOpenAdminAudit}
@@ -467,10 +470,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                         <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/80 text-2xs text-amber-800 flex items-start gap-2">
                           <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
                           <div>
-                            <strong>正在复核：</strong>正在由交大学工/学生审核组复核，预计24小时内公示。
-                            <span className="block text-amber-700 mt-0.5 font-medium">
-                              提示：+20 积分待审核通过后自动到账并记入教师主页。
-                            </span>
+                            <strong>提示：</strong>+20 积分待审核通过后自动到账并记入教师主页。
                           </div>
                         </div>
                       )}

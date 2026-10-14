@@ -4,8 +4,8 @@ import { supabaseService } from '../services/supabaseService';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { Pagination, PageFeedback } from './Pagination';
 import { Teacher, RecommendationWeights, College, TeacherWithSections, CourseSection } from '../types';
-import { POPULAR_COURSES } from '../data/mockTeachers';
 import { Search, Sliders, Sparkles, CheckCircle2, ChevronRight, HelpCircle, Star, Award, RotateCcw, Building2, MapPin, Copy, Check, Clock, BookOpen, Calendar, Users, X } from 'lucide-react';
+import { RecommendResultSkeleton } from './Skeletons';
 
 const CAMPUS_OPTIONS = [
   { id: 'all', name: '全部校区' },
@@ -29,17 +29,13 @@ const WEEKDAY_OPTIONS = [
 interface CourseRecommendProps {
   teachers: Teacher[];
   colleges?: College[];
-  userPoints: number;
   onSelectTeacher: (teacher: Teacher) => void;
-  onDeductPoints: (amount: number, reason: string, actionCode?: string) => Promise<boolean> | boolean;
 }
 
 export const CourseRecommend: React.FC<CourseRecommendProps> = ({
   teachers,
   colleges,
-  userPoints,
   onSelectTeacher,
-  onDeductPoints,
 }) => {
   const [selectedCourse, setSelectedCourse] = useState<string>('');
   const [selectedCollegeId, setSelectedCollegeId] = useState<string>('all');
@@ -91,22 +87,22 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
 
   // Weights (0 to 100) for user preferences
   const [weights, setWeights] = useState<RecommendationWeights>({
-    attendanceStrictness: 70, // 倾向不点名
-    gradingLeniency: 90,      // 倾向给分大方
-    effortMatters: 60,        // 付出必有回报
-    workloadDifficulty: 40,   // 作业尽量少
-    approachability: 50,      // 老师好沟通
-    teachingQuality: 80       // 讲课干货多
+    attendanceStrictness: 100,
+    gradingLeniency: 100,
+    effortMatters: 100,
+    workloadDifficulty: 100,
+    approachability: 100,
+    teachingQuality: 100
   });
 
   const handleResetWeights = () => {
     setWeights({
-      attendanceStrictness: 60,
-      gradingLeniency: 80,
-      effortMatters: 50,
-      workloadDifficulty: 40,
-      approachability: 60,
-      teachingQuality: 80
+      attendanceStrictness: 100,
+      gradingLeniency: 100,
+      effortMatters: 100,
+      workloadDifficulty: 100,
+      approachability: 100,
+      teachingQuality: 100
     });
   };
 
@@ -234,11 +230,6 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
           <label className="text-xs font-bold text-gray-800 uppercase tracking-wider block">
             第一步：选择或输入想要选的课程名
           </label>
-          {!courseToMatch && (
-            <span className="text-2xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
-              当前展示全校口碑最高教师
-            </span>
-          )}
         </div>
         
         <div className="relative flex gap-2">
@@ -246,13 +237,13 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
             <input
               id="course-recommend-input"
               type="text"
-              placeholder="输入课程名称，如：高等数学、微积分、数据结构... (留空展示口碑最高教师)"
+              placeholder="输入课程名称，如：高等数学"
               value={searchKeyword}
               onChange={(e) => {
                 setSearchKeyword(e.target.value);
                 if (e.target.value) setSelectedCourse('');
               }}
-              className="w-full px-4 py-2.5 pr-8 bg-gray-50 rounded-2xl border border-gray-200 text-sm focus:outline-hidden focus:border-indigo-500 focus:bg-white transition-all"
+              className="w-full h-11 px-4 pr-9 bg-gray-50 rounded-xl border border-gray-200 text-sm focus:outline-hidden focus:border-indigo-500 focus:bg-white transition-all"
             />
             {searchKeyword && (
               <button
@@ -270,171 +261,132 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
           </div>
         </div>
 
-        {/* Hot Course Tags */}
-        <div className="flex flex-wrap items-center gap-2 pt-1">
-          <span className="text-xs text-gray-400 font-medium">热门课程快捷选:</span>
-          {POPULAR_COURSES.map((course) => {
-            const isSelected = (!searchKeyword && selectedCourse === course) || searchKeyword === course;
-            return (
-              <button
-                key={course}
-                type="button"
-                onClick={() => {
-                  if (isSelected) {
-                    setSelectedCourse('');
-                    setSearchKeyword('');
-                  } else {
-                    setSelectedCourse(course);
-                    setSearchKeyword(course);
-                  }
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
-                  isSelected
-                    ? 'bg-indigo-600 text-white shadow-xs font-semibold'
-                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                }`}
-              >
-                {course}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Campus, College, Weekday & Preferred Class Filter */}
-        <div className="pt-3 border-t border-gray-100 flex flex-wrap items-center gap-3">
-          {/* Campus Filter */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-gray-500 font-medium flex items-center gap-1">
-              <MapPin className="w-3.5 h-3.5 text-indigo-500" />
-              校区:
-            </span>
-            <select
-              id="course-recommend-campus-select"
-              value={selectedCampus}
-              onChange={(e) => setSelectedCampus(e.target.value)}
-              className="text-xs px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-500 text-gray-700 cursor-pointer font-medium"
-            >
-              {CAMPUS_OPTIONS.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* College Filter using college_id foreign key */}
+        {/* 筛选区：统一网格，每格 = 名称（上）+ 等宽等高控件（下） */}
+        <div className="pt-3 border-t border-gray-100 grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-3">
+          {/* 开课学院 */}
           {colleges && colleges.length > 0 && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-gray-500 font-medium flex items-center gap-1">
-                <Building2 className="w-3.5 h-3.5 text-indigo-500" />
-                开课学院:
-              </span>
+            <div className="min-w-0">
+              <label htmlFor="course-recommend-college-select" className="mb-1 text-xs text-gray-500 font-medium flex items-center gap-1">
+                <Building2 className="w-3.5 h-3.5 text-indigo-500" />开课学院
+              </label>
               <select
                 id="course-recommend-college-select"
                 value={selectedCollegeId}
                 onChange={(e) => setSelectedCollegeId(e.target.value)}
-                className="text-xs px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-500 text-gray-700 cursor-pointer"
+                className="w-full h-10 px-3 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-500 text-gray-700 cursor-pointer truncate"
               >
-                <option value="all">全部学院 (不限)</option>
+                <option value="all">全部学院</option>
                 {colleges.map((col) => (
-                  <option key={col.id} value={col.id}>
-                    {col.name}
-                  </option>
+                  <option key={col.id} value={col.id}>{col.name}</option>
                 ))}
               </select>
             </div>
           )}
 
-          {/* Weekday Filter */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-gray-500 font-medium flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5 text-indigo-500" />
-              上课日期:
-            </span>
+          {/* 校区 */}
+          <div className="min-w-0">
+            <label htmlFor="course-recommend-campus-select" className="mb-1 text-xs text-gray-500 font-medium flex items-center gap-1">
+              <MapPin className="w-3.5 h-3.5 text-indigo-500" />校区
+            </label>
             <select
-              id="course-recommend-weekday-select"
-              value={selectedWeekday}
-              onChange={(e) => setSelectedWeekday(e.target.value)}
-              className="text-xs px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-500 text-gray-700 cursor-pointer font-medium"
+              id="course-recommend-campus-select"
+              value={selectedCampus}
+              onChange={(e) => setSelectedCampus(e.target.value)}
+              className="w-full h-10 px-3 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-500 text-gray-700 cursor-pointer truncate"
             >
-              {WEEKDAY_OPTIONS.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
+              {CAMPUS_OPTIONS.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
           </div>
 
-          {/* Teacher Name Filter */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-gray-500 font-medium flex items-center gap-1">
-              <Search className="w-3.5 h-3.5 text-indigo-500" />
-              老师姓名:
-            </span>
-            <div className="relative flex items-center">
+          {/* 上课日期 */}
+          <div className="min-w-0">
+            <label htmlFor="course-recommend-weekday-select" className="mb-1 text-xs text-gray-500 font-medium flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-indigo-500" />上课日期
+            </label>
+            <select
+              id="course-recommend-weekday-select"
+              value={selectedWeekday}
+              onChange={(e) => setSelectedWeekday(e.target.value)}
+              className="w-full h-10 px-3 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-500 text-gray-700 cursor-pointer truncate"
+            >
+              {WEEKDAY_OPTIONS.map((w) => (
+                <option key={w.id} value={w.id}>{w.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 老师姓名 */}
+          <div className={`min-w-0 ${colleges && colleges.length > 0 ? '' : 'col-span-2 sm:col-span-1'}`}>
+            <label htmlFor="course-recommend-teacher-name-input" className="mb-1 text-xs text-gray-500 font-medium flex items-center gap-1">
+              <Search className="w-3.5 h-3.5 text-indigo-500" />老师姓名
+            </label>
+            <div className="relative">
               <input
                 id="course-recommend-teacher-name-input"
                 type="text"
-                placeholder="输入老师姓名，如: 张"
+                placeholder="如：张"
                 value={teacherNameFilter}
                 onChange={(e) => setTeacherNameFilter(e.target.value)}
-                className="text-xs px-2.5 py-1.5 pr-6 bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-500 text-gray-700 w-32 sm:w-40 transition-all"
+                className="w-full h-10 pl-3 pr-8 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-500 text-gray-700 transition-all"
               />
               {teacherNameFilter && (
                 <button
                   type="button"
                   onClick={() => setTeacherNameFilter('')}
-                  className="absolute right-2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
                   title="清空老师姓名筛选"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-4 h-4" />
                 </button>
               )}
             </div>
           </div>
 
-          {/* Preferred Class Filter */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-gray-500 font-medium flex items-center gap-1">
-              <Users className="w-3.5 h-3.5 text-indigo-500" />
-              优选班:
-            </span>
-            <div className="relative flex items-center">
+          {/* 优选班：单独占一行 */}
+          <div className="min-w-0 col-span-2">
+            <label htmlFor="course-recommend-preferred-input" className="mb-1 text-xs text-gray-500 font-medium flex items-center gap-1">
+              <Users className="w-3.5 h-3.5 text-indigo-500" />优选班
+            </label>
+            <div className="relative">
               <input
                 id="course-recommend-preferred-input"
                 type="text"
-                placeholder="班级关键字，如: 计算机..."
+                placeholder="班级关键字，如：计算机"
                 value={preferredClass}
                 onChange={(e) => setPreferredClass(e.target.value)}
-                className="text-xs px-2.5 py-1.5 pr-6 bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-500 text-gray-700 w-36 sm:w-44 transition-all"
+                className="w-full h-10 pl-3 pr-8 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-500 text-gray-700 transition-all"
               />
               {preferredClass && (
                 <button
                   type="button"
                   onClick={() => setPreferredClass('')}
-                  className="absolute right-2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
                   title="清空优选班筛选"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-4 h-4" />
                 </button>
               )}
             </div>
           </div>
 
-          {(selectedCollegeId !== 'all' || selectedCampus !== 'all' || selectedWeekday !== 'all' || Boolean(preferredClass.trim()) || Boolean(teacherNameFilter.trim())) && (
-            <button
-              onClick={() => {
-                setSelectedCollegeId('all');
-                setSelectedCampus('all');
-                setSelectedWeekday('all');
-                setPreferredClass('');
-                setTeacherNameFilter('');
-              }}
-              className="text-2xs text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
-            >
-              重置筛选
-            </button>
-          )}
+          {/* 重置筛选：全宽，始终占位，没有可重置内容时置灰 */}
+          <button
+            type="button"
+            disabled={!(selectedCollegeId !== 'all' || selectedCampus !== 'all' || selectedWeekday !== 'all' || Boolean(preferredClass.trim()) || Boolean(teacherNameFilter.trim()))}
+            onClick={() => {
+              setSelectedCollegeId('all');
+              setSelectedCampus('all');
+              setSelectedWeekday('all');
+              setPreferredClass('');
+              setTeacherNameFilter('');
+            }}
+            className="col-span-2 sm:col-span-3 w-full h-10 rounded-xl border text-sm font-medium flex items-center justify-center gap-1.5 transition-colors border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 cursor-pointer disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            重置筛选
+          </button>
         </div>
       </div>
 
@@ -573,6 +525,7 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
         </div>
       </div>
 
+
       {/* Recommendation Results (仅展示排序，候选池为本学期开课老师) */}
       <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
@@ -601,8 +554,9 @@ export const CourseRecommend: React.FC<CourseRecommendProps> = ({
           </span>
         </div>
 
-        <PageFeedback loading={loading} error={error} onRetry={() => setRetry(value => value + 1)} />
-        {loading || error ? null : rankedTeachers.length === 0 ? (
+        {loading ? <RecommendResultSkeleton count={3} /> : error ? (
+          <PageFeedback loading={false} error={error} onRetry={() => setRetry(value => value + 1)} />
+        ) : rankedTeachers.length === 0 ? (
           <div className="py-12 text-center text-gray-400 space-y-2">
             <p className="text-sm font-medium">
               {!courseToMatch ? '当前筛选条件下暂无在教教师数据' : '本学期暂无开设该课程的教师数据'}

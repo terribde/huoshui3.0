@@ -6,7 +6,7 @@ export const RATING_DIMENSIONS: Array<{
 }> = [
   { key: 'attendanceStrictness', label: '考勤宽松度', lowDesc: '每节必点', highDesc: '几乎不点名' },
   { key: 'gradingLeniency', label: '给分宽松度', lowDesc: '给分严格', highDesc: '给分大方' },
-  { key: 'effortMatters', label: '努力回报', lowDesc: '努力回报少', highDesc: '认真投入有回报' },
+  { key: 'effortMatters', label: '努力回报', lowDesc: '摆烂也能过', highDesc: '认真投入有回报' },
   { key: 'workloadDifficulty', label: '作业轻松度', lowDesc: '作业繁重', highDesc: '作业少负担轻' },
   { key: 'approachability', label: '师生亲和力', lowDesc: '难以沟通', highDesc: '友善好沟通' },
   { key: 'teachingQuality', label: '教学质量', lowDesc: '讲解薄弱', highDesc: '清晰扎实' },

@@ -1,262 +1,150 @@
 import React, { useState } from 'react';
-import { ModalFrame } from './ModalFrame';
 import { motion } from 'motion/react';
-import { 
-  X, 
-  Sparkles, 
-  Mail, 
-  Copy, 
-  Check, 
-  Heart, 
-  Code2, 
-  Coffee, 
-  AlertTriangle,
-  ExternalLink,
-  QrCode
-} from 'lucide-react';
+import { X, Megaphone, Gift, Sliders, CalendarDays, Bot, Mail, Copy, Check, Heart, ArrowUpRight } from 'lucide-react';
+import { ModalFrame } from './ModalFrame';
+import { RATING_DIMENSIONS } from '../lib/ratings';
 
-/**
- * ============================================================================
- * 📝 【公告卡片快捷编辑区 / QUICK EDIT CONFIGURATION】
- * ============================================================================
- * 提示：如果需要修改公告文字、版本号、联系邮箱或赞赏二维码，可直接修改下方对象：
- * 文件路径: src/components/AgentNoticeModal.tsx
- * ============================================================================
- */
+// 公告文字、联系邮箱和支持二维码统一在这里维护。
 export const AGENT_NOTICE_CONFIG = {
-  // 当前版本号
-  version: 'pre1.0.1',
-  
-  // 顶部主标题与标签
-  title: 'Agent 智能助手维护公告',
-  badge: '全力更新中',
-  
-  // 公告核心文案
-  noticeTitle: '功能暂时下线维护中',
-  noticeBody: 'agent功能暂时不可用，我们正在全力更新，技术开发只有一个人，并且如果想要参与开发可以联系',
-  
-  // 开发者联系邮箱
+  title: '新版交大活水，和你见面了',
+  intro: '查评价、选课程，希望这里能帮你少走一点弯路。',
+  trafficTitle: '新版没有流量限制',
+  trafficBody: '查老师、看评价、挑课程，按自己的需要慢慢看。',
+  pointsTitle: '注册就送 100 积分',
+  pointsBody: '欢迎先注册一个账号，领取你的新用户积分。',
+  ratingsTitle: '从 3 个评价维度，到 6 个',
+  ratingsBody: '旧站只有 3 个评价维度。新版用 6 个维度记录同学们的感受，选老师时可以看得更全面。',
+  timetableTitle: '本学期课表，也能查了',
+  timetableBody: '在智能选课里查本学期开设的课程，也可以点进老师详情，查看老师的开课安排和上课时间。',
+  aiTitle: 'AI 功能维护中',
+  aiBody: '还在继续调试和完善。之后希望能直接用 AI 查老师评价、了解课程，这部分做好了会再告诉大家。',
+  devNote: '这个网站全部由两个人完成，从制定PRD到开发实现，从页面到功能，都是一步步做出来的。开发不易，你们的支持是我们继续更新的动力。',
+  donationTitle: '支持一下服务器',
+  donationSubtitle: '支持随心，能来使用和提建议，我也很感谢。',
   contactEmail: '2502087135@qq.com',
-  
-  // 补充说明
-  devNote: '目前由交大同学一人独立开发维护。如果您对大模型校园应用（RAG / Agent / 知识库 / 前后端）感兴趣，欢迎邮件来信共同打磨！',
-  
-  // 赞赏 / 捐助区域
-  donationTitle: '请开发者喝杯咖啡 ☕',
-  donationSubtitle: '您的赞助是服务器运维与功能迭代的最大动力！',
-  
-  // 捐助二维码图片路径：
-  // 若您有微信或支付宝赞赏码图片，可把图片放到 public/donation-qrcode.png，并设置此处为 '/donation-qrcode.png'
-  // 若为空字符串，则展示内置的赞赏码视觉图
-  qrCodeImageUrl: '/donation-qrcode.jpg',
+  contactNote: '发现问题、有建议，或想一起参与开发，都可以给我写邮件。',
+  alipayQrCodeImageUrl: '/donation-qrcode.jpg',
+  wechatQrCodeImageUrl: '/wechat-donation-qrcode.jpg',
 };
+
+export function SiteNoticeBanner({ onOpen }: { onOpen: () => void }) {
+  return (
+    <button type="button" onClick={onOpen} aria-label="查看网站公告"
+      className="w-full flex items-center gap-2.5 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-3.5 py-3 text-left text-indigo-900 hover:bg-indigo-100/70 transition-colors">
+      <Megaphone className="w-4 h-4 shrink-0 text-indigo-600" />
+      <span className="flex-1 min-w-0 text-xs leading-relaxed"><strong>新版公告</strong><span className="text-indigo-700"> · 不限流量，注册领 100 积分</span></span>
+      <ArrowUpRight className="w-4 h-4 shrink-0" />
+    </button>
+  );
+}
 
 interface AgentNoticeModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onRegister?: () => void;
 }
 
-export const AgentNoticeModal: React.FC<AgentNoticeModalProps> = ({
-  isOpen,
-  onClose,
-}) => {
-  const [copied, setCopied] = useState(false);
-
+export const AgentNoticeModal: React.FC<AgentNoticeModalProps> = ({ isOpen, onClose, onRegister }) => {
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [failedQrCodes, setFailedQrCodes] = useState<Record<'alipay' | 'wechat', boolean>>({ alipay: false, wechat: false });
   if (!isOpen) return null;
 
   const handleCopyEmail = async () => {
     try {
       await navigator.clipboard.writeText(AGENT_NOTICE_CONFIG.contactEmail);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopyState('copied');
     } catch {
-      // Fallback
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopyState('failed');
     }
   };
 
   return (
-    <ModalFrame id="agent-notice-modal" label="Agent 功能维护公告" onClose={onClose}>
-      {/* 背景遮罩 */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onClose}
-        className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
-      />
+    <ModalFrame id="agent-notice-modal" label="新版交大活水网站公告" onClose={onClose}>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        onClick={onClose} aria-hidden="true" className="absolute inset-0 bg-slate-900/55 backdrop-blur-xs" />
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }}
+        transition={{ duration: 0.2 }}
+        className="modal-panel relative z-10 w-full max-w-xl rounded-t-3xl bg-white shadow-2xl border border-indigo-100 flex flex-col">
+        <header className="shrink-0 px-5 py-4 sm:px-7 sm:py-5 bg-gradient-to-br from-indigo-50 via-white to-violet-50 border-b border-indigo-100">
+          <div className="flex items-start gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 mb-2"><Megaphone className="w-3.5 h-3.5" />网站公告</div>
+              <h2 className="text-lg sm:text-xl font-bold text-slate-900 leading-snug">{AGENT_NOTICE_CONFIG.title}</h2>
+              <p className="mt-2 text-xs sm:text-sm text-slate-500 leading-relaxed">{AGENT_NOTICE_CONFIG.intro}</p>
+            </div>
+            <button type="button" onClick={onClose} data-modal-close aria-label="关闭公告"
+              className="rounded-full text-slate-400 hover:bg-white hover:text-slate-700 transition-colors"><X className="w-5 h-5" /></button>
+          </div>
+        </header>
 
-      {/* 弹窗主体卡片 */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.94, y: 24 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.94, y: 20 }}
-        transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-        className="modal-panel relative z-10 w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-indigo-100/80 overflow-hidden flex flex-col max-h-[92vh] max-h-[92dvh] my-auto"
-      >
-        {/* 顶部色彩横条与头部 */}
-        <div className="relative p-5 sm:p-6 bg-gradient-to-br from-indigo-50/90 via-purple-50/60 to-pink-50/40 border-b border-indigo-100/70">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/20 shrink-0">
-                <Sparkles className="w-5 h-5" />
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-5 sm:px-7 space-y-5" data-notice-scroll>
+          <section className="rounded-2xl bg-indigo-600 p-4 sm:p-5 text-white">
+            <h3 className="text-base sm:text-lg font-bold">{AGENT_NOTICE_CONFIG.trafficTitle}</h3>
+            <p className="mt-1.5 text-xs sm:text-sm leading-relaxed text-indigo-100">{AGENT_NOTICE_CONFIG.trafficBody}</p>
+            <div className="mt-4 pt-3 border-t border-white/20 flex items-start gap-2.5">
+              <Gift className="w-5 h-5 shrink-0 mt-0.5 text-amber-200" />
+              <div><h3 className="font-semibold text-sm">{AGENT_NOTICE_CONFIG.pointsTitle}</h3><p className="mt-1 text-xs leading-relaxed text-indigo-100">{AGENT_NOTICE_CONFIG.pointsBody}</p></div>
+            </div>
+          </section>
+
+          <section className="space-y-2.5">
+            <h3 className="flex items-center gap-2 font-bold text-sm text-slate-900"><Sliders className="w-4 h-4 text-indigo-600" />{AGENT_NOTICE_CONFIG.ratingsTitle}</h3>
+            <p className="text-sm leading-relaxed text-slate-600">{AGENT_NOTICE_CONFIG.ratingsBody}</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {RATING_DIMENSIONS.map(dimension => <span key={dimension.key} className="rounded-lg bg-slate-50 border border-slate-100 py-2 px-2 text-center text-xs text-slate-600">{dimension.label}</span>)}
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="flex items-center gap-2 font-bold text-sm text-slate-900"><CalendarDays className="w-4 h-4 text-indigo-600" />{AGENT_NOTICE_CONFIG.timetableTitle}</h3>
+            <p className="text-sm leading-relaxed text-slate-600">{AGENT_NOTICE_CONFIG.timetableBody}</p>
+          </section>
+
+          <section className="rounded-2xl border border-amber-100 bg-amber-50/70 p-4 space-y-2">
+            <h3 className="flex items-center gap-2 text-sm font-bold text-amber-900"><Bot className="w-4 h-4 shrink-0" />{AGENT_NOTICE_CONFIG.aiTitle}</h3>
+            <p className="text-sm leading-relaxed text-amber-900/80">{AGENT_NOTICE_CONFIG.aiBody}</p>
+          </section>
+
+          <section className="border-t border-slate-100 pt-5 space-y-3">
+            <h3 className="text-sm font-bold text-slate-900">最后，想说几句</h3>
+            <p className="text-sm leading-7 text-slate-600">{AGENT_NOTICE_CONFIG.devNote}</p>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 text-center">
+              <h4 className="flex items-center justify-center gap-1.5 text-sm font-semibold text-slate-800"><Heart className="w-4 h-4 text-rose-500" />{AGENT_NOTICE_CONFIG.donationTitle}</h4>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                {([
+                  { key: 'alipay', label: '支付宝', src: AGENT_NOTICE_CONFIG.alipayQrCodeImageUrl },
+                  { key: 'wechat', label: '微信支付', src: AGENT_NOTICE_CONFIG.wechatQrCodeImageUrl },
+                ] as const).map(({ key, label, src }) => (
+                  <div key={key} className="min-w-0">
+                    <p className="mb-2 text-xs font-semibold text-slate-700">{label}</p>
+                    {failedQrCodes[key] ? <p className="flex aspect-square items-center justify-center rounded-xl bg-white px-2 text-xs text-slate-500" role="status">二维码加载失败</p> : (
+                      <a href={src} target="_blank" rel="noopener noreferrer" aria-label={`查看${label}收款码大图`} className="block rounded-xl border border-slate-200 bg-white p-2">
+                        <img src={src} alt={`${label}收款二维码`} width={192} height={240} onError={() => setFailedQrCodes(previous => ({ ...previous, [key]: true }))} className="aspect-square w-full object-contain" />
+                      </a>
+                    )}
+                  </div>
+                ))}
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-base sm:text-lg font-bold text-gray-900">
-                    {AGENT_NOTICE_CONFIG.title}
-                  </h3>
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-3xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                    {AGENT_NOTICE_CONFIG.badge}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xs text-gray-500">当前版本号:</span>
-                  <span className="px-2 py-0.2 rounded-md bg-indigo-100/80 text-indigo-700 text-xs font-mono font-bold">
-                    {AGENT_NOTICE_CONFIG.version}
-                  </span>
-                </div>
+              <p className="mt-2 text-xs text-slate-500">点击二维码查看大图，也可以长按保存。</p>
+              <p className="mt-2 text-xs leading-relaxed text-slate-500">{AGENT_NOTICE_CONFIG.donationSubtitle}</p>
+            </div>
+            <div className="pt-1">
+              <p className="text-xs leading-relaxed text-slate-500">{AGENT_NOTICE_CONFIG.contactNote}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <a href={'mailto:' + AGENT_NOTICE_CONFIG.contactEmail} className="inline-flex items-center gap-1.5 text-sm text-indigo-700 hover:underline py-2 break-all"><Mail className="w-4 h-4 shrink-0" />{AGENT_NOTICE_CONFIG.contactEmail}</a>
+                <button type="button" onClick={handleCopyEmail} className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-indigo-700 rounded-lg bg-slate-100 px-3 min-h-11">
+                  {copyState === 'copied' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}{copyState === 'copied' ? '已复制' : '复制邮箱'}
+                </button>
               </div>
+              <p role="status" className="text-xs text-slate-500 leading-relaxed">{copyState === 'failed' ? '复制未成功，请长按上方邮箱手动复制，或点击邮箱写信。' : copyState === 'copied' ? '邮箱已复制到剪贴板。' : ''}</p>
             </div>
-
-            {/* 关闭按钮 */}
-            <motion.button
-              whileTap={{ scale: 0.88 }}
-              onClick={onClose}
-              data-modal-close
-              aria-label="关闭公告"
-              className="p-2 rounded-full text-gray-400 hover:text-gray-700 hover:bg-white/80 transition-colors shadow-2xs"
-            >
-              <X className="w-5 h-5" />
-            </motion.button>
-          </div>
+          </section>
         </div>
 
-        {/* 弹窗内容可滚动区 */}
-        <div className="p-5 sm:p-6 space-y-4 overflow-y-auto">
-          {/* 核心公告卡片 */}
-          <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 text-amber-950 space-y-2.5">
-            <div className="flex items-center gap-2 font-bold text-sm text-amber-900">
-              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>{AGENT_NOTICE_CONFIG.noticeTitle}</span>
-            </div>
-            
-            <p className="text-xs sm:text-sm leading-relaxed text-amber-900/90">
-              {AGENT_NOTICE_CONFIG.noticeBody}：
-              <a
-                href={`mailto:${AGENT_NOTICE_CONFIG.contactEmail}`}
-                className="font-bold underline decoration-amber-400 hover:text-indigo-600 inline-flex items-center gap-1 mx-1 text-indigo-700 transition-colors"
-              >
-                <span>{AGENT_NOTICE_CONFIG.contactEmail}</span>
-                <ExternalLink className="w-3 h-3 inline-block" />
-              </a>
-            </p>
-
-            <div className="pt-2 border-t border-amber-200/60 flex items-center justify-between text-xs">
-              <span className="text-amber-800/80 flex items-center gap-1">
-                <Code2 className="w-3.5 h-3.5 text-amber-700" />
-                技术开发目前仅一人，感谢大家的理解与等待！
-              </span>
-
-              <button
-                type="button"
-                onClick={handleCopyEmail}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-amber-200 text-amber-900 hover:bg-amber-100 font-semibold transition-all active:scale-95 cursor-pointer shadow-2xs"
-              >
-                {copied ? (
-                  <>
-                    <Check className="w-3.5 h-3.5 text-emerald-600" />
-                    <span className="text-emerald-700">已复制邮箱</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5 text-amber-700" />
-                    <span>复制邮箱</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* 参与开发邀请说明 */}
-          <div className="p-3.5 rounded-2xl bg-indigo-50/50 border border-indigo-100 text-xs text-indigo-900/90 leading-relaxed flex items-start gap-2.5">
-            <Mail className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-            <p>{AGENT_NOTICE_CONFIG.devNote}</p>
-          </div>
-
-          {/* 赞赏 / 捐助二维码卡片 */}
-          <div className="p-5 rounded-3xl bg-gradient-to-b from-gray-50 to-white border border-gray-200/80 flex flex-col items-center text-center space-y-3">
-            <div className="flex items-center gap-1.5 text-sm font-bold text-gray-900">
-              <Coffee className="w-4 h-4 text-amber-600" />
-              <span>{AGENT_NOTICE_CONFIG.donationTitle}</span>
-              <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />
-            </div>
-
-            <p className="text-xs text-gray-500 max-w-sm">
-              {AGENT_NOTICE_CONFIG.donationSubtitle}
-            </p>
-
-            {/* 二维码展示区 */}
-            <div className="relative p-3 bg-white rounded-2xl border-2 border-indigo-100 shadow-md flex flex-col items-center group">
-              {AGENT_NOTICE_CONFIG.qrCodeImageUrl ? (
-                <img
-                  src={AGENT_NOTICE_CONFIG.qrCodeImageUrl}
-                  alt="开发者赞赏二维码"
-                  className="w-44 h-44 object-contain rounded-xl"
-                />
-              ) : (
-                /* 默认矢量赞赏码占位图，样式精美且完全自洽 */
-                <div className="w-44 h-44 bg-slate-900 rounded-xl p-3 flex flex-col items-center justify-between text-white relative overflow-hidden select-none">
-                  {/* 二维码四角定位锚点 */}
-                  <div className="w-full flex justify-between">
-                    <div className="w-8 h-8 border-4 border-white rounded-lg flex items-center justify-center p-1">
-                      <div className="w-3.5 h-3.5 bg-indigo-400 rounded-xs" />
-                    </div>
-                    <div className="w-8 h-8 border-4 border-white rounded-lg flex items-center justify-center p-1">
-                      <div className="w-3.5 h-3.5 bg-indigo-400 rounded-xs" />
-                    </div>
-                  </div>
-
-                  {/* 中心图标与提示 */}
-                  <div className="flex flex-col items-center justify-center space-y-1 my-auto">
-                    <div className="w-10 h-10 rounded-full bg-indigo-500/30 border border-indigo-400/40 flex items-center justify-center">
-                      <QrCode className="w-6 h-6 text-indigo-300" />
-                    </div>
-                    <span className="text-3xs font-bold text-indigo-200 tracking-wider">
-                      交大活水 · 赞赏通道
-                    </span>
-                  </div>
-
-                  {/* 底部定位锚点与说明 */}
-                  <div className="w-full flex justify-between items-end">
-                    <div className="w-8 h-8 border-4 border-white rounded-lg flex items-center justify-center p-1">
-                      <div className="w-3.5 h-3.5 bg-indigo-400 rounded-xs" />
-                    </div>
-                    <div className="text-4xs text-gray-400 text-right leading-tight">
-                      微信 / 支付宝<br />扫码支持
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <span className="mt-2 text-3xs text-gray-400 font-mono">
-                扫码支持独立开发 · 共同打造更好的交大社区
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* 底部按钮栏 */}
-        <div className="p-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white font-semibold text-xs transition-all shadow-xs"
-          >
-            我知道了
-          </button>
-        </div>
+        <footer className="shrink-0 p-4 border-t border-slate-100 bg-white flex gap-3">
+          <button type="button" onClick={onClose} className={'flex-1 min-h-11 rounded-xl text-sm font-semibold transition-colors ' + (onRegister ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-indigo-600 text-white hover:bg-indigo-700')}>我知道了，开始逛逛</button>
+          {onRegister && <button type="button" onClick={onRegister} className="flex-1 min-h-11 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors">注册领 100 积分</button>}
+        </footer>
       </motion.div>
     </ModalFrame>
   );

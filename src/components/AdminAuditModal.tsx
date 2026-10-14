@@ -65,6 +65,8 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [isCheckingAdmin, setIsCheckingAdmin] = useState(true);
   const [adminRole, setAdminRole] = useState<string>('');
+  const [adminCheckError, setAdminCheckError] = useState('');
+  const [adminCheckRevision, setAdminCheckRevision] = useState(0);
 
   // Status feedback toast
   const [toastNotice, setToastNotice] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null);
@@ -111,19 +113,22 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
   const [customReason, setCustomReason] = useState('');
 
   useEffect(() => {
+    if (!isOpen) return;
     let active = true;
     setIsAdminAuthenticated(false);
     setIsCheckingAdmin(true);
+    setAdminCheckError('');
     setAdminRole('');
     setActiveSection('reviews');
     supabaseService.checkIsAdmin().then((res) => {
       if (!active) return;
       setIsAdminAuthenticated(res.isAdmin);
       setAdminRole(res.role || '');
+      setAdminCheckError(res.error || '');
       setIsCheckingAdmin(false);
     });
     return () => { active = false; };
-  }, [currentUserId, currentUserEmail]);
+  }, [isOpen, currentUserId, currentUserEmail, adminCheckRevision]);
 
   // Load admin list when switching to admin config tab
   const loadAdmins = async () => {
@@ -341,9 +346,9 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
                 <h3 className="text-base font-bold tracking-tight text-white">
                   西南交大选课评教 · 管理工作台
                 </h3>
-                <span className="px-2 py-0.5 rounded-full text-3xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                {isAdminAuthenticated && <span className="px-2 py-0.5 rounded-full text-3xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   {adminRole === 'super_admin' ? '超管权限' : '审核权限'}
-                </span>
+                </span>}
               </div>
               <p className="text-xs text-slate-400">
                 严格把关评教内容 · 动态管理审核团队名单 (Supabase 数据库驱动)
@@ -436,10 +441,15 @@ export const AdminAuditModal: React.FC<AdminAuditModalProps> = ({
               <p className="text-xs text-gray-500 leading-relaxed">
                 当前登录邮箱：<strong>{currentUserEmail || '未登录/普通学生'}</strong>
                 <br />
-                {isCheckingAdmin ? '正在核验管理员权限…' : '当前账号未获得有效管理员授权，请联系超级管理员。'}
+                {isCheckingAdmin ? '正在核验管理员权限…' : adminCheckError || '当前账号未获得有效管理员授权，请确认登录邮箱或联系超级管理员。'}
               </p>
             </div>
-
+            {!isCheckingAdmin && (
+              <button type="button" onClick={() => setAdminCheckRevision(value => value + 1)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">
+                <RefreshCw className="w-4 h-4" />重新核验权限
+              </button>
+            )}
           </div>
         ) : activeSection === 'admins' && adminRole === 'super_admin' ? (
           /* Dynamic Admin Database Management Workspace */

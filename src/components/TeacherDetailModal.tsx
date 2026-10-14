@@ -7,7 +7,7 @@ import { supabaseService } from '../services/supabaseService';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { Pagination, PageFeedback } from './Pagination';
 import { ReviewListSkeleton } from './Skeletons';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Teacher, Review } from '../types';
 import { X, Star, Heart, Award, Sparkles, AlertCircle, History, MessageSquarePlus, ThumbsUp, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -24,6 +24,13 @@ interface TeacherDetailModalProps {
   refreshToken?: number;
 }
 
+const DETAIL_TABS = [
+  { id: 'dimensions', label: '六维评价' },
+  { id: 'reviews', label: '学生真实评价' },
+  { id: 'courses', label: '本学期开设课程' },
+] as const;
+type DetailTab = typeof DETAIL_TABS[number]['id'];
+
 export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
   teacher,
   reviews,
@@ -31,7 +38,21 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
   onOpenReview,
   onLikeReview, likedReviewIds, pendingLikeIds, likesLoading, refreshToken,
 }) => {
-  const [activeTab, setActiveTab] = useState<'reviews' | 'dimensions'>('dimensions');
+  const [activeTab, setActiveTab] = useState<DetailTab>('dimensions');
+  const [coursesTeacherId, setCoursesTeacherId] = useState<string | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  const selectTab = (tab: DetailTab) => {
+    setActiveTab(tab);
+    if (tab === 'courses' && teacher) setCoursesTeacherId(teacher.id);
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+  };
+
+  useEffect(() => {
+    setActiveTab('dimensions');
+    setCoursesTeacherId(null);
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+  }, [teacher?.id]);
 
   const page = usePagedQuery<Review>(teacher?.id || '', (index, signal) => {
     if (isSupabaseConfigured) return supabaseService.getReviewsPage({ teacherId: teacher!.id, status: 'approved', page: index }, signal);
@@ -135,45 +156,52 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
         </div>
 
         {/* Tab Navigation */}
-        <div className="shrink-0 flex border-b border-gray-100 px-5 pt-2">
-          <button
-            id="tab-dimensions-btn"
-            onClick={() => setActiveTab('dimensions')}
-            className={`pb-2.5 text-sm font-semibold transition-colors relative mr-6 ${
-              activeTab === 'dimensions' ? 'text-indigo-600' : 'text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            六维评价
-            {activeTab === 'dimensions' && (
-              <motion.div 
-                layoutId="modalTabLine"
-                className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full" 
-              />
-            )}
-          </button>
-          <button
-            id="tab-reviews-btn"
-            onClick={() => setActiveTab('reviews')}
-            className={`pb-2.5 text-sm font-semibold transition-colors relative flex items-center gap-1.5 ${
-              activeTab === 'reviews' ? 'text-indigo-600' : 'text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            学生真实评价
-            <span className="px-1.5 py-0.2 bg-gray-100 text-gray-600 rounded-full text-xs">
-              {activeTab === 'reviews' && !page.loading && !page.error ? page.total : teacher.reviewCount}
-            </span>
-            {activeTab === 'reviews' && (
-              <motion.div 
-                layoutId="modalTabLine"
-                className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full" 
-              />
-            )}
-          </button>
+        <div role="tablist" aria-label="教师详情内容" className="shrink-0 flex justify-start gap-3 overflow-x-auto border-b border-gray-100 px-3 sm:px-5 pt-2">
+          {DETAIL_TABS.map((tab, index) => (
+            <button
+              key={tab.id}
+              id={`tab-${tab.id}-btn`}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              aria-controls={`teacher-${tab.id}-panel`}
+              tabIndex={activeTab === tab.id ? 0 : -1}
+              onClick={() => selectTab(tab.id)}
+              onKeyDown={(event) => {
+                let next = index;
+                if (event.key === 'ArrowRight') next = (index + 1) % DETAIL_TABS.length;
+                else if (event.key === 'ArrowLeft') next = (index + DETAIL_TABS.length - 1) % DETAIL_TABS.length;
+                else if (event.key === 'Home') next = 0;
+                else if (event.key === 'End') next = DETAIL_TABS.length - 1;
+                else return;
+                event.preventDefault();
+                selectTab(DETAIL_TABS[next].id);
+                document.getElementById(`tab-${DETAIL_TABS[next].id}-btn`)?.focus();
+              }}
+              className={`min-h-11 pb-2.5 text-xs sm:text-sm font-semibold transition-colors relative flex shrink-0 items-center gap-1 whitespace-nowrap ${
+                activeTab === tab.id ? 'text-indigo-600' : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              {tab.label}
+              {tab.id === 'reviews' && (
+                <span className="px-1.5 py-0.2 bg-gray-100 text-gray-600 rounded-full text-2xs sm:text-xs">
+                  {activeTab === 'reviews' && !page.loading && !page.error ? page.total : teacher.reviewCount}
+                </span>
+              )}
+              {activeTab === tab.id && (
+                <motion.div
+                  layoutId="modalTabLine"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full"
+                />
+              )}
+            </button>
+          ))}
         </div>
 
         {/* Modal Scroll Content */}
-        <div className="p-5 pb-6 overflow-y-auto min-h-0 space-y-4 flex-1 overscroll-contain">
-          {activeTab === 'dimensions' ? (
+        <div ref={contentRef} className="p-5 pb-6 overflow-y-auto min-h-0 flex-1 overscroll-contain">
+          <div id="teacher-dimensions-panel" role="tabpanel" aria-labelledby="tab-dimensions-btn" hidden={activeTab !== 'dimensions'} tabIndex={0}>
+          {activeTab === 'dimensions' && (
             <div className="space-y-4">
               {/* Courses taught */}
               <div>
@@ -187,8 +215,6 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
                 </div>
               </div>
 
-              <TeacherTermCourses teacher={teacher} />
-
               {/* Tags */}
               <div className="flex flex-wrap gap-1.5 pt-1">
                 {teacher.tags.map((tag, idx) => (
@@ -199,21 +225,11 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
               </div>
 
               <RatingRadar dimensions={teacher.dimensions} />
-
-              {/* Data migration footnote */}
-              {teacher.hasHistoricalData && (
-                <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200 text-xs text-amber-800 flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-semibold">历史数据迁移说明</p>
-                    <p className="text-2xs text-amber-700 mt-0.5">
-                      旧站评价保留教学质量、给分宽松度和作业轻松度评分。考勤宽松度、努力回报和师生亲和力由新评价逐步补齐，暂无评分时显示“暂无数据”。
-                    </p>
-                  </div>
-                </div>
-              )}
             </div>
-          ) : (
+          )}
+          </div>
+          <div id="teacher-reviews-panel" role="tabpanel" aria-labelledby="tab-reviews-btn" hidden={activeTab !== 'reviews'} tabIndex={0}>
+          {activeTab === 'reviews' && (
             <div className="space-y-3">
               <PageFeedback loading={false} error={page.error} onRetry={page.reload} />
               {page.loading ? (
@@ -306,6 +322,11 @@ export const TeacherDetailModal: React.FC<TeacherDetailModalProps> = ({
               <Pagination page={page.page} total={page.total} loading={page.loading} onPageChange={page.setPage} />
             </div>
           )}
+          </div>
+          <div id="teacher-courses-panel" role="tabpanel" aria-labelledby="tab-courses-btn" hidden={activeTab !== 'courses'} tabIndex={0}>
+            {/* Mount on first visit, then keep course data and expanded details while switching tabs. */}
+            {coursesTeacherId === teacher.id && <TeacherTermCourses key={teacher.id} teacher={teacher} />}
+          </div>
         </div>
 
         {/* Modal Action Footer */}

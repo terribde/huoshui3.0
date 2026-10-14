@@ -17,3 +17,6 @@ docs.zip
 schule2026-2027-1/*.csv
 schule2026-2027-1/import-output/
 schule2026-2027-1/supabase-web-import/
+# Local moderation/analytics console stays on this machine; it reads secrets
+# from its own .env and is never deployed.
+local-console/

@@ -98,6 +98,11 @@ export const TeacherListSkeleton: React.FC<{
   );
 };
 
+/** 选课推荐结果使用单列教师卡片骨架屏。 */
+export const RecommendResultSkeleton: React.FC<{ count?: number }> = ({ count = 3 }) => (
+  <TeacherListSkeleton layout="mobile" count={count} />
+);
+
 /**
  * 学生评价列表骨架屏 (用于教师详情弹窗等)
  */
