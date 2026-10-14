@@ -1,4 +1,5 @@
 import express from 'express';
+import { mountAnalytics } from './analytics.mjs';
 import { pagination, teacherOptions, teacherPage, reviewPage } from './data.mjs';
 import { timetableOptions, timetableRecommendations, teacherSections } from './timetable.mjs';
 
@@ -15,7 +16,7 @@ function check(result) {
   return result.data;
 }
 
-export function createApp({ cache, authClient, userClient, logger = console }) {
+export function createApp({ cache, authClient, userClient, analytics, analyticsToken, analyticsOrigins, logger = console }) {
   const app = express();
   app.disable('x-powered-by');
   app.use(express.json({ limit: '32kb' }));
@@ -25,6 +26,7 @@ export function createApp({ cache, authClient, userClient, logger = console }) {
     next();
   });
   app.get('/health', (_req, res) => res.json({ ok: true, cache: cache.available ? 'ready' : 'bypass', lastSync: cache.lastSync }));
+  mountAnalytics(app, { analytics, readToken: analyticsToken, origins: analyticsOrigins });
   app.get('/api/timetable/recommendations', asyncRoute(async (req, res) => {
     let options;
     try { options = timetableOptions(req.query); }

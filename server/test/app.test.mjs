@@ -52,6 +52,18 @@ test('recommendation API selects current term and validates filters before loadi
   assert.equal((await f.request('/api/timetable/recommendations?weekday=8')).status, 400);
   assert.equal(f.calls.length, 1);
 });
+test('recommendation API applies teacher-name queries and rejects malformed names', async t => {
+  const f = await fixture(t);
+  const matching = await f.request('/api/timetable/recommendations?teacherName=%20teach%20&weekday=1');
+  assert.equal(matching.status, 200);
+  assert.equal((await matching.json()).data[0].teacher.id, 't');
+  const missing = await f.request('/api/timetable/recommendations?teacherName=Nobody');
+  assert.equal(missing.status, 200);
+  assert.deepEqual((await missing.json()).data, []);
+  assert.equal((await f.request('/api/timetable/recommendations?teacherName=a&teacherName=b')).status, 400);
+  assert.equal(f.calls.length, 2);
+});
+
 test('public reads use cache while privileged routes reject absent or invalid sessions', async t => {
   const f = await fixture(t);
   const response = await f.request('/api/teachers');

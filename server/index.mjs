@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createSource } from './data.mjs';
 import { CatalogCache } from './cache.mjs';
 import { createApp } from './app.mjs';
+import { createVisitStore, createAnalytics } from './analytics.mjs';
 
 const { SUPABASE_URL, SUPABASE_ANON_KEY, REDIS_PASSWORD } = process.env;
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !REDIS_PASSWORD) throw new Error('Missing server credentials');
@@ -25,7 +26,20 @@ const cache = new CatalogCache(redis, createSource(client), {
 });
 await redis.connect().catch(error => cache.failure(error));
 await cache.synchronize().catch(error => console.warn('[startup]', error.message));
-const app = createApp({ cache, authClient: client, userClient: makeClient });
+let visitStore;
+let analytics;
+if (process.env.ANALYTICS_ENABLED === 'true') {
+  const { DatabaseSync } = await import('node:sqlite');
+  visitStore = createVisitStore(DatabaseSync, {
+    path: process.env.ANALYTICS_DB_PATH || '/var/lib/swjtu-cache/visits.sqlite',
+    timeZone: process.env.ANALYTICS_TIMEZONE || 'Asia/Tokyo',
+  });
+  analytics = createAnalytics({ store: visitStore, redis, prefix: process.env.CACHE_PREFIX || 'swjtu:prod:cache:v1:' });
+}
+const app = createApp({ cache, authClient: client, userClient: makeClient, analytics,
+  analyticsToken: process.env.ANALYTICS_READ_TOKEN,
+  analyticsOrigins: (process.env.ANALYTICS_ALLOWED_ORIGINS || '').split(',').map(value => value.trim()).filter(Boolean),
+});
 const server = app.listen(Number(process.env.PORT || 3001), process.env.HOST || '127.0.0.1', () => {
   console.info('[api] listening on loopback');
 });
@@ -38,5 +52,5 @@ const timer = setInterval(() => {
 timer.unref();
 for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => {
   clearInterval(timer);
-  server.close(async () => { await cache.tail; redis.disconnect(); process.exit(0); });
+  server.close(async () => { await cache.tail; visitStore?.close(); redis.disconnect(); process.exit(0); });
 });

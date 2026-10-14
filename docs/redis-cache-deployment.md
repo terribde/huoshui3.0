@@ -1,5 +1,34 @@
 # Redis 缓存部署记录
 
+## 2026-10-13 智能选课老师姓名筛选修复（Asia/Tokyo）
+
+- 原因：线上 `timetable.mjs` 未部署本地已有的 `teacherName` 支持，接口忽略姓名参数；输入不存在的姓名仍返回默认 60 位教师。Redis 数据刷新不会更新接口代码。
+- 已将本地 `server/timetable.mjs` 同步到当前发布目录并重启 `swjtu-cache-api.service`。18:02:59（Asia/Tokyo）完成启动同步，健康状态为 `cache=ready`。
+- 原文件备份：`/www/backup/swjtu-cache-teacher-filter-20261013T090127Z/timetable.mjs`。更新后文件 SHA256：`5ff942e89bb1dfb3c40fb84416f8e4f88a71cb04432426ee77e93f87adaeacf2`。
+- 姓名按包含关系筛选，忽略首尾空格与英文大小写；可与课程、星期等条件组合，且姓名搜索不受默认前 60 名限制。
+- 正式域名 HTTPS 接口验证：姓名“张”返回 145 位；“高等数学 + 张”返回 4 位；“周一 + 张”返回 39 位；不存在的姓名返回空数组；清空条件恢复 60 位默认推荐。成功查询均为 200 / HIT，超长姓名返回 400。
+- 新增回归测试在旧线上模块上复现失败，在当前模块上通过。本地后端 23 项、前端服务 36 项测试及 TypeScript 检查通过；服务器候选模块的 5 项课表测试通过后才替换。
+
+## 2026-10-13 缓存刷新与当前访问入口（Asia/Tokyo）
+
+- 当前 HTTP 入口为 **80 端口**：`http://47.108.145.230/`；正式域名支持 `https://huoshui3.top/`（443 端口）。6099 是历史端口，已不再监听。
+- 已通过重启 `swjtu-cache-api.service` 触发内置全量同步，17:52:48（Asia/Tokyo）完成；同步耗时约 87 秒，期间缓存 API 暂时不可用，随后恢复为 `cache=ready`。
+- 已刷新 3,368 位教师、2 个学期，以及当前 `2026-2027第1学期` 的 4,602 个教学班、6,979 段安排。
+- 163 个已缓存评价分组全部刷新，公开评价缓存从 2,568 条更新为 3,018 条；尚未缓存的教师评价继续在首次访问时回源加载。
+- Redis 返回 PONG，所有业务缓存快照时间均晚于本次刷新开始时间。检查时 Redis 内存约 14.89MB，限额为 256MB。
+- 教师列表、智能选课推荐和抽查评价接口均返回 200、`X-Cache: HIT`；已验证本机 3001 后端及正式域名的 Nginx HTTPS 入口。80 端口的 `temp.com` 教师接口同样返回 200、HIT。
+
+当前验证命令：
+
+```bash
+curl --fail http://127.0.0.1:3001/health
+curl --fail -H 'Host: temp.com' 'http://127.0.0.1:80/api/timetable/recommendations'
+curl --fail -H 'Host: temp.com' 'http://127.0.0.1:80/api/teachers?pageSize=1'
+curl --fail --resolve huoshui3.top:443:127.0.0.1 'https://huoshui3.top/api/teachers?pageSize=1'
+```
+
+下文为历史部署记录，当前端口、数据量及检查结果以上述记录为准。
+
 ## 2026-10-02 课表缓存更新（Asia/Tokyo）
 
 - 已部署 Node 新版本：`/opt/swjtu-cache/releases/20261002-timetable-01`，`/opt/swjtu-cache/current` 已指向该目录，systemd 状态 active。
@@ -9,15 +38,15 @@
 - Redis 课表键：`swjtu:prod:cache:v1:timetable:002df550-11e0-4c64-bd46-82ce9f76aa06`；4,602 条选课记录，6,979 段安排，教师目录 3,368 人。
 - 服务器后端测试 20 项全部通过。线上健康状态 cache=ready；经实际 Nginx 站点检查，默认推荐返回 60 位教师，周一筛选返回 743 位教师，均为 HIT；原教师列表与评价接口均正常并命中缓存。
 - 预热检查时 Redis 使用约 12.45MB，记录峰值约 18.11MB，限额仍为 256MB；最终检查 API systemd 内存为 97,865,728 字节（约 93.3MiB）。这些是检查时读数。
-- **实际站点监听 6099 端口**，不是旧记录示例中的 80。首次按旧示例检查遇到 404，验证流程自动回滚；确认实际端口后再次切换并通过。没有修改站点端口或代理规则。
+- 当时站点监听 6099 端口。首次按 80 端口检查遇到 404，验证流程自动回滚；确认当时的实际端口后再次切换并通过。2026-10-13 已确认当前改用 80 端口。
 - 前端站点文件未上传或覆盖；新前端需要另行上传才能调用新选课 API。数据库课表、评价、用户、积分未修改。
 
-当前验证命令：
+验证命令（访问端口已按当前配置更新为 80）：
 
 ```bash
 curl http://127.0.0.1:3001/health
-curl -H 'Host: temp.com' 'http://127.0.0.1:6099/api/timetable/recommendations'
-curl -H 'Host: temp.com' 'http://127.0.0.1:6099/api/teachers?pageSize=1'
+curl -H 'Host: temp.com' 'http://127.0.0.1:80/api/timetable/recommendations'
+curl -H 'Host: temp.com' 'http://127.0.0.1:80/api/teachers?pageSize=1'
 ```
 
 下文保留 2026-09-27 的历史记录，数据量和路径应以上述本次记录为准。

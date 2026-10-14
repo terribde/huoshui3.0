@@ -36,6 +36,41 @@ test('multiple teachers keep their own meetings, and unknown weekdays do not mat
   assert.throws(() => timetableOptions({ query: ['a', 'b'] }));
 });
 
+test('teacher-name search includes matches beyond the default top 60 and combines with course and weekday filters', () => {
+  const profiles = Array.from({ length: 65 }, (_, i) => ({
+    id: `teacher-${i}`, name: `张老师${i}`, overall_score: 4, review_count: i,
+  }));
+  profiles.push({ id: 'other', name: '李老师', overall_score: 5, review_count: 100 });
+  const sections = buildTimetableSections(profiles.map((teacher, i) => row({
+    section_id: `section-${i}`, meeting_id: `meeting-${i}`, teacher_id: teacher.id,
+    teacher_name: teacher.name, weekday: i % 2 ? 3 : 1,
+    course_name: i === 64 ? '线性代数' : '高等数学',
+  })));
+  const recommend = filters => timetableRecommendations(sections, profiles, timetableOptions(filters));
+  assert.equal(recommend({}).length, 60);
+  const matches = recommend({ teacherName: '  张  ' });
+  assert.equal(matches.length, 65);
+  assert.ok(matches.every(item => item.teacher.name.includes('张')));
+  assert.ok(matches.some(item => item.teacher.id === 'teacher-0'));
+  assert.deepEqual(recommend({ teacherName: '不存在的教师' }), []);
+  const combined = recommend({ teacherName: '张', query: '高等数学', weekday: '1' });
+  assert.equal(combined.length, 32);
+  assert.ok(combined.every(item => item.teacher.name.includes('张') &&
+    item.sections.every(section => section.courseName === '高等数学' && section.meetings.some(meeting => meeting.weekday === 1))));
+  assert.throws(() => timetableOptions({ teacherName: ['张', '李'] }), /Invalid timetable filter/);
+  assert.throws(() => timetableOptions({ teacherName: '张'.repeat(201) }), /Invalid timetable filter/);
+});
+
+test('teacher-name search uses a linked profile name or an unmatched timetable name', () => {
+  const sections = buildTimetableSections([row({ teacher_name: '旧姓名' }),
+    row({ section_id: 'unmatched', meeting_id: 'unmatched', teacher_id: null, teacher_name: '临时教师' })]);
+  const profiles = [{ id: 't', name: 'Alice Zhang' }];
+  const recommend = teacherName => timetableRecommendations(sections, profiles, timetableOptions({ teacherName }));
+  assert.equal(recommend(' alice ')[0].teacher.id, 't');
+  assert.deepEqual(recommend('旧姓名'), []);
+  assert.equal(recommend('临时')[0].teacher.name, '临时教师');
+});
+
 test('timetable source reads all capped pages, isolates terms and refuses incomplete snapshots', async () => {
   const rows = Array.from({ length: 1203 }, (_, i) => row({ section_id: `s${String(i).padStart(4, '0')}`, meeting_id: `m${i}` }));
   rows.push(row({ term_id: 'previous', section_id: 'old' }));
