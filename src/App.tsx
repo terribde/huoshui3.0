@@ -961,7 +961,7 @@ export default function App() {
                       className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-2xs"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
-                      <span>注册 (+100积分)</span>
+                      <span>注册 (+50积分)</span>
                     </button>
                   </div>
                 )}

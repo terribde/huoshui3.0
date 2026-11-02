@@ -222,7 +222,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                   </div>
                   <div>
                     <h4 className="text-sm font-bold text-gray-900">登录开启学生积分与全部特权</h4>
-                    <p className="text-xs text-gray-500 mt-0.5">新人注册即赠 100 初始积分 · 评价过审再领 20 分</p>
+                    <p className="text-xs text-gray-500 mt-0.5">新人注册即赠 50 初始积分 · 评价过审再领 20 分</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 pt-1">
@@ -231,7 +231,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                     className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 transition-all"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
-                    <span>立即注册 (赠送 100 积分)</span>
+                    <span>立即注册 (赠送 50 积分)</span>
                   </button>
                   <button
                     onClick={() => onOpenAuth('login')}
@@ -595,7 +595,7 @@ export const DesktopUserProfile: React.FC<DesktopUserProfileProps> = ({
                 <span className="font-bold text-emerald-700 block">积分获取渠道：</span>
                 <p>• 每日签到奖励：+5 积分/天</p>
                 <p>• 提交审核通过评价：+20 积分/条</p>
-                <p>• 首次注册赠送：+100 初始积分</p>
+                <p>• 首次注册赠送：+50 初始积分</p>
               </div>
               <div className="p-2.5 bg-white rounded-xl border border-gray-100 space-y-1">
                 <span className="font-bold text-rose-700 block">积分消耗渠道：</span>

@@ -37,7 +37,12 @@ export const ExperienceGuideModal: React.FC<ExperienceGuideModalProps> = ({
         {/* Header */}
         <div className="shrink-0 p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-indigo-50 to-white">
           <div>
-            <h3 className="text-lg font-bold text-gray-900">交大知识库 & 校园动态</h3>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-lg font-bold text-gray-900">交大知识库 & 校园动态</h3>
+              <span className="px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200 text-2xs font-semibold text-gray-500">
+                预览版 · 暂时不可用
+              </span>
+            </div>
             <p className="text-xs text-gray-500">经验攻略与教务资讯</p>
           </div>
           <motion.button 

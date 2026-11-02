@@ -91,7 +91,7 @@ export const MobileQuarkHome: React.FC<MobileQuarkHomeProps> = ({
       {/* 2. 品牌 */}
       <div className="flex flex-col items-center justify-center mt-[17dvh] mb-8 select-none">
         <h1 className="text-4xl font-extrabold tracking-tight text-gray-950 font-sans">交大活水</h1>
-        <p className="text-xs text-gray-400 mt-1.5 tracking-wide">西南交通大学专属教师评价 · 校园智能助手</p>
+        <p className="text-xs text-gray-400 mt-1.5 tracking-wide">交大属教师评价 · 校园智能助手</p>
       </div>
 
       {onOpenNotice && <div className="w-full mb-4"><SiteNoticeBanner onOpen={onOpenNotice} /></div>}

@@ -205,7 +205,7 @@ export const MobileUserProfile: React.FC<MobileUserProfileProps> = ({
               </div>
               <div>
                 <p className="text-xs font-bold text-gray-800">登录开启积分激励与特权</p>
-                <p className="text-3xs text-gray-500">新人注册送 100 积分 · 撰写评价 +20 分</p>
+                <p className="text-3xs text-gray-500">新人注册送 50 积分 · 撰写评价 +20 分</p>
               </div>
             </div>
             <button

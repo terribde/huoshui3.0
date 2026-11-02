@@ -10,7 +10,7 @@ export const AGENT_NOTICE_CONFIG = {
   intro: '查评价、选课程，希望这里能帮你少走一点弯路。',
   trafficTitle: '新版没有流量限制',
   trafficBody: '查老师、看评价、挑课程，按自己的需要慢慢看。',
-  pointsTitle: '注册就送 100 积分',
+  pointsTitle: '注册就送 50 积分',
   pointsBody: '欢迎先注册一个账号，领取你的新用户积分。',
   ratingsTitle: '从 3 个评价维度，到 6 个',
   ratingsBody: '旧站只有 3 个评价维度。新版用 6 个维度记录同学们的感受，选老师时可以看得更全面。',
@@ -32,7 +32,7 @@ export function SiteNoticeBanner({ onOpen }: { onOpen: () => void }) {
     <button type="button" onClick={onOpen} aria-label="查看网站公告"
       className="w-full flex items-center gap-2.5 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-3.5 py-3 text-left text-indigo-900 hover:bg-indigo-100/70 transition-colors">
       <Megaphone className="w-4 h-4 shrink-0 text-indigo-600" />
-      <span className="flex-1 min-w-0 text-xs leading-relaxed"><strong>新版公告</strong><span className="text-indigo-700"> · 不限流量，注册领 100 积分</span></span>
+      <span className="flex-1 min-w-0 text-xs leading-relaxed"><strong>新版公告</strong><span className="text-indigo-700"> · 不限流量，注册领 50 积分</span></span>
       <ArrowUpRight className="w-4 h-4 shrink-0" />
     </button>
   );
@@ -143,7 +143,7 @@ export const AgentNoticeModal: React.FC<AgentNoticeModalProps> = ({ isOpen, onCl
 
         <footer className="shrink-0 p-4 border-t border-slate-100 bg-white flex gap-3">
           <button type="button" onClick={onClose} className={'flex-1 min-h-11 rounded-xl text-sm font-semibold transition-colors ' + (onRegister ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-indigo-600 text-white hover:bg-indigo-700')}>我知道了，开始逛逛</button>
-          {onRegister && <button type="button" onClick={onRegister} className="flex-1 min-h-11 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors">注册领 100 积分</button>}
+          {onRegister && <button type="button" onClick={onRegister} className="flex-1 min-h-11 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors">注册领 50 积分</button>}
         </footer>
       </motion.div>
     </ModalFrame>

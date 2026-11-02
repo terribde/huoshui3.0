@@ -42,7 +42,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [nickname, setNickname] = useState('');
   const [college, setCollege] = useState('');
-  const [campus, setCampus] = useState<'犀浦校区' | '九里校区'>('犀浦校区');
+  const [campus, setCampus] = useState<'犀浦校区' | '九里校区' | '东部校区' | '峨眉校区'>('犀浦校区');
 
   // Status
   const [loading, setLoading] = useState(false);
@@ -85,10 +85,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
     setResending(true);
     setErrorMsg(null);
+    setSuccessMsg(null);
     try {
       await supabaseService.resendVerificationEmail(cleanEmail);
       setSuccessMsg('激活验证邮件已重新发送至您的邮箱，请检查收件箱或垃圾邮件箱');
-      setCanResendVerification(false);
     } catch (err: any) {
       console.error('[Resend Verification Error]', err);
       let msg = err.message || '重发激活邮件失败';
@@ -185,6 +185,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         // Check if email confirmation is required by Supabase (session is null)
         if (res.user && !res.session) {
           setSuccessMsg('注册申请已提交！激活确认邮件已发送至您的邮箱，请前往查收邮件并激活后再登录。');
+          setCanResendVerification(true);
           setTimeout(() => {
             setMode('login');
           }, 3500);
@@ -203,7 +204,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             }
           : null;
 
-        setSuccessMsg('注册成功！已为您自动赠送 100 初始评教积分 🎁');
+        setSuccessMsg('注册成功！已为您自动赠送 50 初始评教积分 🎁');
 
         setTimeout(() => {
           if (authUser) {
@@ -317,7 +318,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                邮箱注册 (+100积分)
+                邮箱注册 (+50积分)
               </button>
             </div>
           )}
@@ -330,7 +331,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <div className="p-3 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border border-amber-200/80 text-amber-900 text-xs flex items-start gap-2.5 shadow-2xs">
               <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
               <div>
-                <p className="font-bold">新人注册福利：即送 100 初始积分</p>
+                <p className="font-bold">新人注册福利：即送 50 初始积分</p>
                 <p className="text-2xs text-amber-700 mt-0.5">
                   解锁「全量教师评价查看」、「选课推荐权重计算」及「撰写评教 +20分 奖励」。
                 </p>
@@ -382,10 +383,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 initial={{ opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
-                className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2"
+                className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex flex-col gap-1.5"
               >
-                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-                <span className="font-medium">{successMsg}</span>
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                  <span className="font-medium">{successMsg}</span>
+                </div>
+                {canResendVerification && (
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={resending}
+                    className="self-start ml-6 text-xs font-bold text-indigo-600 hover:text-indigo-800 underline transition-colors disabled:opacity-50"
+                  >
+                    {resending ? '正在重新发送验证邮件...' : '重发确认邮件'}
+                  </button>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -511,6 +524,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     >
                       <option value="犀浦校区">犀浦校区</option>
                       <option value="九里校区">九里校区</option>
+                      <option value="东部校区">东部校区</option>
+                      <option value="峨眉校区">峨眉校区</option>
                     </select>
                   </div>
                 </div>
@@ -541,7 +556,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </>
                 ) : mode === 'register' ? (
                   <>
-                    <span>完成注册并领 100 积分</span>
+                    <span>完成注册并领 50 积分</span>
                     <Sparkles className="w-4 h-4" />
                   </>
                 ) : (
